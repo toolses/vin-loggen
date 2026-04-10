@@ -1,0 +1,37 @@
+# ── Node / Angular ─────────────────────────────────────────────
+node_modules/
+dist/
+.angular/
+.cache/
+npm-debug.log*
+yarn-error.log*
+
+# ── .NET ───────────────────────────────────────────────────────
+bin/
+obj/
+*.user
+*.suo
+.vs/
+# Never commit local secrets
+api/local.settings.json
+
+# ── Environment / secrets ──────────────────────────────────────
+.env
+.env.local
+.env.*.local
+
+# ── OS ─────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── Editor ─────────────────────────────────────────────────────
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+*.swp
+*.swo
+
+# ── Logs ───────────────────────────────────────────────────────
+*.log
+logs/

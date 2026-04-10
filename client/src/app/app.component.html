@@ -1,0 +1,128 @@
+<div class="min-h-screen bg-gray-50 flex flex-col">
+
+  <!-- ── Header ───────────────────────────────────────────── -->
+  <header class="bg-red-900 text-white shadow-md sticky top-0 z-10">
+    <div class="max-w-2xl mx-auto px-4 py-4 flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <span class="text-2xl" aria-hidden="true">🍷</span>
+        <h1 class="text-lg font-bold tracking-wide">VinLoggen</h1>
+      </div>
+      <span class="text-sm opacity-70 tabular-nums">
+        {{ wineService.wineCount() }}
+        {{ wineService.wineCount() === 1 ? 'vin' : 'viner' }}
+      </span>
+    </div>
+  </header>
+
+  <!-- ── Main content ─────────────────────────────────────── -->
+  <main class="flex-1 max-w-2xl w-full mx-auto px-4 py-6 space-y-8">
+
+    <!-- Quick-Log section -->
+    <section aria-labelledby="quick-log-heading">
+      <h2 id="quick-log-heading" class="text-base font-semibold text-gray-600 mb-3 uppercase tracking-wider text-xs">
+        Quick-Log
+      </h2>
+      <app-camera-capture (imageCaptured)="onImageCaptured($event)" />
+    </section>
+
+    <!-- Loading spinner -->
+    @if (wineService.loading()) {
+      <div class="flex justify-center py-10" role="status" aria-label="Laster viner…">
+        <span
+          class="w-8 h-8 rounded-full border-4 border-red-200 border-t-red-800 animate-spin"
+          aria-hidden="true"
+        ></span>
+      </div>
+    }
+
+    <!-- Error banner -->
+    @if (wineService.error()) {
+      <div class="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700" role="alert">
+        {{ wineService.error() }}
+      </div>
+    }
+
+    <!-- Wine list -->
+    @if (!wineService.loading()) {
+      <section aria-labelledby="wine-list-heading">
+        <h2 id="wine-list-heading" class="text-base font-semibold text-gray-600 mb-3 uppercase tracking-wider text-xs">
+          Mine viner
+        </h2>
+
+        @if (wineService.wines().length === 0) {
+          <!-- Empty state -->
+          <div class="flex flex-col items-center justify-center py-16 text-gray-400 space-y-2">
+            <span class="text-5xl" aria-hidden="true">🍾</span>
+            <p class="font-medium">Ingen viner registrert ennå</p>
+            <p class="text-sm">Ta bilde av en etikett for å starte!</p>
+          </div>
+        } @else {
+          <ul class="space-y-3" role="list">
+            @for (wine of wineService.wines(); track wine.id) {
+              <li class="bg-white rounded-2xl shadow-sm border border-gray-100 flex gap-4 p-4">
+
+                <!-- Thumbnail -->
+                @if (wine.image_url) {
+                  <img
+                    [src]="wine.image_url"
+                    [alt]="wine.name + ' etikett'"
+                    class="w-16 h-20 object-cover rounded-xl flex-shrink-0"
+                    loading="lazy"
+                  />
+                } @else {
+                  <div
+                    class="w-16 h-20 bg-red-50 rounded-xl flex items-center justify-center flex-shrink-0 text-2xl"
+                    aria-hidden="true"
+                  >
+                    🍷
+                  </div>
+                }
+
+                <!-- Wine info -->
+                <div class="flex-1 min-w-0">
+                  <h3 class="font-semibold text-gray-900 truncate">{{ wine.name }}</h3>
+                  <p class="text-sm text-gray-500 truncate">{{ wine.producer }}</p>
+
+                  <!-- Badges -->
+                  <div class="flex flex-wrap gap-1.5 mt-2">
+                    @if (wine.vintage) {
+                      <span class="text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded-full font-medium">
+                        {{ wine.vintage }}
+                      </span>
+                    }
+                    @if (wine.type) {
+                      <span class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
+                        {{ wine.type }}
+                      </span>
+                    }
+                    @if (wine.country) {
+                      <span class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
+                        {{ wine.country }}
+                      </span>
+                    }
+                  </div>
+
+                  @if (wine.notes) {
+                    <p class="text-xs text-gray-400 mt-1.5 line-clamp-2">{{ wine.notes }}</p>
+                  }
+                </div>
+
+                <!-- Rating -->
+                @if (wine.rating != null) {
+                  <div class="flex flex-col items-center justify-center pl-2 flex-shrink-0">
+                    <span class="text-2xl font-bold text-red-800 leading-none">{{ wine.rating }}</span>
+                    <span class="text-xs text-gray-400 mt-0.5">/ 6</span>
+                  </div>
+                }
+
+              </li>
+            }
+          </ul>
+        }
+      </section>
+    }
+
+  </main>
+
+  <router-outlet />
+</div>

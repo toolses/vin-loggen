@@ -16,9 +16,13 @@ obj/
 api/local.settings.json
 
 # ── Environment / secrets ──────────────────────────────────────
+# Root and any subdirectory
 .env
 .env.local
 .env.*.local
+**/.env
+**/.env.local
+**/.env.*.local
 
 # ── OS ─────────────────────────────────────────────────────────
 .DS_Store

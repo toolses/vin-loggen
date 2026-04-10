@@ -1,35 +1,21 @@
-<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
-    <AzureFunctionsVersion>v4</AzureFunctionsVersion>
-    <OutputType>Exe</OutputType>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <RootNamespace>VinLoggen.Api</RootNamespace>
     <AssemblyName>VinLoggen.Api</AssemblyName>
-    <Optimize>true</Optimize>
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Azure Functions Isolated Worker -->
-    <PackageReference Include="Microsoft.Azure.Functions.Worker" Version="2.*" />
-    <PackageReference Include="Microsoft.Azure.Functions.Worker.Extensions.Http" Version="3.*" />
-    <PackageReference Include="Microsoft.Azure.Functions.Worker.Extensions.Http.AspNetCore" Version="2.*" />
-    <PackageReference Include="Microsoft.ApplicationInsights.WorkerService" Version="2.*" />
-    <PackageReference Include="Microsoft.Azure.Functions.Worker.ApplicationInsights" Version="2.*" />
+    <!-- Data access -->
+    <PackageReference Include="Dapper"  Version="2.*" />
+    <PackageReference Include="Npgsql"  Version="9.*" />
 
-    <!-- Database access -->
-    <PackageReference Include="Dapper" Version="2.*" />
-    <PackageReference Include="Npgsql" Version="9.*" />
+    <!-- OpenAPI / Scalar UI (replaces Swashbuckle) -->
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.*" />
+    <PackageReference Include="Scalar.AspNetCore"            Version="2.*" />
   </ItemGroup>
 
-  <ItemGroup>
-    <None Update="host.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="local.settings.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <CopyToPublishDirectory>Never</CopyToPublishDirectory>
-    </None>
-  </ItemGroup>
 </Project>

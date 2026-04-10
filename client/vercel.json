@@ -1,0 +1,35 @@
+{
+  "framework": null,
+  "buildCommand": "npm run build:prod",
+  "outputDirectory": "dist/vin-loggen/browser",
+  "rewrites": [
+    {
+      "source": "/((?!assets|icons|favicon\\.ico|manifest\\.webmanifest|ngsw.*|.*\\..+).*)",
+      "destination": "/index.html"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options",  "value": "nosniff" },
+        { "key": "X-Frame-Options",          "value": "DENY" },
+        { "key": "Referrer-Policy",          "value": "strict-origin-when-cross-origin" },
+        { "key": "X-XSS-Protection",         "value": "1; mode=block" }
+      ]
+    },
+    {
+      "source": "/ngsw-worker.js",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-cache" },
+        { "key": "Service-Worker-Allowed", "value": "/" }
+      ]
+    },
+    {
+      "source": "/manifest.webmanifest",
+      "headers": [
+        { "key": "Content-Type", "value": "application/manifest+json" }
+      ]
+    }
+  ]
+}

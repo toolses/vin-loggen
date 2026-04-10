@@ -1,33 +1,79 @@
-using Microsoft.Azure.Functions.Worker;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Npgsql;
+using Scalar.AspNetCore;
+using VinLoggen.Api.Endpoints;
 
-var host = new HostBuilder()
-    .ConfigureFunctionsWebApplication()
-    .ConfigureServices((context, services) =>
+var builder = WebApplication.CreateBuilder(args);
+
+// ── CORS ──────────────────────────────────────────────────────────────────────
+// Allows all *.vercel.app origins (preview + production) and localhost.
+// For a custom production domain add it to CORS_ALLOWED_ORIGINS (comma-separated).
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("Frontend", policy =>
+        policy
+            .SetIsOriginAllowed(OriginPolicy.IsAllowed)
+            .AllowAnyMethod()
+            .AllowAnyHeader());
+});
+
+// ── OpenAPI ───────────────────────────────────────────────────────────────────
+builder.Services.AddOpenApi();
+
+// ── HTTP client (used by ProcessLabel → Gemini) ───────────────────────────────
+builder.Services.AddHttpClient();
+
+// ── Database ──────────────────────────────────────────────────────────────────
+// Reads SUPABASE_CONNECTION_STRING from env / appsettings.
+// Falls back to a placeholder so the app starts without a DB configured.
+var connectionString = builder.Configuration["SUPABASE_CONNECTION_STRING"]
+    ?? string.Empty;
+
+builder.Services.AddNpgsqlDataSource(
+    !string.IsNullOrWhiteSpace(connectionString)
+        ? connectionString
+        : "Host=localhost;Database=vinloggen_placeholder");
+
+// ── Render support ────────────────────────────────────────────────────────────
+// Render injects a dynamic $PORT. Map it to ASP.NET Core's listener.
+var renderPort = Environment.GetEnvironmentVariable("PORT");
+if (!string.IsNullOrEmpty(renderPort))
+{
+    builder.WebHost.UseUrls($"http://+:{renderPort}");
+}
+
+// ── Build ─────────────────────────────────────────────────────────────────────
+var app = builder.Build();
+
+// ── Middleware ────────────────────────────────────────────────────────────────
+if (app.Environment.IsDevelopment())
+{
+    app.MapOpenApi();
+    app.MapScalarApiReference(opt => opt.WithTitle("VinLoggen API"));
+}
+
+app.UseCors("Frontend");
+
+// ── Endpoints ─────────────────────────────────────────────────────────────────
+app.MapHealthEndpoint();
+app.MapWineEndpoints();
+app.MapProcessLabelEndpoints();
+
+app.Run();
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+static class OriginPolicy
+{
+    private static readonly string[] _extra = (
+        Environment.GetEnvironmentVariable("CORS_ALLOWED_ORIGINS") ?? string.Empty)
+        .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+    public static bool IsAllowed(string origin)
     {
-        services.AddApplicationInsightsTelemetryWorkerService();
-        services.ConfigureFunctionsApplicationInsights();
-        services.AddHttpClient();
+        if (!Uri.TryCreate(origin, UriKind.Absolute, out var uri))
+            return false;
 
-        // Register Npgsql connection pool.
-        // Connection string is set in local.settings.json (dev) or
-        // Azure Static Web Apps application settings (prod).
-        var connectionString = context.Configuration["SUPABASE_CONNECTION_STRING"]
-            ?? string.Empty;
-
-        if (!string.IsNullOrWhiteSpace(connectionString))
-        {
-            services.AddNpgsqlDataSource(connectionString);
-        }
-        else
-        {
-            // Register a no-op data source so DI doesn't fail during local runs
-            // without a DB connection. Functions will return 503 if invoked.
-            services.AddSingleton(NpgsqlDataSource.Create("Host=localhost;Database=placeholder"));
-        }
-    })
-    .Build();
-
-await host.RunAsync();
+        return uri.Host is "localhost" or "127.0.0.1"
+            || uri.Host.EndsWith(".vercel.app", StringComparison.OrdinalIgnoreCase)
+            || _extra.Contains(uri.Host, StringComparer.OrdinalIgnoreCase);
+    }
+}

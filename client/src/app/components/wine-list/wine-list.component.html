@@ -1,0 +1,163 @@
+<div class="animate-fade-in max-w-lg mx-auto px-4 py-6">
+
+  <!-- ── Header ────────────────────────────────────────────── -->
+  <h1 class="font-serif text-3xl text-cream font-bold mb-6">Min vinkjeller</h1>
+
+  <!-- ── Search ────────────────────────────────────────────── -->
+  <div class="relative mb-4">
+    <svg class="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-cream-dark/50" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" aria-hidden="true">
+      <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+    </svg>
+    <input
+      type="search"
+      [ngModel]="search()"
+      (ngModelChange)="search.set($event)"
+      placeholder="Søk etter vin, produsent eller land..."
+      class="w-full min-h-12 pl-11 pr-4 rounded-xl glass text-cream placeholder-cream-dark/40
+             focus:border-burgundy-light focus:ring-1 focus:ring-burgundy-light
+             transition-colors outline-none"
+    />
+  </div>
+
+  <!-- ── Filter Chips ──────────────────────────────────────── -->
+  <div class="flex gap-2 overflow-x-auto no-scrollbar pb-4">
+    @for (type of wineTypes; track type) {
+      <button
+        (click)="toggleTypeFilter(type)"
+        class="flex-shrink-0 px-4 py-1.5 rounded-full text-xs font-medium border
+               transition-all duration-200"
+        [class]="typeFilter() === type
+          ? 'bg-burgundy text-cream border-burgundy-light'
+          : 'bg-white/5 text-cream-dark border-white/10 hover:bg-white/10'"
+      >
+        {{ type }}
+      </button>
+    }
+    @if (search() || typeFilter()) {
+      <button
+        (click)="clearFilters()"
+        class="flex-shrink-0 px-4 py-1.5 rounded-full text-xs font-medium
+               text-gold border border-gold/30 hover:bg-gold/10 transition-colors"
+      >
+        Nullstill
+      </button>
+    }
+  </div>
+
+  <!-- ── Loading ───────────────────────────────────────────── -->
+  @if (loading()) {
+    <div class="flex justify-center py-16" role="status" aria-label="Laster viner…">
+      <span class="w-8 h-8 rounded-full border-4 border-burgundy/30 border-t-burgundy animate-spin" aria-hidden="true"></span>
+    </div>
+  }
+
+  <!-- ── Error ─────────────────────────────────────────────── -->
+  @if (error()) {
+    <div class="glass rounded-xl px-4 py-3 text-sm text-red-400 border border-red-500/20 mb-4" role="alert">
+      {{ error() }}
+    </div>
+  }
+
+  <!-- ── Wine List ─────────────────────────────────────────── -->
+  @if (!loading()) {
+    @if (filteredWines().length === 0) {
+      <!-- Empty State -->
+      <div class="glass rounded-2xl p-10 text-center mt-4">
+        @if (search() || typeFilter()) {
+          <div class="text-5xl mb-4" aria-hidden="true">🔍</div>
+          <h3 class="font-serif text-lg text-cream mb-2">Ingen treff</h3>
+          <p class="text-cream-dark text-sm">Prøv et annet søk eller fjern filtre</p>
+        } @else {
+          <div class="text-6xl mb-4" aria-hidden="true">🍾</div>
+          <h3 class="font-serif text-xl text-cream mb-2">Ingen viner i kjelleren ennå</h3>
+          <p class="text-cream-dark text-sm mb-6">Skann din første vinetikett for å starte samlingen</p>
+          <a
+            routerLink="/scan"
+            class="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-burgundy text-cream text-sm font-medium
+                   hover:bg-burgundy-light transition-colors"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+            Skann etikett
+          </a>
+        }
+      </div>
+    } @else {
+      <!-- Results count -->
+      <p class="text-xs text-cream-dark mb-3">
+        {{ filteredWines().length }} {{ filteredWines().length === 1 ? 'vin' : 'viner' }}
+      </p>
+
+      <!-- Wine cards -->
+      <ul class="space-y-3" role="list">
+        @for (wine of displayedWines(); track wine.id) {
+          <li
+            class="glass rounded-2xl flex gap-4 p-4 transition-all duration-200 hover:bg-white/[0.08]"
+            [style.animation-delay]="($index * 50) + 'ms'"
+            style="animation: fade-in 0.4s ease-out both"
+          >
+            <!-- Thumbnail -->
+            @if (wine.image_url) {
+              <img
+                [src]="wine.image_url"
+                [alt]="wine.name + ' etikett'"
+                class="w-16 h-20 object-cover rounded-xl flex-shrink-0"
+                loading="lazy"
+              />
+            } @else {
+              <div class="w-16 h-20 bg-burgundy/20 rounded-xl flex items-center justify-center flex-shrink-0 text-2xl" aria-hidden="true">
+                🍷
+              </div>
+            }
+
+            <!-- Wine info -->
+            <div class="flex-1 min-w-0">
+              <h3 class="font-semibold text-cream truncate">{{ wine.name }}</h3>
+              <p class="text-sm text-cream-dark truncate">{{ wine.producer }}</p>
+
+              <!-- Badges -->
+              <div class="flex flex-wrap gap-1.5 mt-2">
+                @if (wine.vintage) {
+                  <span class="text-[10px] bg-burgundy/30 text-cream-muted px-2 py-0.5 rounded-full font-medium">
+                    {{ wine.vintage }}
+                  </span>
+                }
+                @if (wine.type) {
+                  <span class="text-[10px] px-2 py-0.5 rounded-full border" [class]="getTypeColor(wine.type)">
+                    {{ wine.type }}
+                  </span>
+                }
+                @if (wine.country) {
+                  <span class="text-[10px] bg-white/5 text-cream-dark px-2 py-0.5 rounded-full border border-white/10">
+                    {{ wine.country }}
+                  </span>
+                }
+              </div>
+
+              @if (wine.notes) {
+                <p class="text-xs text-cream-dark/60 mt-1.5 line-clamp-2">{{ wine.notes }}</p>
+              }
+            </div>
+
+            <!-- Rating -->
+            @if (wine.rating != null) {
+              <div class="flex flex-col items-center justify-center pl-2 flex-shrink-0">
+                <span class="text-2xl font-bold text-gold leading-none">{{ wine.rating }}</span>
+                <span class="text-[10px] text-cream-dark mt-0.5">/ 6</span>
+              </div>
+            }
+          </li>
+        }
+      </ul>
+
+      <!-- Infinite scroll sentinel -->
+      @if (hasMore()) {
+        <div #sentinel class="flex justify-center py-8">
+          <span class="w-6 h-6 rounded-full border-2 border-burgundy/30 border-t-burgundy animate-spin" aria-hidden="true"></span>
+        </div>
+      }
+    }
+  }
+
+</div>

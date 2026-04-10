@@ -2,6 +2,11 @@
   "framework": null,
   "buildCommand": "npm run build:prod",
   "outputDirectory": "dist/vin-loggen/browser",
+  "env": {
+    "API_URL": "@api_url",
+    "SUPABASE_URL": "@supabase_url",
+    "SUPABASE_ANON_KEY": "@supabase_anon_key"
+  },
   "rewrites": [
     {
       "source": "/((?!assets|icons|favicon\\.ico|manifest\\.webmanifest|ngsw.*|.*\\..+).*)",

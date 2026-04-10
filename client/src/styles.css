@@ -1,7 +1,94 @@
 /* Tailwind CSS v4 – single import, no config file required */
 @import "tailwindcss";
 
-/* Safe-area insets for notched mobile devices */
+/* ── Google Fonts ──────────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
+
+/* ── Design System: "Dark Cellar" Theme ────────────────────── */
+@theme {
+  --color-cellar-bg: #121212;
+  --color-cellar-surface: #1a1a1a;
+  --color-cellar-surface-light: #242424;
+  --color-burgundy: #800020;
+  --color-burgundy-light: #9a1a3a;
+  --color-burgundy-dark: #5c0018;
+  --color-gold: #D4AF37;
+  --color-gold-light: #e6c65a;
+  --color-gold-dark: #b8952e;
+  --color-cream: #F5F5F5;
+  --color-cream-muted: #d4d4d4;
+  --color-cream-dark: #a3a3a3;
+
+  --font-serif: 'Playfair Display', 'Georgia', serif;
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+/* ── Glass Utilities ───────────────────────────────────────── */
+@utility glass {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+@utility glass-strong {
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+/* ── Keyframe Animations ───────────────────────────────────── */
+@keyframes scan-line {
+  0%   { transform: translateY(0); opacity: 0; }
+  10%  { opacity: 1; }
+  90%  { opacity: 1; }
+  100% { transform: translateY(100%); opacity: 0; }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(40px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse-burgundy {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(128, 0, 32, 0.6); }
+  50%      { box-shadow: 0 0 20px 8px rgba(128, 0, 32, 0.2); }
+}
+
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@utility animate-fade-in {
+  animation: fade-in 0.5s ease-out both;
+}
+
+@utility animate-slide-up {
+  animation: slide-up 0.4s ease-out both;
+}
+
+@utility animate-pulse-burgundy {
+  animation: pulse-burgundy 2s ease-in-out infinite;
+}
+
+@utility animate-scan-line {
+  animation: scan-line 2.5s ease-in-out infinite;
+}
+
+@utility animate-shimmer {
+  background: linear-gradient(90deg, transparent 25%, rgba(128, 0, 32, 0.15) 50%, transparent 75%);
+  background-size: 200% 100%;
+  animation: shimmer 2s ease-in-out infinite;
+}
+
+/* ── Safe-area insets for notched mobile devices ───────────── */
 :root {
   --sat: env(safe-area-inset-top);
   --sar: env(safe-area-inset-right);
@@ -13,9 +100,40 @@ html,
 body {
   height: 100%;
   overscroll-behavior-y: none;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
 }
 
 /* Tap highlight removal on mobile */
 * {
   -webkit-tap-highlight-color: transparent;
+}
+
+/* ── Scrollbar Styling ─────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+}
+
+/* ── Focus Visible Ring ────────────────────────────────────── */
+*:focus-visible {
+  outline: 2px solid var(--color-burgundy-light);
+  outline-offset: 2px;
+}
+
+/* Hide scrollbar for horizontal scroll containers */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }

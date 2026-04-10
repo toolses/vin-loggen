@@ -28,7 +28,7 @@ services:
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health || exit 1"]
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/health || exit 1"]
       interval: 20s
       timeout: 5s
       retries: 5

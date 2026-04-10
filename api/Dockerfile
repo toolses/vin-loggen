@@ -18,8 +18,10 @@ FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 WORKDIR /app
 
 # Run as non-root for security
-RUN addgroup --gid 1001 appgroup \
- && adduser  --uid 1001 --gid 1001 --disabled-password --gecos "" appuser
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
+ && rm -rf /var/lib/apt/lists/* \
+ && groupadd --gid 1001 appgroup \
+ && useradd  --uid 1001 --gid 1001 --no-create-home appuser
 USER appuser
 
 COPY --from=build --chown=appuser:appgroup /app/publish .

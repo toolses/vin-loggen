@@ -1,6 +1,7 @@
 using Npgsql;
 using Scalar.AspNetCore;
 using VinLoggen.Api.Endpoints;
+using VinLoggen.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -19,8 +20,12 @@ builder.Services.AddCors(options =>
 // ── OpenAPI ───────────────────────────────────────────────────────────────────
 builder.Services.AddOpenApi();
 
-// ── HTTP client (used by ProcessLabel → Gemini) ───────────────────────────────
+// ── HTTP client (used by GeminiService) ─────────────────────────────────────
 builder.Services.AddHttpClient();
+builder.Services.AddHttpClient("gemini");
+
+// ── AI / Gemini ───────────────────────────────────────────────────────────────
+builder.Services.AddScoped<GeminiService>();
 
 // ── Database ──────────────────────────────────────────────────────────────────
 // Reads SUPABASE_CONNECTION_STRING from env / appsettings.
@@ -57,6 +62,7 @@ app.UseCors("Frontend");
 app.MapHealthEndpoint();
 app.MapWineEndpoints();
 app.MapProcessLabelEndpoints();
+app.MapWineAnalyzeEndpoints();
 
 app.Run();
 

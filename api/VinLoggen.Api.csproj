@@ -10,8 +10,9 @@
 
   <ItemGroup>
     <!-- Data access -->
-    <PackageReference Include="Dapper"  Version="2.*" />
-    <PackageReference Include="Npgsql"  Version="9.*" />
+    <PackageReference Include="Dapper"                    Version="2.*" />
+    <PackageReference Include="Npgsql"                    Version="9.*" />
+    <PackageReference Include="Npgsql.DependencyInjection" Version="9.*" />
 
     <!-- OpenAPI / Scalar UI (replaces Swashbuckle) -->
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.*" />

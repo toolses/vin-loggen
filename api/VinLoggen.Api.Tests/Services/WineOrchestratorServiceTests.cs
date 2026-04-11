@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Npgsql;
 using VinLoggen.Api.Configuration;
+using VinLoggen.Api.Models;
 using VinLoggen.Api.Services;
 using Xunit;
 
@@ -15,7 +16,9 @@ namespace VinLoggen.Api.Tests.Services;
 public class WineOrchestratorServiceTests : IDisposable
 {
     private static readonly byte[] FakeImage = [0xFF, 0xD8, 0xFF, 0xE0]; // JPEG magic bytes
+    private static readonly byte[] FakeBackImage = [0xFF, 0xD8, 0xFF, 0xE1]; // Different back image
     private const string Jpeg = "image/jpeg";
+    private const string WebP = "image/webp";
 
     private readonly Mock<IGeminiService>   _gemini   = new();
     private readonly Mock<IWineApiService>  _wineApi  = new();
@@ -50,7 +53,7 @@ public class WineOrchestratorServiceTests : IDisposable
 
     public void Dispose() => _dataSource.Dispose();
 
-    // ── Unauthenticated path (userId = null) ──────────────────────────────────
+    // ── Unauthenticated path (userId = null) ────────────────────────────────
 
     [Fact]
     public async Task AnalyzeAsync_NullUserId_ReturnsBasicOcrResult()
@@ -60,13 +63,14 @@ public class WineOrchestratorServiceTests : IDisposable
 
         var result = await _sut.AnalyzeAsync(FakeImage, Jpeg, userId: null, CancellationToken.None);
 
-        Assert.Equal("Barolo Riserva", result.WineName);
-        Assert.Equal("Marchesi di Barolo", result.Producer);
-        Assert.Equal(2018, result.Vintage);
-        Assert.False(result.AlreadyTasted);
-        Assert.Null(result.FoodPairings);
-        Assert.False(result.ProLimitReached);
-        Assert.Equal(0, result.ProScansToday);
+        Assert.True(result.Success);
+        Assert.Equal("Barolo Riserva", result.Data!.WineName);
+        Assert.Equal("Marchesi di Barolo", result.Data.Producer);
+        Assert.Equal(2018, result.Data.Vintage);
+        Assert.False(result.Data.AlreadyTasted);
+        Assert.Null(result.Data.FoodPairings);
+        Assert.False(result.Data.ProLimitReached);
+        Assert.Equal(0, result.Data.ProScansToday);
     }
 
     [Fact]
@@ -81,10 +85,10 @@ public class WineOrchestratorServiceTests : IDisposable
         _wineApi.VerifyNoOtherCalls();
     }
 
-    // ── Gemini disabled ───────────────────────────────────────────────────────
+    // ── Gemini disabled ─────────────────────────────────────────────────────
 
     [Fact]
-    public async Task AnalyzeAsync_GeminiDisabled_ReturnsEmptyResult()
+    public async Task AnalyzeAsync_GeminiDisabled_ReturnsFailResult()
     {
         var sut = new WineOrchestratorService(
             _gemini.Object, _wineApi.Object, _proUsage.Object, _dataSource,
@@ -93,23 +97,38 @@ public class WineOrchestratorServiceTests : IDisposable
 
         var result = await sut.AnalyzeAsync(FakeImage, Jpeg, userId: null, CancellationToken.None);
 
-        Assert.Null(result.WineName);
+        Assert.False(result.Success);
+        Assert.Equal(ApiErrorCode.ExternalServiceDown, result.ErrorCode);
         _gemini.VerifyNoOtherCalls();
     }
 
-    // ── Gemini failure ────────────────────────────────────────────────────────
+    // ── Gemini failure ──────────────────────────────────────────────────────
 
     [Fact]
-    public async Task AnalyzeAsync_GeminiReturnsError_ThrowsInvalidOperation()
+    public async Task AnalyzeAsync_GeminiReturnsError_ReturnsImageUnreadable()
     {
         _gemini.Setup(g => g.AnalyzeLabelAsync(FakeImage, Jpeg, default))
-               .ReturnsAsync(new GeminiResult<WineAnalysisResponse>(null, "API quota exceeded"));
+               .ReturnsAsync(new GeminiResult<WineAnalysisResponse>(null, "Could not read label"));
 
-        await Assert.ThrowsAsync<InvalidOperationException>(
-            () => _sut.AnalyzeAsync(FakeImage, Jpeg, userId: null, CancellationToken.None));
+        var result = await _sut.AnalyzeAsync(FakeImage, Jpeg, userId: null, CancellationToken.None);
+
+        Assert.False(result.Success);
+        Assert.Equal(ApiErrorCode.ImageUnreadable, result.ErrorCode);
     }
 
-    // ── Authenticated path (quota + enrichment) ───────────────────────────────
+    [Fact]
+    public async Task AnalyzeAsync_GeminiTimedOut_ReturnsExternalServiceDown()
+    {
+        _gemini.Setup(g => g.AnalyzeLabelAsync(FakeImage, Jpeg, default))
+               .ReturnsAsync(new GeminiResult<WineAnalysisResponse>(null, "Gemini API request timed out"));
+
+        var result = await _sut.AnalyzeAsync(FakeImage, Jpeg, userId: null, CancellationToken.None);
+
+        Assert.False(result.Success);
+        Assert.Equal(ApiErrorCode.ExternalServiceDown, result.ErrorCode);
+    }
+
+    // ── Authenticated path (quota + enrichment) ─────────────────────────────
 
     [Fact]
     public async Task AnalyzeAsync_AuthenticatedWithQuota_CallsWineApiAndReturnsFoodPairings()
@@ -143,10 +162,11 @@ public class WineOrchestratorServiceTests : IDisposable
 
         var result = await _sut.AnalyzeAsync(FakeImage, Jpeg, userId, CancellationToken.None);
 
-        Assert.NotNull(result.FoodPairings);
-        Assert.Equal(3, result.FoodPairings!.Length);
-        Assert.Equal("api-001", result.ExternalSourceId);
-        Assert.False(result.ProLimitReached);
+        Assert.True(result.Success);
+        Assert.NotNull(result.Data!.FoodPairings);
+        Assert.Equal(3, result.Data.FoodPairings!.Length);
+        Assert.Equal("api-001", result.Data.ExternalSourceId);
+        Assert.False(result.Data.ProLimitReached);
     }
 
     [Fact]
@@ -163,8 +183,94 @@ public class WineOrchestratorServiceTests : IDisposable
 
         var result = await _sut.AnalyzeAsync(FakeImage, Jpeg, userId, CancellationToken.None);
 
-        Assert.True(result.ProLimitReached);
-        Assert.Null(result.FoodPairings);
+        Assert.True(result.Success);
+        Assert.True(result.Data!.ProLimitReached);
+        Assert.Null(result.Data.FoodPairings);
         _wineApi.VerifyNoOtherCalls();
+    }
+
+    // ── Multi-image (front + back) analysis ─────────────────────────────────
+
+    [Fact]
+    public async Task AnalyzeAsync_WithBackImage_CallsAnalyzeLabelsAsync()
+    {
+        _gemini.Setup(g => g.AnalyzeLabelsAsync(FakeImage, Jpeg, FakeBackImage, WebP, default))
+               .ReturnsAsync(new GeminiResult<WineAnalysisResponse>(DefaultAnalysis, null));
+
+        var result = await _sut.AnalyzeAsync(
+            FakeImage, Jpeg, userId: null, CancellationToken.None,
+            backImageBytes: FakeBackImage, backMimeType: WebP);
+
+        Assert.True(result.Success);
+        Assert.Equal("Barolo Riserva", result.Data!.WineName);
+        _gemini.Verify(g => g.AnalyzeLabelsAsync(FakeImage, Jpeg, FakeBackImage, WebP, default), Times.Once);
+        _gemini.Verify(g => g.AnalyzeLabelAsync(It.IsAny<byte[]>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task AnalyzeAsync_WithNullBackImage_CallsSingleImageAnalyze()
+    {
+        _gemini.Setup(g => g.AnalyzeLabelAsync(FakeImage, Jpeg, default))
+               .ReturnsAsync(new GeminiResult<WineAnalysisResponse>(DefaultAnalysis, null));
+
+        var result = await _sut.AnalyzeAsync(
+            FakeImage, Jpeg, userId: null, CancellationToken.None,
+            backImageBytes: null, backMimeType: null);
+
+        Assert.True(result.Success);
+        _gemini.Verify(g => g.AnalyzeLabelAsync(FakeImage, Jpeg, default), Times.Once);
+        _gemini.Verify(g => g.AnalyzeLabelsAsync(
+            It.IsAny<byte[]>(), It.IsAny<string>(),
+            It.IsAny<byte[]?>(), It.IsAny<string?>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task AnalyzeAsync_WithEmptyBackImage_CallsSingleImageAnalyze()
+    {
+        _gemini.Setup(g => g.AnalyzeLabelAsync(FakeImage, Jpeg, default))
+               .ReturnsAsync(new GeminiResult<WineAnalysisResponse>(DefaultAnalysis, null));
+
+        var result = await _sut.AnalyzeAsync(
+            FakeImage, Jpeg, userId: null, CancellationToken.None,
+            backImageBytes: [], backMimeType: Jpeg);
+
+        Assert.True(result.Success);
+        _gemini.Verify(g => g.AnalyzeLabelAsync(FakeImage, Jpeg, default), Times.Once);
+    }
+
+    [Fact]
+    public async Task AnalyzeAsync_MultiImage_GeminiFailure_ReturnsImageUnreadable()
+    {
+        _gemini.Setup(g => g.AnalyzeLabelsAsync(FakeImage, Jpeg, FakeBackImage, WebP, default))
+               .ReturnsAsync(new GeminiResult<WineAnalysisResponse>(null, "Label unreadable"));
+
+        var result = await _sut.AnalyzeAsync(
+            FakeImage, Jpeg, userId: null, CancellationToken.None,
+            backImageBytes: FakeBackImage, backMimeType: WebP);
+
+        Assert.False(result.Success);
+        Assert.Equal(ApiErrorCode.ImageUnreadable, result.ErrorCode);
+    }
+
+    [Fact]
+    public async Task AnalyzeAsync_MultiImage_WithAuth_RunsFullPipeline()
+    {
+        var userId = Guid.NewGuid();
+
+        _gemini.Setup(g => g.AnalyzeLabelsAsync(FakeImage, Jpeg, FakeBackImage, WebP, default))
+               .ReturnsAsync(new GeminiResult<WineAnalysisResponse>(DefaultAnalysis, null));
+
+        _proUsage.Setup(p => p.GetStatusAsync(userId, default))
+                 .ReturnsAsync(new ProUsageService.ProStatus(
+                     CanUsePro: false, IsPro: false, ScansToday: 10, DailyLimit: 10, ScansRemaining: 0));
+
+        var result = await _sut.AnalyzeAsync(
+            FakeImage, Jpeg, userId, CancellationToken.None,
+            backImageBytes: FakeBackImage, backMimeType: WebP);
+
+        Assert.True(result.Success);
+        Assert.Equal("Barolo Riserva", result.Data!.WineName);
+        Assert.True(result.Data.ProLimitReached);
     }
 }

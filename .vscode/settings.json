@@ -1,6 +1,8 @@
 {
     "chat.tools.terminal.autoApprove": {
         "npx ng": true,
-        "docker run": true
+        "docker run": true,
+        "npx vitest": true,
+        "npm test": true
     }
 }

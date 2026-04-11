@@ -54,9 +54,6 @@ export class ScannerComponent implements OnDestroy {
   private frontImages: ProcessedImages | null = null;
   private backImages: ProcessedImages | null = null;
 
-  /** Track which image the file input targets */
-  private fileInputTarget: 'front' | 'back' = 'front';
-
   private locationPromise: Promise<{ lat: number; lng: number } | null>;
 
   constructor() {
@@ -118,7 +115,12 @@ export class ScannerComponent implements OnDestroy {
   }
 
   protected triggerFileInput(target: 'front' | 'back' = 'front'): void {
-    this.fileInputTarget = target;
+    // Ensure the step matches the target so handleCapture routes correctly
+    if (target === 'back' && this.step() !== 'back') {
+      this.step.set('back');
+    } else if (target === 'front' && this.step() === 'idle') {
+      this.step.set('front');
+    }
     this.fileInputRef()?.nativeElement.click();
   }
 
@@ -126,9 +128,16 @@ export class ScannerComponent implements OnDestroy {
   private async handleCapture(source: File | Blob): Promise<void> {
     try {
       const processed = await this.imageProcessing.processImage(source);
-      const currentStep = this.step() === 'idle' ? 'front' : this.step();
+      const currentStep = this.step();
 
-      if (currentStep === 'front' || this.fileInputTarget === 'front') {
+      if (currentStep === 'back') {
+        this.backImages = processed;
+        this.revokePreview('back');
+        this.backPreviewObjectUrl = URL.createObjectURL(processed.thumbnail);
+        this.backPreviewUrl.set(this.backPreviewObjectUrl);
+        this.stopCamera();
+      } else {
+        // 'idle' or 'front' → treat as front capture
         this.frontImages = processed;
         this.revokePreview('front');
         this.frontPreviewObjectUrl = URL.createObjectURL(processed.thumbnail);
@@ -136,12 +145,6 @@ export class ScannerComponent implements OnDestroy {
         this.stopCamera();
         // Move to back-capture step
         this.step.set('back');
-      } else {
-        this.backImages = processed;
-        this.revokePreview('back');
-        this.backPreviewObjectUrl = URL.createObjectURL(processed.thumbnail);
-        this.backPreviewUrl.set(this.backPreviewObjectUrl);
-        this.stopCamera();
       }
     } catch (err) {
       console.error('Scanner: image processing error', err);

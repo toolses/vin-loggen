@@ -30,6 +30,14 @@
     <EmbeddedResource Include="Migrations\*.sql" />
   </ItemGroup>
 
+  <!-- Exclude the nested test project from source compilation -->
+  <ItemGroup>
+    <Compile Remove="VinLoggen.Api.Tests\**" />
+    <Content Remove="VinLoggen.Api.Tests\**" />
+    <None Remove="VinLoggen.Api.Tests\**" />
+    <EmbeddedResource Remove="VinLoggen.Api.Tests\**" />
+  </ItemGroup>
+
   <ItemGroup>
     <InternalsVisibleTo Include="VinLoggen.Api.Tests" />
   </ItemGroup>

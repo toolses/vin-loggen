@@ -8,6 +8,7 @@ import {
 } from '@angular/core';
 import { Router } from '@angular/router';
 import { WineService } from '../../services/wine.service';
+import { LocationService } from '../../services/location.service';
 import { ImageProcessingService } from '../../services/image-processing.service';
 
 @Component({
@@ -18,6 +19,7 @@ import { ImageProcessingService } from '../../services/image-processing.service'
 export class ScannerComponent implements OnDestroy {
   private readonly router = inject(Router);
   private readonly wineService = inject(WineService);
+  private readonly locationService = inject(LocationService);
   private readonly imageProcessing = inject(ImageProcessingService);
 
   protected readonly videoRef = viewChild<ElementRef<HTMLVideoElement>>('videoEl');
@@ -32,6 +34,12 @@ export class ScannerComponent implements OnDestroy {
 
   private stream: MediaStream | null = null;
   private previewObjectUrl: string | null = null;
+  private locationPromise: Promise<{ lat: number; lng: number } | null>;
+
+  constructor() {
+    // Silently request GPS in background — non-blocking
+    this.locationPromise = this.locationService.getCurrentPosition().catch(() => null);
+  }
 
   async startCamera(): Promise<void> {
     try {
@@ -110,6 +118,12 @@ export class ScannerComponent implements OnDestroy {
 
       if (imageUrl) {
         this.wineService.setScanImageUrl(imageUrl);
+      }
+
+      // Store GPS if captured
+      const loc = await this.locationPromise;
+      if (loc) {
+        this.wineService.setScanLocation(loc.lat, loc.lng);
       }
 
       if (navigator.vibrate) {

@@ -2,18 +2,24 @@ import { Component, OnInit, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { WineService, NewWine } from '../../services/wine.service';
+import { LocationService } from '../../services/location.service';
 import { StarRatingComponent } from '../star-rating/star-rating.component';
+import {
+  LocationSearchComponent,
+  LocationSelection,
+} from '../location-search/location-search.component';
 
 @Component({
   selector: 'app-wine-editor',
   standalone: true,
-  imports: [FormsModule, StarRatingComponent],
+  imports: [FormsModule, StarRatingComponent, LocationSearchComponent],
   templateUrl: './wine-editor.component.html',
 })
 export class WineEditorComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   protected readonly wineService = inject(WineService);
+  private readonly locationService = inject(LocationService);
 
   protected readonly name = signal('');
   protected readonly producer = signal('');
@@ -27,6 +33,13 @@ export class WineEditorComponent implements OnInit {
   protected readonly rating = signal(0);
   protected readonly tastedAt = signal('');
   protected readonly saving = signal(false);
+
+  // Location
+  protected readonly locationName = signal<string | null>(null);
+  protected readonly locationLat = signal<number | null>(null);
+  protected readonly locationLng = signal<number | null>(null);
+  protected readonly locationType = signal<string | null>(null);
+  protected readonly locationSet = signal(false);
 
   protected readonly imageUrl = signal<string | null>(null);
   protected readonly wineTypes = ['Rød', 'Hvit', 'Rosé', 'Musserende', 'Oransje', 'Dessert'];
@@ -58,6 +71,19 @@ export class WineEditorComponent implements OnInit {
         if (scan.grapes?.length)  this.grapeVariety.set(scan.grapes.join(', '));
         if (scan.alcoholContent != null) this.alcoholContent.set(`${scan.alcoholContent}%`);
       }
+
+      // Pre-fill location from scan GPS
+      const scanLoc = this.wineService.lastScanLocation();
+      if (scanLoc) {
+        this.locationLat.set(scanLoc.lat);
+        this.locationLng.set(scanLoc.lng);
+        this.locationService.reverseGeocode(scanLoc.lat, scanLoc.lng).then(geo => {
+          if (geo) {
+            this.locationName.set(geo.name);
+            this.locationSet.set(true);
+          }
+        });
+      }
     }
   }
 
@@ -81,6 +107,15 @@ export class WineEditorComponent implements OnInit {
     this.rating.set(wine.rating ?? 0);
     this.imageUrl.set(wine.image_url);
     this.tastedAt.set(wine.tasted_at ?? '');
+
+    // Load location if present
+    if (wine.location_name) {
+      this.locationName.set(wine.location_name);
+      this.locationLat.set(wine.location_lat);
+      this.locationLng.set(wine.location_lng);
+      this.locationType.set(wine.location_type);
+      this.locationSet.set(true);
+    }
   }
 
   protected async save(): Promise<void> {
@@ -99,6 +134,10 @@ export class WineEditorComponent implements OnInit {
       notes: this.notes() || null,
       image_url: this.imageUrl() || null,
       tasted_at: this.tastedAt() || null,
+      location_name: this.locationName(),
+      location_lat: this.locationLat(),
+      location_lng: this.locationLng(),
+      location_type: this.locationType(),
     };
 
     let success: boolean;
@@ -127,5 +166,21 @@ export class WineEditorComponent implements OnInit {
     } else {
       this.router.navigate(['/']);
     }
+  }
+
+  protected onLocationSelected(loc: LocationSelection): void {
+    this.locationName.set(loc.name);
+    this.locationLat.set(loc.lat);
+    this.locationLng.set(loc.lng);
+    this.locationType.set(loc.type);
+    this.locationSet.set(true);
+  }
+
+  protected clearLocation(): void {
+    this.locationName.set(null);
+    this.locationLat.set(null);
+    this.locationLng.set(null);
+    this.locationType.set(null);
+    this.locationSet.set(false);
   }
 }

@@ -3,10 +3,12 @@ import { Router } from '@angular/router';
 import { AuthService } from '../../services/auth.service';
 import { ProfileService } from '../../services/profile.service';
 import { WineService } from '../../services/wine.service';
+import { LocationSearchComponent, LocationSelection } from '../location-search/location-search.component';
 
 @Component({
   selector: 'app-profile',
   standalone: true,
+  imports: [LocationSearchComponent],
   templateUrl: './profile.component.html',
 })
 export class ProfileComponent implements OnInit {
@@ -16,6 +18,7 @@ export class ProfileComponent implements OnInit {
   private readonly router = inject(Router);
 
   protected readonly regenerating = signal(false);
+  protected readonly editingHomeAddress = signal(false);
 
   protected readonly countryDistribution = computed(() => {
     const wines = this.wineService.wines();
@@ -62,12 +65,22 @@ export class ProfileComponent implements OnInit {
   ngOnInit(): void {
     this.wineService.loadWines();
     this.profileService.loadProfile();
+    this.profileService.loadHomeAddress();
   }
 
   protected async regenerateInsight(): Promise<void> {
     this.regenerating.set(true);
     await this.profileService.regenerateProfile();
     this.regenerating.set(false);
+  }
+
+  protected async onHomeAddressSelected(location: LocationSelection): Promise<void> {
+    await this.profileService.saveHomeAddress(location.name, location.lat, location.lng);
+    this.editingHomeAddress.set(false);
+  }
+
+  protected async removeHomeAddress(): Promise<void> {
+    await this.profileService.clearHomeAddress();
   }
 
   protected async signOut(): Promise<void> {

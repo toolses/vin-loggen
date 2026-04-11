@@ -13,11 +13,12 @@ import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { WineService, Wine } from '../../services/wine.service';
 import { SharePreviewComponent } from '../share-preview/share-preview.component';
+import { WineMapComponent } from '../wine-map/wine-map.component';
 
 @Component({
   selector: 'app-wine-list',
   standalone: true,
-  imports: [FormsModule, RouterLink, SharePreviewComponent],
+  imports: [FormsModule, RouterLink, SharePreviewComponent, WineMapComponent],
   templateUrl: './wine-list.component.html',
 })
 export class WineListComponent implements OnInit, OnDestroy {
@@ -28,6 +29,7 @@ export class WineListComponent implements OnInit, OnDestroy {
   protected readonly search = signal('');
   protected readonly typeFilter = signal<string | null>(null);
   protected readonly displayCount = signal(20);
+  protected readonly viewMode = signal<'list' | 'map'>('list');
   protected readonly loading = this.wineService.loading;
   protected readonly error = this.wineService.error;
   protected readonly sharingWine = signal<Wine | null>(null);

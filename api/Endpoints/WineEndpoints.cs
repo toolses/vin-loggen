@@ -55,10 +55,14 @@ public static class WineEndpoints
                     region,
                     rating,
                     notes,
-                    image_url  AS ImageUrl,
-                    tasted_at  AS TastedAt,
-                    created_at AS CreatedAt,
-                    user_id    AS UserId
+                    image_url      AS ImageUrl,
+                    tasted_at      AS TastedAt,
+                    location_name  AS LocationName,
+                    location_lat   AS LocationLat,
+                    location_lng   AS LocationLng,
+                    location_type  AS LocationType,
+                    created_at     AS CreatedAt,
+                    user_id        AS UserId
                 FROM wines
                 WHERE user_id = @UserId
                 ORDER BY created_at DESC

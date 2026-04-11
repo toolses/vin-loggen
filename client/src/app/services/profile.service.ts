@@ -2,6 +2,8 @@ import { Injectable, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { environment } from '../../environments/environment';
 import { firstValueFrom } from 'rxjs';
+import { SupabaseService } from './supabase.service';
+import { AuthService } from './auth.service';
 
 export interface TasteProfile {
   preferredTypes: string[];
@@ -14,17 +16,27 @@ export interface TasteProfile {
   personalityTitle: string;
 }
 
+export interface HomeAddress {
+  name: string;
+  lat: number;
+  lng: number;
+}
+
 @Injectable({ providedIn: 'root' })
 export class ProfileService {
   private readonly http = inject(HttpClient);
+  private readonly supabase = inject(SupabaseService);
+  private readonly auth = inject(AuthService);
 
   private readonly _profile = signal<TasteProfile | null>(null);
   private readonly _loading = signal(false);
   private readonly _error = signal<string | null>(null);
+  private readonly _homeAddress = signal<HomeAddress | null>(null);
 
   readonly profile = this._profile.asReadonly();
   readonly loading = this._loading.asReadonly();
   readonly error = this._error.asReadonly();
+  readonly homeAddress = this._homeAddress.asReadonly();
 
   async loadProfile(): Promise<void> {
     this._loading.set(true);
@@ -63,5 +75,58 @@ export class ProfileService {
     } finally {
       this._loading.set(false);
     }
+  }
+
+  async loadHomeAddress(): Promise<void> {
+    const userId = this.auth.user()?.id;
+    if (!userId) return;
+
+    const { data } = await this.supabase.client
+      .from('user_profiles')
+      .select('home_address_name, home_address_lat, home_address_lng')
+      .eq('id', userId)
+      .single();
+
+    if (data?.home_address_name && data.home_address_lat != null && data.home_address_lng != null) {
+      this._homeAddress.set({
+        name: data.home_address_name,
+        lat: data.home_address_lat,
+        lng: data.home_address_lng,
+      });
+    } else {
+      this._homeAddress.set(null);
+    }
+  }
+
+  async saveHomeAddress(name: string, lat: number, lng: number): Promise<void> {
+    const userId = this.auth.user()?.id;
+    if (!userId) return;
+
+    await this.supabase.client
+      .from('user_profiles')
+      .upsert({
+        id: userId,
+        home_address_name: name,
+        home_address_lat: lat,
+        home_address_lng: lng,
+      });
+
+    this._homeAddress.set({ name, lat, lng });
+  }
+
+  async clearHomeAddress(): Promise<void> {
+    const userId = this.auth.user()?.id;
+    if (!userId) return;
+
+    await this.supabase.client
+      .from('user_profiles')
+      .update({
+        home_address_name: null,
+        home_address_lat: null,
+        home_address_lng: null,
+      })
+      .eq('id', userId);
+
+    this._homeAddress.set(null);
   }
 }

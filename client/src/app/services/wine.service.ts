@@ -16,6 +16,10 @@ export interface Wine {
   notes: string | null;
   image_url: string | null;
   tasted_at: string | null;
+  location_name: string | null;
+  location_lat: number | null;
+  location_lng: number | null;
+  location_type: string | null;
   created_at: string;
 }
 
@@ -44,6 +48,7 @@ export class WineService {
   private readonly _processing = signal(false);
   private readonly _lastScanResult = signal<WineAnalysisResult | null>(null);
   private readonly _lastScanImageUrl = signal<string | null>(null);
+  private readonly _lastScanLocation = signal<{ lat: number; lng: number } | null>(null);
 
   readonly wines = this._wines.asReadonly();
   readonly loading = this._loading.asReadonly();
@@ -52,6 +57,7 @@ export class WineService {
   readonly processing = this._processing.asReadonly();
   readonly lastScanResult = this._lastScanResult.asReadonly();
   readonly lastScanImageUrl = this._lastScanImageUrl.asReadonly();
+  readonly lastScanLocation = this._lastScanLocation.asReadonly();
 
   async loadWines(): Promise<void> {
     this._loading.set(true);
@@ -179,8 +185,13 @@ export class WineService {
     this._lastScanImageUrl.set(url);
   }
 
+  setScanLocation(lat: number, lng: number): void {
+    this._lastScanLocation.set({ lat, lng });
+  }
+
   clearScanResult(): void {
     this._lastScanResult.set(null);
     this._lastScanImageUrl.set(null);
+    this._lastScanLocation.set(null);
   }
 }

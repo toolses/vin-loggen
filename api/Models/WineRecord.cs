@@ -14,8 +14,12 @@ public record WineRecord(
     string? Region,
     decimal? Rating,
     string? Notes,
-    string? ImageUrl,     // mapped from image_url
-    DateOnly? TastedAt,   // mapped from tasted_at
-    DateTime CreatedAt,   // mapped from created_at
-    Guid? UserId          // mapped from user_id
+    string? ImageUrl,       // mapped from image_url
+    DateOnly? TastedAt,     // mapped from tasted_at
+    string? LocationName,   // mapped from location_name
+    double? LocationLat,    // mapped from location_lat
+    double? LocationLng,    // mapped from location_lng
+    string? LocationType,   // mapped from location_type
+    DateTime CreatedAt,     // mapped from created_at
+    Guid? UserId            // mapped from user_id
 );

@@ -3,6 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { environment } from '../../environments/environment';
 import { firstValueFrom } from 'rxjs';
 import { SupabaseService } from './supabase.service';
+import { NotificationService } from './notification.service';
 
 // ── Master wine data (from the wines table) ───────────────────────────────────
 // Combined with the user's latest log via the wine_entries view.
@@ -25,6 +26,7 @@ export interface Wine {
   rating: number | null;
   notes: string | null;
   image_url: string | null;
+  thumbnail_url: string | null;
   tasted_at: string | null;
   location_name: string | null;
   location_lat: number | null;
@@ -42,6 +44,7 @@ export interface WineLog {
   rating: number | null;
   notes: string | null;
   image_url: string | null;
+  thumbnail_url: string | null;
   tasted_at: string | null;
   location_name: string | null;
   location_lat: number | null;
@@ -68,6 +71,7 @@ export interface NewWine {
   rating: number | null;
   notes: string | null;
   image_url: string | null;
+  thumbnail_url: string | null;
   tasted_at: string | null;
   location_name: string | null;
   location_lat: number | null;
@@ -106,6 +110,7 @@ export interface WineAnalysisResult {
 export class WineService {
   private readonly http = inject(HttpClient);
   private readonly supabase = inject(SupabaseService).client;
+  private readonly notifications = inject(NotificationService);
 
   private readonly _wines = signal<Wine[]>([]);
   private readonly _loading = signal(false);
@@ -113,6 +118,7 @@ export class WineService {
   private readonly _processing = signal(false);
   private readonly _lastScanResult = signal<WineAnalysisResult | null>(null);
   private readonly _lastScanImageUrl = signal<string | null>(null);
+  private readonly _lastScanThumbnailUrl = signal<string | null>(null);
   private readonly _lastScanLocation = signal<{ lat: number; lng: number } | null>(null);
 
   readonly wines = this._wines.asReadonly();
@@ -122,6 +128,7 @@ export class WineService {
   readonly processing = this._processing.asReadonly();
   readonly lastScanResult = this._lastScanResult.asReadonly();
   readonly lastScanImageUrl = this._lastScanImageUrl.asReadonly();
+  readonly lastScanThumbnailUrl = this._lastScanThumbnailUrl.asReadonly();
   readonly lastScanLocation = this._lastScanLocation.asReadonly();
 
   // ── Read ────────────────────────────────────────────────────────────────────
@@ -253,6 +260,7 @@ export class WineService {
         rating:        wine.rating,
         notes:         wine.notes,
         image_url:     wine.image_url,
+        thumbnail_url: wine.thumbnail_url,
         tasted_at:     wine.tasted_at,
         location_name: wine.location_name,
         location_lat:  wine.location_lat,
@@ -269,15 +277,38 @@ export class WineService {
     return true;
   }
 
-  /** Updates a specific tasting log (identified by its log_id). */
-  async updateWine(logId: string, wine: Partial<NewWine>): Promise<boolean> {
+  /** Updates a specific tasting log and its master wine record. */
+  async updateWine(logId: string, wineId: string, wine: Partial<NewWine>): Promise<boolean> {
     this._error.set(null);
-    const { error } = await this.supabase
+
+    // Update master wine data
+    const { error: wineError } = await this.supabase
+      .from('wines' as any)
+      .update({
+        name:             wine.name,
+        producer:         wine.producer,
+        vintage:          wine.vintage,
+        type:             wine.type,
+        country:          wine.country,
+        region:           wine.region,
+        grapes:           wine.grapes,
+        alcohol_content:  wine.alcohol_content,
+      })
+      .eq('id', wineId);
+
+    if (wineError) {
+      this._error.set(wineError.message);
+      return false;
+    }
+
+    // Update tasting log data
+    const { error: logError } = await this.supabase
       .from('wine_logs' as any)
       .update({
         rating:        wine.rating,
         notes:         wine.notes,
         image_url:     wine.image_url,
+        thumbnail_url: wine.thumbnail_url,
         tasted_at:     wine.tasted_at,
         location_name: wine.location_name,
         location_lat:  wine.location_lat,
@@ -286,8 +317,8 @@ export class WineService {
       })
       .eq('id', logId);
 
-    if (error) {
-      this._error.set(error.message);
+    if (logError) {
+      this._error.set(logError.message);
       return false;
     }
     await this.loadWines();
@@ -333,19 +364,98 @@ export class WineService {
     return urlData.publicUrl;
   }
 
+  /**
+   * Uploads both the full-size and thumbnail images to Supabase Storage.
+   * Supports front and optional back label images.
+   * Path structure: {userId}/{wineId}/front/full.webp + thumb.webp
+   *                 {userId}/{wineId}/back/full.webp + thumb.webp
+   */
+  async uploadLabelImages(
+    frontFull: Blob,
+    frontThumb: Blob,
+    backFull?: Blob | null,
+    backThumb?: Blob | null,
+  ): Promise<{ imageUrl: string; thumbnailUrl: string; backImageUrl?: string; backThumbnailUrl?: string } | null> {
+    const { data: { user } } = await this.supabase.auth.getUser();
+    const ts = Date.now();
+    const prefix = user ? `${user.id}/scans/${ts}` : `labels/${ts}`;
+    const ext = frontFull.type === 'image/webp' ? 'webp' : 'jpg';
+
+    // Upload front images
+    const [frontFullResult, frontThumbResult] = await Promise.all([
+      this.supabase.storage
+        .from('wine-labels')
+        .upload(`${prefix}/front/full.${ext}`, frontFull, { contentType: frontFull.type, upsert: false }),
+      this.supabase.storage
+        .from('wine-labels')
+        .upload(`${prefix}/front/thumb.${ext}`, frontThumb, { contentType: frontThumb.type, upsert: false }),
+    ]);
+
+    if (frontFullResult.error || frontThumbResult.error) {
+      const msg = frontFullResult.error?.message ?? frontThumbResult.error?.message ?? 'Bildeopplasting feilet';
+      console.error('Storage upload error (front):', msg);
+      this._error.set(msg);
+      return null;
+    }
+
+    const { data: frontFullUrl } = this.supabase.storage
+      .from('wine-labels')
+      .getPublicUrl(frontFullResult.data.path);
+
+    const { data: frontThumbUrl } = this.supabase.storage
+      .from('wine-labels')
+      .getPublicUrl(frontThumbResult.data.path);
+
+    const result: { imageUrl: string; thumbnailUrl: string; backImageUrl?: string; backThumbnailUrl?: string } = {
+      imageUrl: frontFullUrl.publicUrl,
+      thumbnailUrl: frontThumbUrl.publicUrl,
+    };
+
+    // Upload back images if provided
+    if (backFull && backThumb) {
+      const backExt = backFull.type === 'image/webp' ? 'webp' : 'jpg';
+      const [backFullResult, backThumbResult] = await Promise.all([
+        this.supabase.storage
+          .from('wine-labels')
+          .upload(`${prefix}/back/full.${backExt}`, backFull, { contentType: backFull.type, upsert: false }),
+        this.supabase.storage
+          .from('wine-labels')
+          .upload(`${prefix}/back/thumb.${backExt}`, backThumb, { contentType: backThumb.type, upsert: false }),
+      ]);
+
+      if (!backFullResult.error && !backThumbResult.error) {
+        const { data: backFullUrl } = this.supabase.storage
+          .from('wine-labels')
+          .getPublicUrl(backFullResult.data.path);
+        const { data: backThumbUrl } = this.supabase.storage
+          .from('wine-labels')
+          .getPublicUrl(backThumbResult.data.path);
+        result.backImageUrl = backFullUrl.publicUrl;
+        result.backThumbnailUrl = backThumbUrl.publicUrl;
+      } else {
+        console.warn('Storage upload error (back), continuing with front only');
+      }
+    }
+
+    return result;
+  }
+
   // ── AI Analysis ─────────────────────────────────────────────────────────────
 
   /**
-   * Sends the raw image blob as multipart/form-data to POST /api/wine/analyze.
+   * Sends the raw image blob(s) as multipart/form-data to POST /api/wine/analyze.
    * The backend calls Gemini and checks the catalogue for de-duplication.
    * Sets the `processing` signal while the request is in flight.
    */
-  async analyzeLabel(file: Blob): Promise<WineAnalysisResult | null> {
+  async analyzeLabel(frontImage: Blob, backImage?: Blob | null): Promise<WineAnalysisResult | null> {
     this._processing.set(true);
     this._error.set(null);
     try {
       const formData = new FormData();
-      formData.append('image', file, 'label.jpg');
+      formData.append('image', frontImage, 'label.jpg');
+      if (backImage) {
+        formData.append('backImage', backImage, 'back-label.jpg');
+      }
 
       const result = await firstValueFrom(
         this.http.post<WineAnalysisResult>(`${environment.apiBaseUrl}/wine/analyze`, formData)
@@ -353,9 +463,16 @@ export class WineService {
       this._lastScanResult.set(result);
       return result;
     } catch (err: unknown) {
-      const detail = (err as { error?: { detail?: string } })?.error?.detail
-        ?? (err instanceof Error ? err.message : 'Kunne ikke analysere etiketten');
-      this._error.set(detail);
+      const httpErr = err as { error?: { extensions?: { errorCode?: string }; detail?: string }; status?: number };
+      const errorCode = httpErr?.error?.extensions?.errorCode;
+
+      if (errorCode) {
+        this.notifications.showApiError(errorCode);
+      } else {
+        const detail = httpErr?.error?.detail
+          ?? (err instanceof Error ? err.message : 'Kunne ikke analysere etiketten');
+        this.notifications.error(detail);
+      }
       return null;
     } finally {
       this._processing.set(false);
@@ -367,6 +484,10 @@ export class WineService {
     this._lastScanImageUrl.set(url);
   }
 
+  setScanThumbnailUrl(url: string): void {
+    this._lastScanThumbnailUrl.set(url);
+  }
+
   setScanLocation(lat: number, lng: number): void {
     this._lastScanLocation.set({ lat, lng });
   }
@@ -374,6 +495,7 @@ export class WineService {
   clearScanResult(): void {
     this._lastScanResult.set(null);
     this._lastScanImageUrl.set(null);
+    this._lastScanThumbnailUrl.set(null);
     this._lastScanLocation.set(null);
   }
 }

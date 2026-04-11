@@ -19,11 +19,11 @@
       routerLink="/scan"
       class="block w-full py-4 rounded-2xl bg-burgundy text-cream text-center text-lg font-semibold
              shadow-lg shadow-burgundy/25 border border-burgundy-light/30
-             transition-all duration-200 active:scale-[0.98] hover:bg-burgundy-light
+             transition-transform duration-200 active:scale-[0.98] hover:bg-burgundy-light
              animate-pulse-burgundy"
     >
       <div class="flex items-center justify-center gap-3">
-        <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" aria-hidden="true">
+        <svg class="w-6 h-6 flex-shrink-0" style="transform: translateZ(0)" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round"
             d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z" />
           <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0Z" />
@@ -99,9 +99,9 @@
               style="animation: fade-in 0.4s ease-out both"
             >
               <!-- Thumbnail -->
-              @if (wine.image_url) {
+              @if (wine.thumbnail_url || wine.image_url) {
                 <img
-                  [src]="wine.image_url"
+                  [src]="wine.thumbnail_url || wine.image_url"
                   [alt]="wine.name + ' etikett'"
                   class="w-16 h-20 object-cover rounded-xl flex-shrink-0"
                   loading="lazy"

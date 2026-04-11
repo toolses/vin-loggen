@@ -10,6 +10,13 @@ public interface IGeminiService
         string            mimeType,
         CancellationToken ct);
 
+    Task<GeminiResult<WineAnalysisResponse>> AnalyzeLabelsAsync(
+        byte[]            frontImageBytes,
+        string            frontMimeType,
+        byte[]?           backImageBytes,
+        string?           backMimeType,
+        CancellationToken ct);
+
     Task<GeminiService.FoodPairingResult?> GetFoodPairingsAsync(
         string? wineName,
         string? producer,

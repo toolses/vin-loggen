@@ -24,7 +24,7 @@
   </button>
 
   <!-- ── Pro quota counter ──────────────────────────────────── -->
-  @if (auth.isLoggedIn() && !processing()) {
+  @if (auth.isLoggedIn() && step() !== 'processing') {
     <div
       class="absolute top-4 right-4 z-50 flex items-center gap-1.5 px-3 py-2 rounded-full glass"
       style="margin-top: var(--sat)"
@@ -42,11 +42,23 @@
   }
 
   <!-- ── Processing overlay ────────────────────────────────── -->
-  @if (processing()) {
+  @if (step() === 'processing') {
     <div class="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/80">
-      @if (previewUrl()) {
-        <img [src]="previewUrl()" alt="Skannet etikett" class="w-40 h-40 object-cover rounded-2xl mb-8 opacity-60" />
-      }
+      <!-- Thumbnails of captured images -->
+      <div class="flex gap-4 mb-8">
+        @if (frontPreviewUrl()) {
+          <div class="relative">
+            <img [src]="frontPreviewUrl()" alt="Forside" class="w-24 h-24 object-cover rounded-xl opacity-60" />
+            <span class="absolute -bottom-2 left-1/2 -translate-x-1/2 text-[10px] bg-burgundy text-cream px-2 py-0.5 rounded-full">Forside</span>
+          </div>
+        }
+        @if (backPreviewUrl()) {
+          <div class="relative">
+            <img [src]="backPreviewUrl()" alt="Bakside" class="w-24 h-24 object-cover rounded-xl opacity-60" />
+            <span class="absolute -bottom-2 left-1/2 -translate-x-1/2 text-[10px] bg-burgundy text-cream px-2 py-0.5 rounded-full">Bakside</span>
+          </div>
+        }
+      </div>
       <div class="w-16 h-16 rounded-full border-4 border-burgundy/30 border-t-burgundy animate-spin mb-6"></div>
       <p class="font-serif text-xl text-cream mb-2">Analyserer etikett...</p>
       <p class="text-cream-dark text-sm">Gemini AI leser vininformasjon</p>
@@ -56,8 +68,8 @@
     </div>
   }
 
-  <!-- ── Camera view ───────────────────────────────────────── -->
-  @if (!processing()) {
+  <!-- ── Camera / Capture flow ───────────────────────────────── -->
+  @if (step() !== 'processing') {
     <div class="flex-1 relative overflow-hidden">
 
       @if (cameraActive()) {
@@ -71,74 +83,168 @@
 
         <!-- Viewfinder overlay -->
         <div class="absolute inset-0 flex items-center justify-center">
-          <!-- Dark border mask -->
           <div class="absolute inset-0 bg-black/50"></div>
-
-          <!-- Transparent viewfinder window -->
           <div class="relative w-72 h-96 z-10">
-            <!-- Cut-out effect via box-shadow -->
-            <div class="absolute inset-0 rounded-2xl"
-                 style="box-shadow: 0 0 0 9999px rgba(0,0,0,0.5)"></div>
-
-            <!-- Viewfinder border -->
+            <div class="absolute inset-0 rounded-2xl" style="box-shadow: 0 0 0 9999px rgba(0,0,0,0.5)"></div>
             <div class="absolute inset-0 rounded-2xl border-2 border-gold/50"></div>
-
-            <!-- Corner accents -->
             <div class="absolute top-0 left-0 w-8 h-8 border-t-2 border-l-2 border-gold rounded-tl-2xl"></div>
             <div class="absolute top-0 right-0 w-8 h-8 border-t-2 border-r-2 border-gold rounded-tr-2xl"></div>
             <div class="absolute bottom-0 left-0 w-8 h-8 border-b-2 border-l-2 border-gold rounded-bl-2xl"></div>
             <div class="absolute bottom-0 right-0 w-8 h-8 border-b-2 border-r-2 border-gold rounded-br-2xl"></div>
-
-            <!-- Scanning line -->
             <div class="absolute left-2 right-2 h-0.5 bg-gradient-to-r from-transparent via-burgundy-light to-transparent
                         animate-scan-line rounded-full shadow-[0_0_8px_rgba(128,0,32,0.6)]"></div>
           </div>
         </div>
 
-        <!-- Instructions -->
+        <!-- Step indicator -->
         <div class="absolute bottom-32 left-0 right-0 text-center z-20">
-          <p class="text-cream text-sm font-medium drop-shadow-lg">Plasser etiketten i rammen</p>
+          @if (step() === 'front') {
+            <p class="text-cream text-sm font-medium drop-shadow-lg">Ta bilde av forsiden</p>
+          } @else {
+            <p class="text-cream text-sm font-medium drop-shadow-lg">Ta bilde av baksiden</p>
+          }
         </div>
 
+        <!-- Captured thumbnails overlay (top) -->
+        @if (frontPreviewUrl() || backPreviewUrl()) {
+          <div class="absolute top-16 left-0 right-0 flex justify-center gap-3 z-20" style="margin-top: var(--sat)">
+            @if (frontPreviewUrl()) {
+              <div class="relative">
+                <img [src]="frontPreviewUrl()" alt="Forside" class="w-14 h-14 object-cover rounded-lg border-2 border-gold/60" />
+                <span class="absolute -bottom-1.5 left-1/2 -translate-x-1/2 text-[9px] bg-black/70 text-cream px-1.5 py-0.5 rounded-full whitespace-nowrap">Forside</span>
+              </div>
+            }
+            @if (backPreviewUrl()) {
+              <div class="relative">
+                <img [src]="backPreviewUrl()" alt="Bakside" class="w-14 h-14 object-cover rounded-lg border-2 border-gold/60" />
+                <span class="absolute -bottom-1.5 left-1/2 -translate-x-1/2 text-[9px] bg-black/70 text-cream px-1.5 py-0.5 rounded-full whitespace-nowrap">Bakside</span>
+              </div>
+            }
+          </div>
+        }
+
       } @else {
-        <!-- Camera not started / error state -->
+        <!-- Not capturing: Idle / Review state -->
         <div class="flex-1 flex flex-col items-center justify-center h-full bg-cellar-bg px-6 text-center">
+
           @if (cameraError()) {
             <div class="text-5xl mb-4" aria-hidden="true">📷</div>
             <p class="text-cream mb-2 font-serif text-lg">Kamera utilgjengelig</p>
             <p class="text-cream-dark text-sm mb-6">{{ cameraError() }}</p>
-          } @else {
+          } @else if (step() === 'idle') {
+            <!-- Initial state: nothing captured -->
             <div class="text-6xl mb-6" aria-hidden="true">📸</div>
             <p class="text-cream font-serif text-xl mb-2">Klar til å skanne</p>
-            <p class="text-cream-dark text-sm mb-8">Ta bilde av en vinetikett eller velg fra galleriet</p>
+            <p class="text-cream-dark text-sm mb-8">Ta bilde av forsiden og eventuelt baksiden av flasken</p>
+          } @else {
+            <!-- Review state: front captured, optionally back too -->
+            <div class="flex gap-4 mb-6">
+              <!-- Front thumbnail -->
+              @if (frontPreviewUrl()) {
+                <div class="relative group">
+                  <img [src]="frontPreviewUrl()" alt="Forside" class="w-28 h-28 object-cover rounded-2xl border-2 border-gold/40" />
+                  <span class="absolute -bottom-2 left-1/2 -translate-x-1/2 text-[10px] bg-burgundy text-cream px-2 py-0.5 rounded-full">Forside</span>
+                  <button
+                    (click)="retakeFront()"
+                    class="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-red-500 text-white flex items-center justify-center
+                           text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                    aria-label="Ta nytt bilde av forsiden"
+                  >✕</button>
+                </div>
+              }
+              <!-- Back thumbnail -->
+              @if (backPreviewUrl()) {
+                <div class="relative group">
+                  <img [src]="backPreviewUrl()" alt="Bakside" class="w-28 h-28 object-cover rounded-2xl border-2 border-gold/40" />
+                  <span class="absolute -bottom-2 left-1/2 -translate-x-1/2 text-[10px] bg-burgundy text-cream px-2 py-0.5 rounded-full">Bakside</span>
+                  <button
+                    (click)="retakeBack()"
+                    class="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-red-500 text-white flex items-center justify-center
+                           text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                    aria-label="Ta nytt bilde av baksiden"
+                  >✕</button>
+                </div>
+              } @else if (step() === 'back' && !cameraActive()) {
+                <!-- Back placeholder -->
+                <div class="w-28 h-28 rounded-2xl border-2 border-dashed border-white/20 flex flex-col items-center justify-center text-cream-dark">
+                  <svg class="w-8 h-8 mb-1 opacity-50" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                  </svg>
+                  <span class="text-[10px]">Bakside</span>
+                </div>
+              }
+            </div>
+
+            @if (step() === 'back' && frontPreviewUrl()) {
+              <p class="text-cream font-serif text-lg mb-2">Forside tatt!</p>
+              <p class="text-cream-dark text-sm mb-6">Vil du også ta bilde av baksiden?</p>
+            }
           }
 
+          <!-- Action buttons -->
           <div class="flex flex-col gap-3 w-full max-w-xs">
-            <button
-              (click)="startCamera()"
-              class="w-full py-3.5 rounded-2xl bg-burgundy text-cream font-semibold
-                     transition-all duration-200 active:scale-[0.98] hover:bg-burgundy-light"
-            >
-              Åpne kamera
-            </button>
-            <button
-              (click)="triggerFileInput()"
-              class="w-full py-3.5 rounded-2xl glass text-cream font-medium
-                     transition-all duration-200 active:scale-[0.98] hover:bg-white/10"
-            >
-              Velg fra galleri
-            </button>
+            @if (step() === 'idle') {
+              <button
+                (click)="startCamera()"
+                class="w-full py-3.5 rounded-2xl bg-burgundy text-cream font-semibold
+                       transition-all duration-200 active:scale-[0.98] hover:bg-burgundy-light"
+              >
+                Åpne kamera
+              </button>
+              <button
+                (click)="triggerFileInput('front')"
+                class="w-full py-3.5 rounded-2xl glass text-cream font-medium
+                       transition-all duration-200 active:scale-[0.98] hover:bg-white/10"
+              >
+                Velg fra galleri
+              </button>
+            }
+
+            @if (step() === 'back' && !cameraActive()) {
+              @if (!backPreviewUrl()) {
+                <button
+                  (click)="captureBack()"
+                  class="w-full py-3.5 rounded-2xl bg-burgundy text-cream font-semibold
+                         transition-all duration-200 active:scale-[0.98] hover:bg-burgundy-light"
+                >
+                  Ta bilde av baksiden
+                </button>
+                <button
+                  (click)="triggerFileInput('back')"
+                  class="w-full py-3.5 rounded-2xl glass text-cream font-medium
+                         transition-all duration-200 active:scale-[0.98] hover:bg-white/10"
+                >
+                  Velg bakside fra galleri
+                </button>
+                <button
+                  (click)="skipBack()"
+                  class="w-full py-3 rounded-2xl text-cream-dark font-medium text-sm
+                         transition-all duration-200 active:scale-[0.98] hover:text-cream"
+                >
+                  Hopp over – analyser kun forsiden
+                </button>
+              } @else {
+                <!-- Both images captured -->
+                <button
+                  (click)="submitImages()"
+                  class="w-full py-3.5 rounded-2xl bg-burgundy text-cream font-semibold
+                         transition-all duration-200 active:scale-[0.98] hover:bg-burgundy-light"
+                >
+                  Analyser etikettene
+                </button>
+              }
+            }
           </div>
         </div>
       }
     </div>
 
-    <!-- ── Capture controls ──────────────────────────────────── -->
+    <!-- ── Capture controls (camera active) ────────────────────── -->
     @if (cameraActive()) {
       <div class="flex items-center justify-center gap-8 py-6 bg-black/80" style="padding-bottom: calc(1.5rem + var(--sab))">
         <!-- Gallery button -->
         <button
-          (click)="triggerFileInput()"
+          (click)="triggerFileInput(step() === 'front' ? 'front' : 'back')"
           class="w-12 h-12 rounded-full glass flex items-center justify-center text-cream
                  transition-colors hover:bg-white/10"
           aria-label="Velg fra galleri"

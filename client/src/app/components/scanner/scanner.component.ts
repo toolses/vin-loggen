@@ -11,7 +11,10 @@ import { WineService } from '../../services/wine.service';
 import { ProfileService } from '../../services/profile.service';
 import { AuthService } from '../../services/auth.service';
 import { LocationService } from '../../services/location.service';
-import { ImageProcessingService } from '../../services/image-processing.service';
+import { ImageProcessingService, ProcessedImages } from '../../services/image-processing.service';
+import { NotificationService } from '../../services/notification.service';
+
+type ScanStep = 'idle' | 'front' | 'back' | 'processing';
 
 @Component({
   selector: 'app-scanner',
@@ -23,6 +26,7 @@ export class ScannerComponent implements OnDestroy {
   private readonly wineService = inject(WineService);
   private readonly locationService = inject(LocationService);
   private readonly imageProcessing = inject(ImageProcessingService);
+  private readonly notifications = inject(NotificationService);
   protected readonly profileService = inject(ProfileService);
   protected readonly auth = inject(AuthService);
 
@@ -34,16 +38,26 @@ export class ScannerComponent implements OnDestroy {
   protected readonly cameraError = signal<string | null>(null);
   protected readonly capturing = signal(false);
   protected readonly processing = this.wineService.processing;
-  protected readonly previewUrl = signal<string | null>(null);
+
+  /** Current step in the scanning flow */
+  protected readonly step = signal<ScanStep>('idle');
+
+  /** Thumbnail previews for captured images */
+  protected readonly frontPreviewUrl = signal<string | null>(null);
+  protected readonly backPreviewUrl = signal<string | null>(null);
 
   private stream: MediaStream | null = null;
-  private previewObjectUrl: string | null = null;
+  private frontPreviewObjectUrl: string | null = null;
+  private backPreviewObjectUrl: string | null = null;
+
+  /** Processed images awaiting submission */
+  private frontImages: ProcessedImages | null = null;
+  private backImages: ProcessedImages | null = null;
+
   private locationPromise: Promise<{ lat: number; lng: number } | null>;
 
   constructor() {
-    // Silently request GPS in background — non-blocking
     this.locationPromise = this.locationService.getCurrentPosition().catch(() => null);
-    // Load quota state for the counter
     this.profileService.loadProQuota();
   }
 
@@ -52,11 +66,13 @@ export class ScannerComponent implements OnDestroy {
       this.stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } },
       });
-      // Set cameraActive first so Angular renders the <video> element
       this.cameraActive.set(true);
       this.cameraError.set(null);
 
-      // Wait for the DOM to update before assigning the stream
+      if (this.step() === 'idle') {
+        this.step.set('front');
+      }
+
       await new Promise(r => requestAnimationFrame(r));
       const video = this.videoRef()?.nativeElement;
       if (video) {
@@ -85,7 +101,7 @@ export class ScannerComponent implements OnDestroy {
         this.capturing.set(false);
         return;
       }
-      await this.processFile(blob);
+      await this.handleCapture(blob);
     }, 'image/jpeg');
   }
 
@@ -95,38 +111,104 @@ export class ScannerComponent implements OnDestroy {
     if (!file) return;
     input.value = '';
     this.capturing.set(true);
-    this.processFile(file);
+    this.handleCapture(file);
   }
 
-  protected triggerFileInput(): void {
+  protected triggerFileInput(target: 'front' | 'back' = 'front'): void {
+    // Ensure the step matches the target so handleCapture routes correctly
+    if (target === 'back' && this.step() !== 'back') {
+      this.step.set('back');
+    } else if (target === 'front' && this.step() === 'idle') {
+      this.step.set('front');
+    }
     this.fileInputRef()?.nativeElement.click();
   }
 
-  private async processFile(source: File | Blob): Promise<void> {
+  /** Called after capturing an image from camera or file picker */
+  private async handleCapture(source: File | Blob): Promise<void> {
     try {
-      // 1. Resize to max 1080p, JPEG 0.8 quality
-      const resized = await this.imageProcessing.resizeImage(source);
+      const processed = await this.imageProcessing.processImage(source);
+      const currentStep = this.step();
 
-      // 2. Show local preview immediately
-      this.revokePreview();
-      this.previewObjectUrl = URL.createObjectURL(resized);
-      this.previewUrl.set(this.previewObjectUrl);
-      this.stopCamera();
+      if (currentStep === 'back') {
+        this.backImages = processed;
+        this.revokePreview('back');
+        this.backPreviewObjectUrl = URL.createObjectURL(processed.thumbnail);
+        this.backPreviewUrl.set(this.backPreviewObjectUrl);
+        this.stopCamera();
+      } else {
+        // 'idle' or 'front' → treat as front capture
+        this.frontImages = processed;
+        this.revokePreview('front');
+        this.frontPreviewObjectUrl = URL.createObjectURL(processed.thumbnail);
+        this.frontPreviewUrl.set(this.frontPreviewObjectUrl);
+        this.stopCamera();
+        // Move to back-capture step
+        this.step.set('back');
+      }
+    } catch (err) {
+      console.error('Scanner: image processing error', err);
+      this.notifications.error('Kunne ikke behandle bildet. Prøv igjen.');
+    } finally {
+      this.capturing.set(false);
+    }
+  }
 
-      // 3. Build a named File for the Supabase upload
-      const uploadFile = new File([resized], `scan-${Date.now()}.jpg`, { type: 'image/jpeg' });
+  /** Skip back label capture and proceed with front only */
+  protected skipBack(): void {
+    this.submitImages();
+  }
 
-      // 4. Upload to Supabase (for image_url) and send to AI endpoint in parallel
-      const [imageUrl] = await Promise.all([
-        this.wineService.uploadLabelImage(uploadFile),
-        this.wineService.analyzeLabel(resized),
+  /** User wants to capture the back label */
+  protected captureBack(): void {
+    this.step.set('back');
+    this.startCamera();
+  }
+
+  /** Re-take the front image */
+  protected retakeFront(): void {
+    this.frontImages = null;
+    this.revokePreview('front');
+    this.frontPreviewUrl.set(null);
+    this.step.set('front');
+    this.startCamera();
+  }
+
+  /** Re-take the back image */
+  protected retakeBack(): void {
+    this.backImages = null;
+    this.revokePreview('back');
+    this.backPreviewUrl.set(null);
+    this.step.set('back');
+    this.startCamera();
+  }
+
+  /** Submit captured images (front required, back optional) */
+  protected async submitImages(): Promise<void> {
+    if (!this.frontImages) return;
+
+    this.step.set('processing');
+
+    try {
+      // Upload to Supabase and send to AI in parallel
+      const [uploadResult] = await Promise.all([
+        this.wineService.uploadLabelImages(
+          this.frontImages.full,
+          this.frontImages.thumbnail,
+          this.backImages?.full ?? null,
+          this.backImages?.thumbnail ?? null,
+        ),
+        this.wineService.analyzeLabel(
+          this.frontImages.full,
+          this.backImages?.full ?? null,
+        ),
       ]);
 
-      if (imageUrl) {
-        this.wineService.setScanImageUrl(imageUrl);
+      if (uploadResult) {
+        this.wineService.setScanImageUrl(uploadResult.imageUrl);
+        this.wineService.setScanThumbnailUrl(uploadResult.thumbnailUrl);
       }
 
-      // Store GPS if captured
       const loc = await this.locationPromise;
       if (loc) {
         this.wineService.setScanLocation(loc.lat, loc.lng);
@@ -138,9 +220,9 @@ export class ScannerComponent implements OnDestroy {
 
       this.router.navigate(['/edit']);
     } catch (err) {
-      console.error('Scanner: processFile error', err);
-    } finally {
-      this.capturing.set(false);
+      console.error('Scanner: submitImages error', err);
+      this.notifications.error('Noe gikk galt under analyse. Prøv igjen.');
+      this.step.set('back');
     }
   }
 
@@ -150,10 +232,14 @@ export class ScannerComponent implements OnDestroy {
     this.cameraActive.set(false);
   }
 
-  private revokePreview(): void {
-    if (this.previewObjectUrl) {
-      URL.revokeObjectURL(this.previewObjectUrl);
-      this.previewObjectUrl = null;
+  private revokePreview(which: 'front' | 'back'): void {
+    if (which === 'front' && this.frontPreviewObjectUrl) {
+      URL.revokeObjectURL(this.frontPreviewObjectUrl);
+      this.frontPreviewObjectUrl = null;
+    }
+    if (which === 'back' && this.backPreviewObjectUrl) {
+      URL.revokeObjectURL(this.backPreviewObjectUrl);
+      this.backPreviewObjectUrl = null;
     }
   }
 
@@ -163,6 +249,7 @@ export class ScannerComponent implements OnDestroy {
 
   ngOnDestroy(): void {
     this.stopCamera();
-    this.revokePreview();
+    this.revokePreview('front');
+    this.revokePreview('back');
   }
 }

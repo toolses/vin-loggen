@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Http.HttpResults;
+using VinLoggen.Api.Models;
 using VinLoggen.Api.Services;
 
 namespace VinLoggen.Api.Endpoints;
@@ -24,12 +25,13 @@ public static class WineAnalyzeEndpoints
 
     private static async Task<Results<Ok<WineAnalysisResponse>, ProblemHttpResult>> AnalyzeLabel(
         IFormFile                 image,
+        IFormFile?                backImage,
         ClaimsPrincipal           user,
         WineOrchestratorService   orchestrator,
         ILogger<Program>          logger,
         CancellationToken         ct)
     {
-        // ── Validate input ────────────────────────────────────────────────────
+        // ── Validate front image ────────────────────────────────────────────
         if (image is null || image.Length == 0)
             return TypedResults.Problem("No image file provided", statusCode: 400);
 
@@ -40,11 +42,22 @@ public static class WineAnalyzeEndpoints
             return TypedResults.Problem(
                 "Unsupported image type. Use JPEG, PNG, or WebP.", statusCode: 400);
 
-        logger.LogInformation(
-            "AnalyzeLabel: {FileName} ({ContentType}, {Bytes} bytes)",
-            image.FileName, image.ContentType, image.Length);
+        // ── Validate optional back image ────────────────────────────────────
+        if (backImage is { Length: > 0 })
+        {
+            if (backImage.Length > MaxImageBytes)
+                return TypedResults.Problem("Back image too large (max 10 MB)", statusCode: 400);
 
-        // ── Read image bytes ──────────────────────────────────────────────────
+            if (!AllowedMimeTypes.Contains(backImage.ContentType, StringComparer.OrdinalIgnoreCase))
+                return TypedResults.Problem(
+                    "Unsupported back image type. Use JPEG, PNG, or WebP.", statusCode: 400);
+        }
+
+        logger.LogInformation(
+            "AnalyzeLabel: front={FileName} ({ContentType}, {Bytes} bytes), back={HasBack}",
+            image.FileName, image.ContentType, image.Length, backImage is { Length: > 0 });
+
+        // ── Read front image bytes ──────────────────────────────────────────
         byte[] imageBytes;
         using (var ms = new MemoryStream((int)image.Length))
         {
@@ -52,20 +65,44 @@ public static class WineAnalyzeEndpoints
             imageBytes = ms.ToArray();
         }
 
-        // ── Resolve optional user identity ────────────────────────────────────
+        // ── Read optional back image bytes ──────────────────────────────────
+        byte[]? backImageBytes = null;
+        string? backMimeType   = null;
+        if (backImage is { Length: > 0 })
+        {
+            using var ms = new MemoryStream((int)backImage.Length);
+            await backImage.CopyToAsync(ms, ct);
+            backImageBytes = ms.ToArray();
+            backMimeType   = backImage.ContentType;
+        }
+
+        // ── Resolve optional user identity ──────────────────────────────────
         var userIdClaim = user.FindFirstValue(ClaimTypes.NameIdentifier)
                        ?? user.FindFirstValue("sub");
         Guid? userId = Guid.TryParse(userIdClaim, out var id) ? id : null;
 
-        // ── Delegate to the orchestrator ──────────────────────────────────────
-        try
+        // ── Delegate to the orchestrator ────────────────────────────────────
+        var apiResult = await orchestrator.AnalyzeAsync(
+            imageBytes, image.ContentType, userId, ct, backImageBytes, backMimeType);
+
+        if (apiResult.Success)
+            return TypedResults.Ok(apiResult.Data!);
+
+        var statusCode = apiResult.ErrorCode switch
         {
-            var result = await orchestrator.AnalyzeAsync(imageBytes, image.ContentType, userId, ct);
-            return TypedResults.Ok(result);
-        }
-        catch (InvalidOperationException ex)
-        {
-            return TypedResults.Problem(ex.Message, statusCode: StatusCodes.Status502BadGateway);
-        }
+            ApiErrorCode.ImageUnreadable     => StatusCodes.Status422UnprocessableEntity,
+            ApiErrorCode.ExternalServiceDown => StatusCodes.Status502BadGateway,
+            ApiErrorCode.QuotaExceeded       => StatusCodes.Status429TooManyRequests,
+            ApiErrorCode.Unauthorized        => StatusCodes.Status401Unauthorized,
+            _                                => StatusCodes.Status500InternalServerError,
+        };
+
+        return TypedResults.Problem(
+            detail: apiResult.Message,
+            statusCode: statusCode,
+            extensions: new Dictionary<string, object?>
+            {
+                ["errorCode"] = apiResult.ErrorCode.ToString(),
+            });
     }
 }

@@ -76,8 +76,11 @@
 
 @utility animate-pulse-burgundy {
   animation: pulse-burgundy 2s ease-in-out infinite;
-  transform: translateZ(0);
   will-change: box-shadow;
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
 
 @utility animate-scan-line {

@@ -1,6 +1,7 @@
 using Dapper;
 using Npgsql;
 using VinLoggen.Api.Configuration;
+using VinLoggen.Api.Models;
 
 namespace VinLoggen.Api.Services;
 
@@ -54,31 +55,52 @@ public sealed class WineOrchestratorService
     /// Runs the full analysis pipeline for the supplied image bytes.
     /// <paramref name="userId"/> may be <c>null</c> for unauthenticated calls
     /// (dedup + quota features are skipped).
+    /// <paramref name="backImageBytes"/> and <paramref name="backMimeType"/> are optional
+    /// (omit when only a front label image is available).
     /// </summary>
-    public async Task<WineAnalysisResponse> AnalyzeAsync(
+    public async Task<ApiResult<WineAnalysisResponse>> AnalyzeAsync(
         byte[]  imageBytes,
         string  mimeType,
         Guid?   userId,
-        CancellationToken ct)
+        CancellationToken ct,
+        byte[]? backImageBytes = null,
+        string? backMimeType   = null)
     {
         // ── Step 1: Gemini OCR ────────────────────────────────────────────────
         if (!_settings.EnableGemini)
         {
             _logger.LogWarning("OrchestratorService: Gemini disabled, returning empty result");
-            return new WineAnalysisResponse(null, null, null, null, null, null, null, null);
+            return ApiResult<WineAnalysisResponse>.Fail(
+                ApiErrorCode.ExternalServiceDown, "AI-analyse er deaktivert");
         }
 
-        var geminiResult = await _gemini.AnalyzeLabelAsync(imageBytes, mimeType, ct);
+        var geminiResult = backImageBytes is { Length: > 0 }
+            ? await _gemini.AnalyzeLabelsAsync(imageBytes, mimeType, backImageBytes, backMimeType, ct)
+            : await _gemini.AnalyzeLabelAsync(imageBytes, mimeType, ct);
         if (!geminiResult.IsSuccess)
         {
             _logger.LogError("OrchestratorService: Gemini OCR failed: {Error}", geminiResult.Error);
-            throw new InvalidOperationException($"AI analysis failed: {geminiResult.Error}");
+
+            var isServiceError = geminiResult.Error?.Contains("timed out", StringComparison.OrdinalIgnoreCase) == true
+                              || geminiResult.Error?.Contains("HTTP request", StringComparison.OrdinalIgnoreCase) == true;
+
+            return isServiceError
+                ? ApiResult<WineAnalysisResponse>.Fail(
+                    ApiErrorCode.ExternalServiceDown, "AI-tjenesten er midlertidig utilgjengelig")
+                : ApiResult<WineAnalysisResponse>.Fail(
+                    ApiErrorCode.ImageUnreadable, "Kunne ikke lese etiketten fra bildet");
         }
 
         var analysis = geminiResult.Value!;
 
         // Label was unreadable (Gemini returned all nulls) – no charge
         bool labelReadable = !string.IsNullOrWhiteSpace(analysis.WineName);
+
+        if (!labelReadable)
+        {
+            return ApiResult<WineAnalysisResponse>.Fail(
+                ApiErrorCode.ImageUnreadable, "Kunne ikke lese etiketten. Prøv et nytt bilde med bedre lys.");
+        }
 
         // ── Step 2: Deduplication (authenticated only) ────────────────────────
         DedupMatch? dedup = null;
@@ -151,7 +173,7 @@ public sealed class WineOrchestratorService
         // ── Step 5: Assemble response ─────────────────────────────────────────
         bool proLimitReached = proStatus is { CanUsePro: false };
 
-        return analysis with
+        return ApiResult<WineAnalysisResponse>.Ok(analysis with
         {
             // Dedup
             AlreadyTasted  = dedup is not null && dedup.UserLogCount > 0,
@@ -171,7 +193,7 @@ public sealed class WineOrchestratorService
             ProScansToday   = proStatus?.ScansToday   ?? 0,
             DailyProLimit   = proStatus?.DailyLimit   ?? _settings.DailyProLimit,
             IsPro           = proStatus?.IsPro        ?? false,
-        };
+        });
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────

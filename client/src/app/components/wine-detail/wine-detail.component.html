@@ -1,8 +1,28 @@
 <div class="animate-fade-in max-w-lg mx-auto">
 
   @if (loading()) {
-    <div class="flex justify-center py-16">
-      <span class="w-8 h-8 rounded-full border-4 border-burgundy/30 border-t-burgundy animate-spin" aria-hidden="true"></span>
+    <div role="status" aria-label="Laster vindetaljer…">
+      <!-- Hero skeleton -->
+      <div class="w-full h-64 bg-white/10 animate-shimmer"></div>
+      <div class="px-6 pb-8 -mt-8 relative z-10">
+        <!-- Title + producer -->
+        <div class="h-8 w-3/4 bg-white/10 rounded animate-shimmer mt-4"></div>
+        <div class="h-5 w-1/2 bg-white/10 rounded animate-shimmer mt-2"></div>
+        <!-- Rating -->
+        <div class="h-6 w-24 bg-white/10 rounded animate-shimmer mt-4"></div>
+        <!-- Badges -->
+        <div class="flex gap-2 mt-5">
+          <div class="h-6 w-14 bg-white/10 rounded-full animate-shimmer"></div>
+          <div class="h-6 w-12 bg-white/10 rounded-full animate-shimmer"></div>
+          <div class="h-6 w-16 bg-white/10 rounded-full animate-shimmer"></div>
+        </div>
+        <!-- Notes card -->
+        <div class="glass rounded-xl px-4 py-3 mt-5 space-y-2">
+          <div class="h-3 w-16 bg-white/10 rounded animate-shimmer"></div>
+          <div class="h-3 w-full bg-white/10 rounded animate-shimmer"></div>
+          <div class="h-3 w-2/3 bg-white/10 rounded animate-shimmer"></div>
+        </div>
+      </div>
     </div>
   }
 
@@ -226,11 +246,12 @@
 
                     <div class="flex items-center gap-2 flex-shrink-0">
                       <!-- Log image thumbnail -->
-                      @if (log.image_url) {
+                      @if (log.thumbnail_url || log.image_url) {
                         <img
-                          [src]="log.image_url"
+                          [src]="log.thumbnail_url || log.image_url"
                           alt="Etikett"
                           class="w-10 h-10 rounded-lg object-cover border border-white/10"
+                          loading="lazy"
                         />
                       }
 

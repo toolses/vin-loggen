@@ -113,6 +113,13 @@ ALTER TABLE wines
     UNIQUE NULLS NOT DISTINCT (producer, name, vintage);
 
 -- ── 6. Drop user-specific columns from wines; update RLS ─────────────────────
+-- Drop per-user policies first — they reference user_id and block the column drop.
+DROP POLICY IF EXISTS "Users read own wines"    ON wines;
+DROP POLICY IF EXISTS "Users insert own wines"  ON wines;
+DROP POLICY IF EXISTS "Users update own wines"  ON wines;
+DROP POLICY IF EXISTS "Users delete own wines"  ON wines;
+DROP POLICY IF EXISTS "Read orphaned wines"     ON wines;
+
 ALTER TABLE wines DROP COLUMN IF EXISTS user_id;
 ALTER TABLE wines DROP COLUMN IF EXISTS rating;
 ALTER TABLE wines DROP COLUMN IF EXISTS notes;
@@ -125,12 +132,6 @@ ALTER TABLE wines DROP COLUMN IF EXISTS location_type;
 
 -- Replace per-user RLS with catalogue-level policies:
 -- any authenticated user can read, insert, or update master wine data.
-DROP POLICY IF EXISTS "Users read own wines"    ON wines;
-DROP POLICY IF EXISTS "Users insert own wines"  ON wines;
-DROP POLICY IF EXISTS "Users update own wines"  ON wines;
-DROP POLICY IF EXISTS "Users delete own wines"  ON wines;
-DROP POLICY IF EXISTS "Read orphaned wines"     ON wines;
-
 CREATE POLICY "Authenticated users can read wines"
     ON wines FOR SELECT
     TO authenticated

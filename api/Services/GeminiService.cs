@@ -52,7 +52,7 @@ public record TasteProfileResponse(
     string[]  PreferredTypes,
     string[]  TopCountries,
     string[]  TopRegions,
-    decimal   AverageRating,
+    decimal?  AverageRating,
     string?   VintageRange,
     string[]  FlavorDescriptors,
     string    Recommendation,

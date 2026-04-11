@@ -67,6 +67,7 @@ builder.Services.AddHttpClient("wineApi", (sp, client) =>
 builder.Services.AddHttpClient();
 
 // ── Application services ──────────────────────────────────────────────────────
+builder.Services.AddMemoryCache();
 builder.Services.AddScoped<IGeminiService,   GeminiService>();
 builder.Services.AddScoped<IWineApiService,  WineApiService>();
 builder.Services.AddScoped<IProUsageService, ProUsageService>();

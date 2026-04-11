@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Microsoft.Extensions.Caching.Memory;
 using VinLoggen.Api.Configuration;
 
 namespace VinLoggen.Api.Services;
@@ -61,6 +62,9 @@ public sealed class WineApiService : IWineApiService
     private readonly IConfiguration     _configuration;
     private readonly IntegrationSettings _settings;
     private readonly ILogger<WineApiService> _logger;
+    private readonly IMemoryCache _cache;
+
+    private static readonly TimeSpan CacheTtl = TimeSpan.FromHours(24);
 
     private static readonly JsonSerializerOptions JsonOpts = new()
     {
@@ -71,12 +75,14 @@ public sealed class WineApiService : IWineApiService
         IHttpClientFactory       httpClientFactory,
         IConfiguration           configuration,
         IntegrationSettings      settings,
-        ILogger<WineApiService>  logger)
+        ILogger<WineApiService>  logger,
+        IMemoryCache             cache)
     {
         _httpClientFactory = httpClientFactory;
         _configuration     = configuration;
         _settings          = settings;
         _logger            = logger;
+        _cache             = cache;
     }
 
     /// <summary>
@@ -101,6 +107,14 @@ public sealed class WineApiService : IWineApiService
         {
             _logger.LogDebug("WineApiService: WINE_API_KEY not configured, skipping");
             return null;
+        }
+
+        // ── Cache lookup ────────────────────────────────────────────────────────
+        var cacheKey = $"wineapi:{producer.Trim().ToLowerInvariant()}|{name.Trim().ToLowerInvariant()}|{vintage?.ToString() ?? "nv"}";
+        if (_cache.TryGetValue<WineEnrichment?>(cacheKey, out var cached))
+        {
+            _logger.LogDebug("WineApiService: cache hit for '{CacheKey}'", cacheKey);
+            return cached;
         }
 
         // Build query string: free-text search combining key identifiers
@@ -139,6 +153,7 @@ public sealed class WineApiService : IWineApiService
             if (hit is null)
             {
                 _logger.LogInformation("WineApiService: no match for '{Query}'", query);
+                _cache.Set(cacheKey, (WineEnrichment?)null, CacheTtl);
                 return null;
             }
 
@@ -150,7 +165,7 @@ public sealed class WineApiService : IWineApiService
                               ?.Where(s => !string.IsNullOrWhiteSpace(s))
                               .ToArray();
 
-            return new WineEnrichment(
+            var enrichment = new WineEnrichment(
                 ExternalId:    hit.Id,
                 Description:   hit.Description,
                 FoodPairings:  foodPairings?.Length > 0 ? foodPairings : null,
@@ -158,6 +173,9 @@ public sealed class WineApiService : IWineApiService
                 AlcoholContent: hit.AlcoholContent,
                 Grapes:        hit.Grapes
             );
+
+            _cache.Set(cacheKey, (WineEnrichment?)enrichment, CacheTtl);
+            return enrichment;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

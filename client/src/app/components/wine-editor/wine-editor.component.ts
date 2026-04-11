@@ -2,7 +2,7 @@ import { Component, OnInit, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { SlicePipe } from '@angular/common';
-import { WineService, NewWine } from '../../services/wine.service';
+import { WineService, NewWine, WineLog } from '../../services/wine.service';
 import { ProfileService } from '../../services/profile.service';
 import { LocationService } from '../../services/location.service';
 import { StarRatingComponent } from '../star-rating/star-rating.component';
@@ -68,11 +68,18 @@ export class WineEditorComponent implements OnInit {
 
   ngOnInit(): void {
     const id = this.route.snapshot.paramMap.get('id');
+    const logId = this.route.snapshot.queryParamMap.get('logId');
 
     if (id) {
-      // Edit mode: load existing wine (id = wine master id from URL)
+      // Edit mode: load existing wine
       this.editMode.set(true);
-      this.loadExistingWine(id);
+      if (logId) {
+        // Editing a specific log entry (from tasting timeline)
+        this.loadExistingLog(id, logId);
+      } else {
+        // Editing the latest log (default)
+        this.loadExistingWine(id);
+      }
     } else {
       // Create mode: pre-fill from scan result
       this.imageUrl.set(this.wineService.lastScanImageUrl());
@@ -170,6 +177,52 @@ export class WineEditorComponent implements OnInit {
     }
   }
 
+  /** Load a specific log entry for editing (used from the tasting timeline). */
+  private async loadExistingLog(wineId: string, logId: string): Promise<void> {
+    // Load master wine data for the form header fields
+    let wine = this.wineService.getWine(wineId);
+    if (!wine) {
+      wine = await this.wineService.fetchWine(wineId) ?? undefined;
+    }
+    if (!wine) {
+      this.router.navigate(['/cellar']);
+      return;
+    }
+
+    // Load the specific log entry
+    const log = await this.wineService.fetchWineLog(logId);
+    if (!log) {
+      this.router.navigate(['/wines', wineId]);
+      return;
+    }
+
+    this.editLogId = logId;
+
+    // Master data from wine
+    this.name.set(wine.name);
+    this.producer.set(wine.producer);
+    this.vintage.set(wine.vintage);
+    this.type.set(wine.type);
+    this.country.set(wine.country ?? '');
+    this.region.set(wine.region ?? '');
+    if (wine.grapes?.length)   this.grapeVariety.set(wine.grapes.join(', '));
+    if (wine.alcohol_content != null) this.alcoholContent.set(`${wine.alcohol_content}%`);
+
+    // Log-specific data
+    this.notes.set(log.notes ?? '');
+    this.rating.set(log.rating ?? 0);
+    this.imageUrl.set(log.image_url);
+    this.tastedAt.set(log.tasted_at ?? '');
+
+    if (log.location_name) {
+      this.locationName.set(log.location_name);
+      this.locationLat.set(log.location_lat);
+      this.locationLng.set(log.location_lng);
+      this.locationType.set(log.location_type);
+      this.locationSet.set(true);
+    }
+  }
+
   protected async save(): Promise<void> {
     if (!this.name() || !this.producer()) return;
 
@@ -184,6 +237,9 @@ export class WineEditorComponent implements OnInit {
       region:           this.region() || null,
       grapes:           this.grapes,
       alcohol_content:  this.alcoholNum,
+      food_pairings:    this.foodPairings(),
+      description:      this.description(),
+      technical_notes:  this.technicalNotes(),
       rating:           this.rating() > 0 ? this.rating() : null,
       notes:            this.notes() || null,
       image_url:        this.imageUrl() || null,
@@ -237,7 +293,7 @@ export class WineEditorComponent implements OnInit {
     this.locationName.set(null);
     this.locationLat.set(null);
     this.locationLng.set(null);
-    this.locationType.set(null);
+    // Keep locationType so the location-search pre-selects the previous type
     this.locationSet.set(false);
   }
 }

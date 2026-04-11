@@ -6,3 +6,4 @@
 **/appsettings.Development.json
 Dockerfile
 .dockerignore
+VinLoggen.Api.Tests/

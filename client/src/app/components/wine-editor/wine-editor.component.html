@@ -368,7 +368,9 @@
         </div>
       } @else {
         <app-location-search
+          [initialType]="locationType()"
           (locationSelected)="onLocationSelected($event)"
+          (typeChanged)="locationType.set($event)"
         />
       }
     </div>

@@ -48,9 +48,10 @@ services:
       - "4200:4200"       # http://localhost:4200
     environment:
       NODE_ENV: development
+      MAPBOX_TOKEN: ${MAPBOX_TOKEN:-}
     # Proxies /api/* → http://api:8080 via proxy.conf.docker.json
     command: >
-      sh -c "npm install && npm run start:docker"
+      sh -c "npm install && node scripts/set-env-dev.mjs && npm run start:docker"
     depends_on:
       api:
         condition: service_healthy

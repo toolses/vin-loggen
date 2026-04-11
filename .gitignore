@@ -3,6 +3,8 @@ node_modules/
 dist/
 .angular/
 .cache/
+# Auto-generated dev environment (scripts/set-env-dev.mjs)
+client/src/environments/environment.dev.ts
 npm-debug.log*
 yarn-error.log*
 

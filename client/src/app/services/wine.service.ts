@@ -18,6 +18,9 @@ export interface Wine {
   grapes: string[] | null;
   alcohol_content: number | null;
   external_source_id: string | null;
+  food_pairings: string[] | null;
+  description: string | null;
+  technical_notes: string | null;
   // From the latest wine_log
   rating: number | null;
   notes: string | null;
@@ -58,6 +61,9 @@ export interface NewWine {
   region: string | null;
   grapes: string[] | null;
   alcohol_content: number | null;
+  food_pairings: string[] | null;
+  description: string | null;
+  technical_notes: string | null;
   // Log data (inserted into wine_logs)
   rating: number | null;
   notes: string | null;
@@ -166,6 +172,17 @@ export class WineService {
     return (data ?? []) as WineLog[];
   }
 
+  /** Returns a single tasting log by its id. */
+  async fetchWineLog(logId: string): Promise<WineLog | null> {
+    const { data, error } = await this.supabase
+      .from('wine_logs' as any)
+      .select('*')
+      .eq('id', logId)
+      .single();
+    if (error || !data) return null;
+    return data as WineLog;
+  }
+
   // ── Write ───────────────────────────────────────────────────────────────────
 
   /**
@@ -201,6 +218,9 @@ export class WineService {
             region:           wine.region,
             grapes:           wine.grapes,
             alcohol_content:  wine.alcohol_content,
+            food_pairings:    wine.food_pairings,
+            description:      wine.description,
+            technical_notes:  wine.technical_notes,
           },
           { onConflict: 'producer,name,vintage', ignoreDuplicates: false }
         )
@@ -212,6 +232,16 @@ export class WineService {
         return false;
       }
       wineId = (wineData as { id: string }).id;
+    } else if (wine.food_pairings || wine.description || wine.technical_notes) {
+      // Update enrichment on existing wine (re-drinking with new scan data)
+      await (this.supabase as any)
+        .from('wines')
+        .update({
+          food_pairings:    wine.food_pairings,
+          description:      wine.description,
+          technical_notes:  wine.technical_notes,
+        })
+        .eq('id', wineId);
     }
 
     // Insert tasting log

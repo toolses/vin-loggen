@@ -30,8 +30,9 @@ public sealed class WineOrchestratorService
     private readonly IntegrationSettings _settings;
     private readonly ILogger<WineOrchestratorService> _logger;
 
-    // Internal Dapper projection for the dedup query
-    private record DedupMatch(Guid WineId, int UserLogCount, decimal? LastRating, DateOnly? LastTastedAt);
+    // Internal Dapper projection for the dedup query.
+    // Types must match what Npgsql/Dapper returns: COUNT(*)→long, date→DateTime.
+    private record DedupMatch(Guid WineId, long UserLogCount, decimal? LastRating, DateTime? LastTastedAt);
 
     public WineOrchestratorService(
         IGeminiService                      gemini,
@@ -156,7 +157,7 @@ public sealed class WineOrchestratorService
             AlreadyTasted  = dedup is not null && dedup.UserLogCount > 0,
             ExistingWineId = dedup?.WineId,
             LastRating     = dedup?.LastRating,
-            LastTastedAt   = dedup?.LastTastedAt,
+            LastTastedAt   = dedup?.LastTastedAt is DateTime dt ? DateOnly.FromDateTime(dt) : null,
             // Pro enrichment
             FoodPairings    = enrichment?.FoodPairings,
             Description     = enrichment?.Description,

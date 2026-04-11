@@ -131,7 +131,7 @@ export class ProfileService {
       const { data, error } = await this.supabase.client
         .from('user_profiles')
         .select('home_address_name, home_address_lat, home_address_lng')
-        .eq('id', userId)
+        .eq('user_id', userId)
         .single();
 
       if (error) {
@@ -160,7 +160,7 @@ export class ProfileService {
     await this.supabase.client
       .from('user_profiles')
       .upsert({
-        id: userId,
+        user_id: userId,
         home_address_name: name,
         home_address_lat: lat,
         home_address_lng: lng,
@@ -180,7 +180,7 @@ export class ProfileService {
         home_address_lat: null,
         home_address_lng: null,
       })
-      .eq('id', userId);
+      .eq('user_id', userId);
 
     this._homeAddress.set(null);
   }

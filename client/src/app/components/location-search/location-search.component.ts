@@ -1,6 +1,7 @@
 import {
   Component,
   OnDestroy,
+  OnInit,
   inject,
   input,
   output,
@@ -22,7 +23,7 @@ export interface LocationSelection {
   imports: [FormsModule],
   templateUrl: './location-search.component.html',
 })
-export class LocationSearchComponent implements OnDestroy {
+export class LocationSearchComponent implements OnInit, OnDestroy {
   private readonly locationService = inject(LocationService);
 
   /** If true, show the "Hjemme" quick-pick button */
@@ -31,7 +32,11 @@ export class LocationSearchComponent implements OnDestroy {
   /** Hide the location type chip selector (e.g. when picking a home address) */
   readonly hideTypeSelector = input(false);
 
+  /** Pre-select a location type (e.g. when re-editing a saved location) */
+  readonly initialType = input<string | null>(null);
+
   readonly locationSelected = output<LocationSelection>();
+  readonly typeChanged = output<string>();
 
   protected readonly query = signal('');
   protected readonly results = signal<Place[]>([]);
@@ -49,6 +54,11 @@ export class LocationSearchComponent implements OnDestroy {
 
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
   private userProximity: { lat: number; lng: number } | null = null;
+
+  ngOnInit(): void {
+    const type = this.initialType();
+    if (type) this.locationType.set(type);
+  }
 
   protected onQueryChange(value: string): void {
     this.query.set(value);
@@ -121,6 +131,7 @@ export class LocationSearchComponent implements OnDestroy {
 
   protected onTypeChange(type: string): void {
     this.locationType.set(type);
+    this.typeChanged.emit(type);
   }
 
   ngOnDestroy(): void {

@@ -87,6 +87,13 @@ public sealed class GeminiService : IGeminiService
           "type": "Rød"|"Hvit"|"Musserende"|"Rosé"|"Oransje",
           "alcoholContent": number
         }
+
+        VIKTIGE REGLER for konsistens:
+        - "producer": Bruk FULLT produsentnavn nøyaktig som det står på etiketten (f.eks. "Markus Molitor", ikke bare "Molitor").
+        - "wineName": Vinens eget navn UTEN produsentnavnet. Hvis etiketten bare viser produsent + druesort + region, bruk druesort + region som wineName (f.eks. "Riesling Spätlese Zeltinger Sonnenuhr").
+        - Ikke gjenta produsentnavnet i wineName-feltet.
+        - Bruk offisielle navn fra etiketten, ikke forkortelser eller omskrivninger.
+
         Hvis du er usikker på et felt, sett det til null.
         """;
 

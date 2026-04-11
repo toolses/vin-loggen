@@ -6,8 +6,10 @@ ALTER TABLE wines ADD COLUMN IF NOT EXISTS food_pairings   TEXT[];
 ALTER TABLE wines ADD COLUMN IF NOT EXISTS description     TEXT;
 ALTER TABLE wines ADD COLUMN IF NOT EXISTS technical_notes TEXT;
 
--- ── Update wine_entries view to include new columns ─────────────────────────
-CREATE OR REPLACE VIEW wine_entries
+-- ── Recreate wine_entries view to include new columns ────────────────────────
+-- DROP first because CREATE OR REPLACE cannot reorder/insert columns.
+DROP VIEW IF EXISTS wine_entries;
+CREATE VIEW wine_entries
 WITH (security_invoker = true) AS
 WITH ranked AS (
     SELECT

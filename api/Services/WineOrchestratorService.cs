@@ -182,17 +182,40 @@ public sealed class WineOrchestratorService
         try
         {
             await using var conn = await _dataSource.OpenConnectionAsync(ct);
+
+            // Try exact match first, then fall back to fuzzy similarity (pg_trgm).
+            // The CTE scores candidates: exact matches get 1.0, fuzzy get averaged similarity.
             return await conn.QueryFirstOrDefaultAsync<DedupMatch>(
                 """
+                WITH candidates AS (
+                    SELECT
+                        w.id,
+                        CASE
+                            WHEN LOWER(TRIM(w.producer)) = LOWER(TRIM(@Producer))
+                             AND LOWER(TRIM(w.name))     = LOWER(TRIM(@Name))
+                            THEN 1.0
+                            ELSE (
+                                similarity(LOWER(TRIM(w.producer)), LOWER(TRIM(@Producer)))
+                              + similarity(LOWER(TRIM(w.name)),     LOWER(TRIM(@Name)))
+                            ) / 2.0
+                        END AS match_score
+                    FROM wines w
+                    WHERE COALESCE(w.vintage, -1) = COALESCE(@Vintage::INT, -1)
+                      AND (
+                          (LOWER(TRIM(w.producer)) = LOWER(TRIM(@Producer))
+                           AND LOWER(TRIM(w.name)) = LOWER(TRIM(@Name)))
+                          OR
+                          (similarity(LOWER(TRIM(w.producer)), LOWER(TRIM(@Producer))) > 0.35
+                           AND similarity(LOWER(TRIM(w.name)), LOWER(TRIM(@Name)))     > 0.25)
+                      )
+                )
                 SELECT
-                    w.id AS WineId,
-                    (SELECT COUNT(*) FROM wine_logs WHERE wine_id = w.id AND user_id = @UserId) AS UserLogCount,
-                    (SELECT rating    FROM wine_logs WHERE wine_id = w.id AND user_id = @UserId ORDER BY created_at DESC LIMIT 1) AS LastRating,
-                    (SELECT tasted_at FROM wine_logs WHERE wine_id = w.id AND user_id = @UserId ORDER BY created_at DESC LIMIT 1) AS LastTastedAt
-                FROM wines w
-                WHERE LOWER(TRIM(w.producer)) = LOWER(TRIM(@Producer))
-                  AND LOWER(TRIM(w.name))     = LOWER(TRIM(@Name))
-                  AND COALESCE(w.vintage, -1) = COALESCE(@Vintage::INT, -1)
+                    c.id AS WineId,
+                    (SELECT COUNT(*) FROM wine_logs WHERE wine_id = c.id AND user_id = @UserId) AS UserLogCount,
+                    (SELECT rating    FROM wine_logs WHERE wine_id = c.id AND user_id = @UserId ORDER BY created_at DESC LIMIT 1) AS LastRating,
+                    (SELECT tasted_at FROM wine_logs WHERE wine_id = c.id AND user_id = @UserId ORDER BY created_at DESC LIMIT 1) AS LastTastedAt
+                FROM candidates c
+                ORDER BY c.match_score DESC
                 LIMIT 1
                 """,
                 new { Producer = producer, Name = name, Vintage = vintage, UserId = userId });

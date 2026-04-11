@@ -7,12 +7,12 @@ namespace VinLoggen.Api.Services;
 
 public sealed class TasteProfileService
 {
-    private readonly GeminiService _geminiService;
+    private readonly IGeminiService _geminiService;
     private readonly NpgsqlDataSource _dataSource;
     private readonly ILogger<TasteProfileService> _logger;
 
     public TasteProfileService(
-        GeminiService geminiService,
+        IGeminiService geminiService,
         NpgsqlDataSource dataSource,
         ILogger<TasteProfileService> logger)
     {

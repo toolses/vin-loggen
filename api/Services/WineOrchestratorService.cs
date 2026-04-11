@@ -23,9 +23,9 @@ namespace VinLoggen.Api.Services;
 /// </summary>
 public sealed class WineOrchestratorService
 {
-    private readonly GeminiService       _gemini;
-    private readonly WineApiService      _wineApi;
-    private readonly ProUsageService     _proUsage;
+    private readonly IGeminiService      _gemini;
+    private readonly IWineApiService     _wineApi;
+    private readonly IProUsageService    _proUsage;
     private readonly NpgsqlDataSource    _dataSource;
     private readonly IntegrationSettings _settings;
     private readonly ILogger<WineOrchestratorService> _logger;
@@ -34,9 +34,9 @@ public sealed class WineOrchestratorService
     private record DedupMatch(Guid WineId, int UserLogCount, decimal? LastRating, DateOnly? LastTastedAt);
 
     public WineOrchestratorService(
-        GeminiService                       gemini,
-        WineApiService                      wineApi,
-        ProUsageService                     proUsage,
+        IGeminiService                      gemini,
+        IWineApiService                     wineApi,
+        IProUsageService                    proUsage,
         NpgsqlDataSource                    dataSource,
         IntegrationSettings                 settings,
         ILogger<WineOrchestratorService>    logger)

@@ -19,7 +19,7 @@ namespace VinLoggen.Api.Services;
 /// HTTP resilience (retry + circuit breaker) is configured in Program.cs via the
 /// "wineApi" named <see cref="IHttpClientFactory"/> registration.
 /// </summary>
-public sealed class WineApiService
+public sealed class WineApiService : IWineApiService
 {
     // ── Configurable constants ────────────────────────────────────────────────
 
@@ -42,7 +42,7 @@ public sealed class WineApiService
         [property: JsonPropertyName("wines")] List<WineApiHit>? Wines
     );
 
-    private sealed record WineApiHit(
+    internal sealed record WineApiHit(
         [property: JsonPropertyName("id")]          string?   Id,
         [property: JsonPropertyName("name")]        string?   Name,
         [property: JsonPropertyName("producer")]    string?   Producer,
@@ -172,7 +172,7 @@ public sealed class WineApiService
     /// Picks the best hit from the result list using a simple scoring heuristic:
     /// exact producer + name match beats partial match; vintage match is a bonus.
     /// </summary>
-    private static WineApiHit? FindBestMatch(
+    internal static WineApiHit? FindBestMatch(
         List<WineApiHit>? hits,
         string producer, string name, int? vintage)
     {
@@ -192,7 +192,7 @@ public sealed class WineApiService
             .FirstOrDefault()?.Hit;
     }
 
-    private static int Score(WineApiHit h, string lp, string ln, int? vintage)
+    internal static int Score(WineApiHit h, string lp, string ln, int? vintage)
     {
         int score = 0;
         var hp = (h.Producer ?? "").Trim().ToLowerInvariant();

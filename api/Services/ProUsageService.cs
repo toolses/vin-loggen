@@ -13,7 +13,7 @@ namespace VinLoggen.Api.Services;
 /// slightly exceed the daily limit by at most the number of simultaneous
 /// in-flight requests. This is acceptable for a soft freemium quota.
 /// </summary>
-public sealed class ProUsageService
+public sealed class ProUsageService : IProUsageService
 {
     private readonly NpgsqlDataSource _dataSource;
     private readonly IntegrationSettings _settings;

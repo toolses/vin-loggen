@@ -53,11 +53,11 @@ public static class WineAnalyzeEndpoints
 
         var result = await geminiService.AnalyzeLabelAsync(imageBytes, image.ContentType, ct);
 
-        if (result is null)
+        if (!result.IsSuccess)
             return TypedResults.Problem(
-                "AI analysis failed – could not extract wine data from the image",
+                $"AI analysis failed: {result.Error}",
                 statusCode: StatusCodes.Status502BadGateway);
 
-        return TypedResults.Ok(result);
+        return TypedResults.Ok(result.Value);
     }
 }

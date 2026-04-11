@@ -1,5 +1,7 @@
 using DbUp;
+using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpLogging;
 using Microsoft.IdentityModel.Tokens;
 using Npgsql;
 using Scalar.AspNetCore;
@@ -22,6 +24,15 @@ builder.Services.AddCors(options =>
 
 // ── OpenAPI ───────────────────────────────────────────────────────────────────
 builder.Services.AddOpenApi();
+
+// ── HTTP Logging ─────────────────────────────────────────────────────────────
+builder.Services.AddHttpLogging(options =>
+{
+    options.LoggingFields = HttpLoggingFields.RequestMethod
+                          | HttpLoggingFields.RequestPath
+                          | HttpLoggingFields.ResponseStatusCode
+                          | HttpLoggingFields.Duration;
+});
 
 // ── HTTP client (used by GeminiService) ─────────────────────────────────────
 builder.Services.AddHttpClient();
@@ -119,6 +130,20 @@ if (!string.IsNullOrWhiteSpace(connectionString))
 }
 
 // ── Middleware ────────────────────────────────────────────────────────────────
+
+// Global exception handler – catches unhandled exceptions and logs them
+app.UseExceptionHandler(err => err.Run(async ctx =>
+{
+    var logger = ctx.RequestServices.GetRequiredService<ILogger<Program>>();
+    var ex = ctx.Features.Get<IExceptionHandlerFeature>()?.Error;
+    logger.LogError(ex, "Unhandled exception for {Method} {Path}", ctx.Request.Method, ctx.Request.Path);
+    ctx.Response.StatusCode = 500;
+    ctx.Response.ContentType = "application/problem+json";
+    await ctx.Response.WriteAsJsonAsync(new { detail = "An unexpected error occurred" });
+}));
+
+app.UseHttpLogging();
+
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();

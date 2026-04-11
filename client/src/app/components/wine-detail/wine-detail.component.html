@@ -143,52 +143,56 @@
         Lagt til {{ w.created_at | date:'d. MMM yyyy' }}
       </p>
     </div>
-
-    <!-- ── Delete Confirm Dialog ─────────────────────────── -->
-    @if (showDeleteConfirm()) {
-      <div
-        class="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in"
-        (click)="showDeleteConfirm.set(false)"
-      >
-        <div
-          class="glass rounded-2xl p-6 w-full max-w-sm border border-white/10 animate-slide-up"
-          (click)="$event.stopPropagation()"
-        >
-          <h3 class="font-serif text-xl text-cream mb-2">Slett vin?</h3>
-          <p class="text-sm text-cream-dark mb-6">
-            Er du sikker på at du vil slette <strong class="text-cream">{{ w.name }}</strong>? Dette kan ikke angres.
-          </p>
-          <div class="flex gap-3">
-            <button
-              (click)="showDeleteConfirm.set(false)"
-              class="flex-1 py-3 rounded-xl glass text-cream font-medium hover:bg-white/10 transition-colors"
-            >
-              Avbryt
-            </button>
-            <button
-              (click)="confirmDelete()"
-              [disabled]="deleting()"
-              class="flex-1 py-3 rounded-xl bg-red-600 text-cream font-medium hover:bg-red-500 transition-colors
-                     disabled:opacity-40"
-            >
-              @if (deleting()) {
-                <span class="flex items-center justify-center gap-2">
-                  <span class="w-4 h-4 rounded-full border-2 border-cream/30 border-t-cream animate-spin"></span>
-                  Sletter...
-                </span>
-              } @else {
-                Slett
-              }
-            </button>
-          </div>
-        </div>
-      </div>
-    }
-
-    <!-- ── Share Preview Modal ───────────────────────────── -->
-    @if (showSharePreview()) {
-      <app-share-preview [wine]="w" (closed)="showSharePreview.set(false)" />
-    }
   }
 
 </div>
+
+<!-- ── Delete Confirm Dialog (outside animated div) ─── -->
+@if (wine(); as w) {
+  @if (showDeleteConfirm()) {
+    <div
+      class="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in"
+      (click)="showDeleteConfirm.set(false)"
+    >
+      <div
+        class="glass rounded-2xl p-6 w-full max-w-sm border border-white/10 animate-slide-up"
+        (click)="$event.stopPropagation()"
+      >
+        <h3 class="font-serif text-xl text-cream mb-2">Slett vin?</h3>
+        <p class="text-sm text-cream-dark mb-6">
+          Er du sikker på at du vil slette <strong class="text-cream">{{ w.name }}</strong>? Dette kan ikke angres.
+        </p>
+        <div class="flex gap-3">
+          <button
+            (click)="showDeleteConfirm.set(false)"
+            class="flex-1 py-3 rounded-xl glass text-cream font-medium hover:bg-white/10 transition-colors"
+          >
+            Avbryt
+          </button>
+          <button
+            (click)="confirmDelete()"
+            [disabled]="deleting()"
+            class="flex-1 py-3 rounded-xl bg-red-600 text-cream font-medium hover:bg-red-500 transition-colors
+                   disabled:opacity-40"
+          >
+            @if (deleting()) {
+              <span class="flex items-center justify-center gap-2">
+                <span class="w-4 h-4 rounded-full border-2 border-cream/30 border-t-cream animate-spin"></span>
+                Sletter...
+              </span>
+            } @else {
+              Slett
+            }
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+}
+
+<!-- ── Share Preview Modal (outside animated div) ───── -->
+@if (showSharePreview()) {
+  @if (wine(); as w) {
+    <app-share-preview [wine]="w" (closed)="showSharePreview.set(false)" />
+  }
+}

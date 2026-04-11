@@ -143,9 +143,9 @@
 
             <!-- Rating -->
             @if (wine.rating != null) {
-              <div class="flex flex-col items-center justify-center pl-2 flex-shrink-0">
-                <span class="text-2xl font-bold text-gold leading-none">{{ wine.rating }}</span>
-                <span class="text-[10px] text-cream-dark mt-0.5">/ 6</span>
+              <div class="flex items-baseline gap-0.5 pl-2 flex-shrink-0">
+                <span class="text-xl font-bold text-gold">{{ wine.rating }}</span>
+                <span class="text-[10px] text-cream-dark">/ 6</span>
               </div>
             }
 

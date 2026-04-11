@@ -24,13 +24,12 @@
     </div>
 
     <!-- Scaled preview of the share card -->
-    <div class="px-5 pb-4 flex justify-center">
-      <div class="w-full" style="max-width: 320px;">
-        <!-- Scale container: the card is 400px wide, we scale it down to fit -->
+    <div class="px-5 pb-4 flex justify-center overflow-hidden">
+      <div class="w-full" style="max-width: 280px;">
         <div class="relative w-full" style="padding-bottom: 130%;">
           <div
             class="absolute inset-0 origin-top-left"
-            style="width: 400px; height: 520px; transform: scale(var(--card-scale, 0.8));"
+            style="width: 400px; height: 520px; transform: scale(0.7);"
             #shareCard
           >
             <app-wine-share-card [wine]="wine()" />
@@ -40,7 +39,7 @@
     </div>
 
     <!-- Actions -->
-    <div class="px-5 pb-5 pt-2 flex gap-3">
+    <div class="px-5 pb-5 pt-2 flex gap-3" style="padding-bottom: max(1.25rem, env(safe-area-inset-bottom))">
       <button
         (click)="close()"
         class="flex-1 py-3 rounded-xl glass text-cream font-medium hover:bg-white/10 transition-colors"

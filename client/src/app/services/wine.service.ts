@@ -164,8 +164,10 @@ export class WineService {
       );
       this._lastScanResult.set(result);
       return result;
-    } catch (err) {
-      this._error.set(err instanceof Error ? err.message : 'Kunne ikke analysere etiketten');
+    } catch (err: unknown) {
+      const detail = (err as { error?: { detail?: string } })?.error?.detail
+        ?? (err instanceof Error ? err.message : 'Kunne ikke analysere etiketten');
+      this._error.set(detail);
       return null;
     } finally {
       this._processing.set(false);

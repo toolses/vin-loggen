@@ -29,6 +29,13 @@ public record TasteProfileResponse(
     string    PersonalityTitle
 );
 
+// ── Result wrapper ────────────────────────────────────────────────────────────
+
+public record GeminiResult<T>(T? Value, string? Error)
+{
+    public bool IsSuccess => Value is not null;
+}
+
 // ── Service ───────────────────────────────────────────────────────────────────
 
 public sealed class GeminiService
@@ -67,7 +74,7 @@ public sealed class GeminiService
         _logger            = logger;
     }
 
-    public async Task<WineAnalysisResponse?> AnalyzeLabelAsync(
+    public async Task<GeminiResult<WineAnalysisResponse>> AnalyzeLabelAsync(
         byte[]            imageBytes,
         string            mimeType,
         CancellationToken ct)
@@ -76,7 +83,7 @@ public sealed class GeminiService
         if (string.IsNullOrWhiteSpace(apiKey))
         {
             _logger.LogError("GeminiService: GEMINI_API_KEY is not configured");
-            return null;
+            return new(null, "GEMINI_API_KEY is not configured");
         }
 
         var base64Image = Convert.ToBase64String(imageBytes);
@@ -104,17 +111,22 @@ public sealed class GeminiService
         {
             response = await client.PostAsJsonAsync($"{GeminiEndpoint}?key={apiKey}", payload, ct);
         }
+        catch (TaskCanceledException ex) when (!ct.IsCancellationRequested)
+        {
+            _logger.LogError(ex, "GeminiService: HTTP request to Gemini timed out");
+            return new(null, "Gemini API request timed out");
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "GeminiService: HTTP request to Gemini failed");
-            return null;
+            return new(null, $"HTTP request to Gemini failed: {ex.Message}");
         }
 
         if (!response.IsSuccessStatusCode)
         {
             var errorBody = await response.Content.ReadAsStringAsync(ct);
             _logger.LogError("GeminiService: Gemini returned {Status}: {Body}", response.StatusCode, errorBody);
-            return null;
+            return new(null, $"Gemini returned {(int)response.StatusCode} {response.StatusCode}: {errorBody}");
         }
 
         // Extract the text field from the Gemini response structure
@@ -134,7 +146,7 @@ public sealed class GeminiService
         catch (Exception ex)
         {
             _logger.LogError(ex, "GeminiService: failed to navigate Gemini response structure");
-            return null;
+            return new(null, "Failed to parse Gemini response structure");
         }
 
         // Strip markdown code fences if Gemini includes them despite instructions
@@ -153,12 +165,12 @@ public sealed class GeminiService
             _logger.LogInformation(
                 "GeminiService: extracted '{WineName}' ({Vintage})", extraction?.WineName, extraction?.Vintage);
 
-            return extraction;
+            return new(extraction, null);
         }
         catch (JsonException ex)
         {
             _logger.LogError(ex, "GeminiService: JSON parsing failed. Raw: {Raw}", rawJson);
-            return null;
+            return new(null, $"Failed to parse AI response as wine data");
         }
     }
 

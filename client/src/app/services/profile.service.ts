@@ -81,20 +81,29 @@ export class ProfileService {
     const userId = this.auth.user()?.id;
     if (!userId) return;
 
-    const { data } = await this.supabase.client
-      .from('user_profiles')
-      .select('home_address_name, home_address_lat, home_address_lng')
-      .eq('id', userId)
-      .single();
+    try {
+      const { data, error } = await this.supabase.client
+        .from('user_profiles')
+        .select('home_address_name, home_address_lat, home_address_lng')
+        .eq('id', userId)
+        .single();
 
-    if (data?.home_address_name && data.home_address_lat != null && data.home_address_lng != null) {
-      this._homeAddress.set({
-        name: data.home_address_name,
-        lat: data.home_address_lat,
-        lng: data.home_address_lng,
-      });
-    } else {
-      this._homeAddress.set(null);
+      if (error) {
+        console.warn('Could not load home address (migration may not be applied yet):', error.message);
+        return;
+      }
+
+      if (data?.home_address_name && data.home_address_lat != null && data.home_address_lng != null) {
+        this._homeAddress.set({
+          name: data.home_address_name,
+          lat: data.home_address_lat,
+          lng: data.home_address_lng,
+        });
+      } else {
+        this._homeAddress.set(null);
+      }
+    } catch {
+      console.warn('Could not load home address');
     }
   }
 

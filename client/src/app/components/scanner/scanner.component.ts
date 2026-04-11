@@ -8,6 +8,8 @@ import {
 } from '@angular/core';
 import { Router } from '@angular/router';
 import { WineService } from '../../services/wine.service';
+import { ProfileService } from '../../services/profile.service';
+import { AuthService } from '../../services/auth.service';
 import { LocationService } from '../../services/location.service';
 import { ImageProcessingService } from '../../services/image-processing.service';
 
@@ -21,6 +23,8 @@ export class ScannerComponent implements OnDestroy {
   private readonly wineService = inject(WineService);
   private readonly locationService = inject(LocationService);
   private readonly imageProcessing = inject(ImageProcessingService);
+  protected readonly profileService = inject(ProfileService);
+  protected readonly auth = inject(AuthService);
 
   protected readonly videoRef = viewChild<ElementRef<HTMLVideoElement>>('videoEl');
   protected readonly canvasRef = viewChild<ElementRef<HTMLCanvasElement>>('canvasEl');
@@ -39,6 +43,8 @@ export class ScannerComponent implements OnDestroy {
   constructor() {
     // Silently request GPS in background — non-blocking
     this.locationPromise = this.locationService.getCurrentPosition().catch(() => null);
+    // Load quota state for the counter
+    this.profileService.loadProQuota();
   }
 
   async startCamera(): Promise<void> {

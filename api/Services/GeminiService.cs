@@ -8,6 +8,7 @@ namespace VinLoggen.Api.Services;
 // ── Public response DTOs ──────────────────────────────────────────────────────
 
 public record WineAnalysisResponse(
+    // ── Basic (OCR) – always populated ───────────────────────────────────────
     string?   WineName,
     string?   Producer,
     int?      Vintage,
@@ -16,11 +17,21 @@ public record WineAnalysisResponse(
     string[]? Grapes,
     string?   Type,
     double?   AlcoholContent,
-    // Deduplication fields – populated by WineAnalyzeEndpoints after the DB check
+    // ── Deduplication – set by orchestrator after DB look-up ─────────────────
     bool      AlreadyTasted   = false,
     Guid?     ExistingWineId  = null,
     decimal?  LastRating      = null,
-    DateOnly? LastTastedAt    = null
+    DateOnly? LastTastedAt    = null,
+    // ── Pro enrichment – set by orchestrator when quota is available ──────────
+    string[]? FoodPairings    = null,   // from wineapi.io or Gemini Pro prompt
+    string?   Description     = null,   // from wineapi.io
+    string?   TechnicalNotes  = null,   // from wineapi.io
+    string?   ExternalSourceId = null,  // wineapi.io catalogue ID
+    // ── Quota metadata – always returned for UI ───────────────────────────────
+    bool      ProLimitReached = false,
+    int       ProScansToday   = 0,
+    int       DailyProLimit   = 10,
+    bool      IsPro           = false
 );
 
 /// <summary>
@@ -190,6 +201,88 @@ public sealed class GeminiService
         {
             _logger.LogError(ex, "GeminiService: JSON parsing failed. Raw: {Raw}", rawJson);
             return new(null, $"Failed to parse AI response as wine data");
+        }
+    }
+
+    // ── Pro: food-pairing enrichment ─────────────────────────────────────────
+
+    private const string FoodPairingPromptTemplate =
+        """
+        Du er en sommelier-ekspert. Basert på vinen nedenfor, generer matanbefalinger og tekniske smaksnotater.
+        Returner KUN rå JSON (uten markdown-formatering).
+        JSON-struktur:
+        {{
+          "foodPairings": string[],
+          "technicalNotes": string
+        }}
+        - foodPairings: 3-5 konkrete matanbefalinger på norsk (f.eks. "Lammekoteletter", "Modnet parmesan")
+        - technicalNotes: 1-2 setninger med tekniske smaksnotater på norsk (tanniner, syre, finish)
+
+        Vin: {0} {1}, {2}, {3} {4}
+        """;
+
+    public record FoodPairingResult(string[] FoodPairings, string? TechnicalNotes);
+
+    /// <summary>
+    /// Pro-tier call: ask Gemini for food pairings and technical tasting notes
+    /// based on the wine's known characteristics. Used as a fallback when
+    /// wineapi.io returns no food-pairing data.
+    /// </summary>
+    public async Task<FoodPairingResult?> GetFoodPairingsAsync(
+        string? wineName,
+        string? producer,
+        int?    vintage,
+        string? type,
+        string? country,
+        CancellationToken ct)
+    {
+        var apiKey = _configuration["GEMINI_API_KEY"];
+        if (string.IsNullOrWhiteSpace(apiKey)) return null;
+
+        var prompt = string.Format(
+            FoodPairingPromptTemplate,
+            producer ?? "",
+            wineName ?? "",
+            vintage?.ToString() ?? "ukjent årgang",
+            type ?? "",
+            country ?? "");
+
+        var payload = new
+        {
+            contents = new[] { new { parts = new[] { new { text = prompt } } } }
+        };
+
+        var client = _httpClientFactory.CreateClient("gemini");
+        try
+        {
+            var response = await client.PostAsJsonAsync($"{GeminiEndpoint}?key={apiKey}", payload, ct);
+            if (!response.IsSuccessStatusCode) return null;
+
+            using var doc = await JsonDocument.ParseAsync(
+                await response.Content.ReadAsStreamAsync(ct), cancellationToken: ct);
+
+            var rawJson = doc.RootElement
+                .GetProperty("candidates")[0]
+                .GetProperty("content")
+                .GetProperty("parts")[0]
+                .GetProperty("text")
+                .GetString() ?? string.Empty;
+
+            rawJson = Regex.Replace(rawJson.Trim(), @"^```(?:json)?\s*|\s*```$", "", RegexOptions.Multiline).Trim();
+
+            var result = JsonSerializer.Deserialize<FoodPairingResult>(
+                rawJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+            _logger.LogInformation(
+                "GeminiService.GetFoodPairings: {Count} pairings for '{Wine}'",
+                result?.FoodPairings?.Length, wineName);
+
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "GeminiService.GetFoodPairings: failed for '{Wine}'", wineName);
+            return null;
         }
     }
 

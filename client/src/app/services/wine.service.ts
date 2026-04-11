@@ -84,6 +84,16 @@ export interface WineAnalysisResult {
   existingWineId: string | null;
   lastRating: number | null;
   lastTastedAt: string | null;
+  // Pro enrichment (populated when quota was available)
+  foodPairings: string[] | null;
+  description: string | null;
+  technicalNotes: string | null;
+  externalSourceId: string | null;
+  // Quota metadata (always returned for UI)
+  proLimitReached: boolean;
+  proScansToday: number;
+  dailyProLimit: number;
+  isPro: boolean;
 }
 
 @Injectable({ providedIn: 'root' })

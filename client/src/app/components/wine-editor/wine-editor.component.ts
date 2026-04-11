@@ -3,6 +3,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { SlicePipe } from '@angular/common';
 import { WineService, NewWine } from '../../services/wine.service';
+import { ProfileService } from '../../services/profile.service';
 import { LocationService } from '../../services/location.service';
 import { StarRatingComponent } from '../star-rating/star-rating.component';
 import {
@@ -20,6 +21,7 @@ export class WineEditorComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   protected readonly wineService = inject(WineService);
+  private readonly profileService = inject(ProfileService);
   private readonly locationService = inject(LocationService);
 
   protected readonly name = signal('');
@@ -58,6 +60,12 @@ export class WineEditorComponent implements OnInit {
   private grapes: string[] | null = null;
   private alcoholNum: number | null = null;
 
+  // Pro enrichment (populated from scan result when quota was available)
+  protected readonly proLimitReached  = signal(false);
+  protected readonly foodPairings     = signal<string[] | null>(null);
+  protected readonly description      = signal<string | null>(null);
+  protected readonly technicalNotes   = signal<string | null>(null);
+
   ngOnInit(): void {
     const id = this.route.snapshot.paramMap.get('id');
 
@@ -91,6 +99,24 @@ export class WineEditorComponent implements OnInit {
         }
         if (scan.existingWineId) {
           this.existingWineId = scan.existingWineId;
+        }
+
+        // Pro enrichment
+        this.proLimitReached.set(scan.proLimitReached ?? false);
+        this.foodPairings.set(scan.foodPairings ?? null);
+        this.description.set(scan.description ?? null);
+        this.technicalNotes.set(scan.technicalNotes ?? null);
+
+        // Sync quota state to ProfileService (avoids an extra DB round-trip)
+        this.profileService.syncQuotaFromScan(
+          scan.proScansToday ?? 0,
+          scan.dailyProLimit ?? 10,
+          scan.isPro ?? false,
+        );
+
+        // Haptic feedback when pro quota was reached
+        if (scan.proLimitReached && navigator.vibrate) {
+          navigator.vibrate([100, 80, 100, 80, 300]);
         }
       }
 

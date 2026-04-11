@@ -38,12 +38,16 @@ export class ScannerComponent implements OnDestroy {
       this.stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } },
       });
+      // Set cameraActive first so Angular renders the <video> element
+      this.cameraActive.set(true);
+      this.cameraError.set(null);
+
+      // Wait for the DOM to update before assigning the stream
+      await new Promise(r => requestAnimationFrame(r));
       const video = this.videoRef()?.nativeElement;
       if (video) {
         video.srcObject = this.stream;
         await video.play();
-        this.cameraActive.set(true);
-        this.cameraError.set(null);
       }
     } catch {
       this.cameraError.set('Kunne ikke åpne kamera. Sjekk tillatelser.');

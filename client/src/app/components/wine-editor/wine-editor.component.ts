@@ -5,6 +5,7 @@ import { DatePipe, SlicePipe } from '@angular/common';
 import { WineService, NewWine, WineLog } from '../../services/wine.service';
 import { ProfileService } from '../../services/profile.service';
 import { LocationService } from '../../services/location.service';
+import { NotificationService } from '../../services/notification.service';
 import { StarRatingComponent } from '../star-rating/star-rating.component';
 import {
   LocationSearchComponent,
@@ -23,6 +24,7 @@ export class WineEditorComponent implements OnInit {
   protected readonly wineService = inject(WineService);
   private readonly profileService = inject(ProfileService);
   private readonly locationService = inject(LocationService);
+  private readonly notifications = inject(NotificationService);
 
   protected readonly name = signal('');
   protected readonly producer = signal('');
@@ -45,6 +47,7 @@ export class WineEditorComponent implements OnInit {
   protected readonly locationSet = signal(false);
 
   protected readonly imageUrl = signal<string | null>(null);
+  protected readonly thumbnailUrl = signal<string | null>(null);
   protected readonly wineTypes = ['Rød', 'Hvit', 'Rosé', 'Musserende', 'Oransje', 'Dessert'];
 
   // Edit mode
@@ -84,6 +87,7 @@ export class WineEditorComponent implements OnInit {
     } else {
       // Create mode: pre-fill from scan result
       this.imageUrl.set(this.wineService.lastScanImageUrl());
+      this.thumbnailUrl.set(this.wineService.lastScanThumbnailUrl());
       this.tastedAt.set(new Date().toISOString().slice(0, 10));
       const scan = this.wineService.lastScanResult();
       if (scan) {
@@ -256,6 +260,7 @@ export class WineEditorComponent implements OnInit {
       rating:           this.rating() > 0 ? this.rating() : null,
       notes:            this.notes() || null,
       image_url:        this.imageUrl() || null,
+      thumbnail_url:    this.thumbnailUrl() || null,
       tasted_at:        this.tastedAt() || null,
       location_name:    this.locationName(),
       location_lat:     this.locationLat(),
@@ -275,6 +280,7 @@ export class WineEditorComponent implements OnInit {
     }
 
     if (success) {
+      this.notifications.success(this.editMode() ? 'Vin oppdatert!' : 'Vin lagret!');
       if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
       if (!this.editMode()) this.wineService.clearScanResult();
       // Navigate to the wine detail using the master wine id (from route or existingWineId)

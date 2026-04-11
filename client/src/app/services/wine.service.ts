@@ -3,6 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { environment } from '../../environments/environment';
 import { firstValueFrom } from 'rxjs';
 import { SupabaseService } from './supabase.service';
+import { NotificationService } from './notification.service';
 
 // ── Master wine data (from the wines table) ───────────────────────────────────
 // Combined with the user's latest log via the wine_entries view.
@@ -25,6 +26,7 @@ export interface Wine {
   rating: number | null;
   notes: string | null;
   image_url: string | null;
+  thumbnail_url: string | null;
   tasted_at: string | null;
   location_name: string | null;
   location_lat: number | null;
@@ -42,6 +44,7 @@ export interface WineLog {
   rating: number | null;
   notes: string | null;
   image_url: string | null;
+  thumbnail_url: string | null;
   tasted_at: string | null;
   location_name: string | null;
   location_lat: number | null;
@@ -68,6 +71,7 @@ export interface NewWine {
   rating: number | null;
   notes: string | null;
   image_url: string | null;
+  thumbnail_url: string | null;
   tasted_at: string | null;
   location_name: string | null;
   location_lat: number | null;
@@ -106,6 +110,7 @@ export interface WineAnalysisResult {
 export class WineService {
   private readonly http = inject(HttpClient);
   private readonly supabase = inject(SupabaseService).client;
+  private readonly notifications = inject(NotificationService);
 
   private readonly _wines = signal<Wine[]>([]);
   private readonly _loading = signal(false);
@@ -113,6 +118,7 @@ export class WineService {
   private readonly _processing = signal(false);
   private readonly _lastScanResult = signal<WineAnalysisResult | null>(null);
   private readonly _lastScanImageUrl = signal<string | null>(null);
+  private readonly _lastScanThumbnailUrl = signal<string | null>(null);
   private readonly _lastScanLocation = signal<{ lat: number; lng: number } | null>(null);
 
   readonly wines = this._wines.asReadonly();
@@ -122,6 +128,7 @@ export class WineService {
   readonly processing = this._processing.asReadonly();
   readonly lastScanResult = this._lastScanResult.asReadonly();
   readonly lastScanImageUrl = this._lastScanImageUrl.asReadonly();
+  readonly lastScanThumbnailUrl = this._lastScanThumbnailUrl.asReadonly();
   readonly lastScanLocation = this._lastScanLocation.asReadonly();
 
   // ── Read ────────────────────────────────────────────────────────────────────
@@ -253,6 +260,7 @@ export class WineService {
         rating:        wine.rating,
         notes:         wine.notes,
         image_url:     wine.image_url,
+        thumbnail_url: wine.thumbnail_url,
         tasted_at:     wine.tasted_at,
         location_name: wine.location_name,
         location_lat:  wine.location_lat,
@@ -300,6 +308,7 @@ export class WineService {
         rating:        wine.rating,
         notes:         wine.notes,
         image_url:     wine.image_url,
+        thumbnail_url: wine.thumbnail_url,
         tasted_at:     wine.tasted_at,
         location_name: wine.location_name,
         location_lat:  wine.location_lat,
@@ -355,6 +364,45 @@ export class WineService {
     return urlData.publicUrl;
   }
 
+  /**
+   * Uploads both the full-size and thumbnail images to Supabase Storage.
+   * Path structure: {userId}/scans/{timestamp}/full.webp + thumb.webp
+   */
+  async uploadLabelImages(
+    full: Blob,
+    thumbnail: Blob,
+  ): Promise<{ imageUrl: string; thumbnailUrl: string } | null> {
+    const { data: { user } } = await this.supabase.auth.getUser();
+    const prefix = user ? `${user.id}/scans/${Date.now()}` : `labels/${Date.now()}`;
+    const ext = full.type === 'image/webp' ? 'webp' : 'jpg';
+
+    const [fullResult, thumbResult] = await Promise.all([
+      this.supabase.storage
+        .from('wine-labels')
+        .upload(`${prefix}/full.${ext}`, full, { contentType: full.type, upsert: false }),
+      this.supabase.storage
+        .from('wine-labels')
+        .upload(`${prefix}/thumb.${ext}`, thumbnail, { contentType: thumbnail.type, upsert: false }),
+    ]);
+
+    if (fullResult.error || thumbResult.error) {
+      const msg = fullResult.error?.message ?? thumbResult.error?.message ?? 'Bildeopplasting feilet';
+      console.error('Storage upload error:', msg);
+      this._error.set(msg);
+      return null;
+    }
+
+    const { data: fullUrl } = this.supabase.storage
+      .from('wine-labels')
+      .getPublicUrl(fullResult.data.path);
+
+    const { data: thumbUrl } = this.supabase.storage
+      .from('wine-labels')
+      .getPublicUrl(thumbResult.data.path);
+
+    return { imageUrl: fullUrl.publicUrl, thumbnailUrl: thumbUrl.publicUrl };
+  }
+
   // ── AI Analysis ─────────────────────────────────────────────────────────────
 
   /**
@@ -375,9 +423,16 @@ export class WineService {
       this._lastScanResult.set(result);
       return result;
     } catch (err: unknown) {
-      const detail = (err as { error?: { detail?: string } })?.error?.detail
-        ?? (err instanceof Error ? err.message : 'Kunne ikke analysere etiketten');
-      this._error.set(detail);
+      const httpErr = err as { error?: { extensions?: { errorCode?: string }; detail?: string }; status?: number };
+      const errorCode = httpErr?.error?.extensions?.errorCode;
+
+      if (errorCode) {
+        this.notifications.showApiError(errorCode);
+      } else {
+        const detail = httpErr?.error?.detail
+          ?? (err instanceof Error ? err.message : 'Kunne ikke analysere etiketten');
+        this.notifications.error(detail);
+      }
       return null;
     } finally {
       this._processing.set(false);
@@ -389,6 +444,10 @@ export class WineService {
     this._lastScanImageUrl.set(url);
   }
 
+  setScanThumbnailUrl(url: string): void {
+    this._lastScanThumbnailUrl.set(url);
+  }
+
   setScanLocation(lat: number, lng: number): void {
     this._lastScanLocation.set({ lat, lng });
   }
@@ -396,6 +455,7 @@ export class WineService {
   clearScanResult(): void {
     this._lastScanResult.set(null);
     this._lastScanImageUrl.set(null);
+    this._lastScanThumbnailUrl.set(null);
     this._lastScanLocation.set(null);
   }
 }

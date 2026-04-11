@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Http.HttpResults;
+using VinLoggen.Api.Models;
 using VinLoggen.Api.Services;
 
 namespace VinLoggen.Api.Endpoints;
@@ -58,14 +59,26 @@ public static class WineAnalyzeEndpoints
         Guid? userId = Guid.TryParse(userIdClaim, out var id) ? id : null;
 
         // ── Delegate to the orchestrator ──────────────────────────────────────
-        try
+        var apiResult = await orchestrator.AnalyzeAsync(imageBytes, image.ContentType, userId, ct);
+
+        if (apiResult.Success)
+            return TypedResults.Ok(apiResult.Data!);
+
+        var statusCode = apiResult.ErrorCode switch
         {
-            var result = await orchestrator.AnalyzeAsync(imageBytes, image.ContentType, userId, ct);
-            return TypedResults.Ok(result);
-        }
-        catch (InvalidOperationException ex)
-        {
-            return TypedResults.Problem(ex.Message, statusCode: StatusCodes.Status502BadGateway);
-        }
+            ApiErrorCode.ImageUnreadable     => StatusCodes.Status422UnprocessableEntity,
+            ApiErrorCode.ExternalServiceDown => StatusCodes.Status502BadGateway,
+            ApiErrorCode.QuotaExceeded       => StatusCodes.Status429TooManyRequests,
+            ApiErrorCode.Unauthorized        => StatusCodes.Status401Unauthorized,
+            _                                => StatusCodes.Status500InternalServerError,
+        };
+
+        return TypedResults.Problem(
+            detail: apiResult.Message,
+            statusCode: statusCode,
+            extensions: new Dictionary<string, object?>
+            {
+                ["errorCode"] = apiResult.ErrorCode.ToString(),
+            });
     }
 }

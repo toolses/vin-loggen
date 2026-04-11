@@ -71,7 +71,7 @@ public record GeminiResult<T>(T? Value, string? Error)
 public sealed class GeminiService : IGeminiService
 {
     private const string GeminiEndpoint =
-        "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent";
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-preview:generateContent";
 
     // Norwegian prompt as specified in the requirements
     private const string SystemPrompt = """

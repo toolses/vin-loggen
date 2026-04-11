@@ -77,8 +77,8 @@
 @utility animate-pulse-burgundy {
   animation: pulse-burgundy 2s ease-in-out infinite;
   will-change: box-shadow;
-  -webkit-transform: translateZ(0);
   transform: translateZ(0);
+  -webkit-transform: translateZ(0);
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
 }

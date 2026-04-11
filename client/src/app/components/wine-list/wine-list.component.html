@@ -89,10 +89,26 @@
   <!-- ── List View ───────────────────────────────────────── -->
   @if (viewMode() === 'list') {
 
-  <!-- ── Loading ───────────────────────────────────────────── -->
+  <!-- ── Loading (Skeleton) ────────────────────────────────── -->
   @if (loading()) {
-    <div class="flex justify-center py-16" role="status" aria-label="Laster viner…">
-      <span class="w-8 h-8 rounded-full border-4 border-burgundy/30 border-t-burgundy animate-spin" aria-hidden="true"></span>
+    <div role="status" aria-label="Laster viner…">
+      <div class="h-3 w-16 bg-white/10 rounded animate-shimmer mb-3"></div>
+      <ul class="space-y-3">
+        @for (i of [1,2,3,4,5,6]; track i) {
+          <li class="glass rounded-2xl flex gap-4 p-4">
+            <div class="w-16 h-20 bg-white/10 rounded-xl flex-shrink-0 animate-shimmer"></div>
+            <div class="flex-1 min-w-0 space-y-2 py-1">
+              <div class="h-4 w-3/4 bg-white/10 rounded animate-shimmer"></div>
+              <div class="h-3 w-1/2 bg-white/10 rounded animate-shimmer"></div>
+              <div class="flex gap-1.5 mt-1">
+                <div class="h-4 w-10 bg-white/10 rounded-full animate-shimmer"></div>
+                <div class="h-4 w-12 bg-white/10 rounded-full animate-shimmer"></div>
+              </div>
+            </div>
+            <div class="h-6 w-8 bg-white/10 rounded animate-shimmer flex-shrink-0"></div>
+          </li>
+        }
+      </ul>
     </div>
   }
 
@@ -146,7 +162,7 @@
             <!-- Thumbnail -->
             @if (wine.image_url) {
               <img
-                [src]="wine.image_url"
+                [src]="wine.thumbnail_url || wine.image_url"
                 [alt]="wine.name + ' etikett'"
                 class="w-16 h-20 object-cover rounded-xl flex-shrink-0"
                 loading="lazy"

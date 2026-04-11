@@ -104,26 +104,24 @@ export class ScannerComponent implements OnDestroy {
 
   private async processFile(source: File | Blob): Promise<void> {
     try {
-      // 1. Resize to max 1080p, JPEG 0.8 quality
-      const resized = await this.imageProcessing.resizeImage(source);
+      // 1. Generate full-size WebP + 200x200 thumbnail
+      const processed = await this.imageProcessing.processImage(source);
 
       // 2. Show local preview immediately
       this.revokePreview();
-      this.previewObjectUrl = URL.createObjectURL(resized);
+      this.previewObjectUrl = URL.createObjectURL(processed.full);
       this.previewUrl.set(this.previewObjectUrl);
       this.stopCamera();
 
-      // 3. Build a named File for the Supabase upload
-      const uploadFile = new File([resized], `scan-${Date.now()}.jpg`, { type: 'image/jpeg' });
-
-      // 4. Upload to Supabase (for image_url) and send to AI endpoint in parallel
-      const [imageUrl] = await Promise.all([
-        this.wineService.uploadLabelImage(uploadFile),
-        this.wineService.analyzeLabel(resized),
+      // 3. Upload both versions to Supabase and send full image to AI endpoint in parallel
+      const [uploadResult] = await Promise.all([
+        this.wineService.uploadLabelImages(processed.full, processed.thumbnail),
+        this.wineService.analyzeLabel(processed.full),
       ]);
 
-      if (imageUrl) {
-        this.wineService.setScanImageUrl(imageUrl);
+      if (uploadResult) {
+        this.wineService.setScanImageUrl(uploadResult.imageUrl);
+        this.wineService.setScanThumbnailUrl(uploadResult.thumbnailUrl);
       }
 
       // Store GPS if captured

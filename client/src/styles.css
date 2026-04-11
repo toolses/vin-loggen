@@ -110,6 +110,7 @@
 html,
 body {
   height: 100%;
+  overflow: hidden;
   overscroll-behavior-y: none;
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
 }

@@ -97,7 +97,7 @@ export class ProfileService {
       const { data, error } = await this.supabase.client
         .from('user_profiles')
         .select('subscription_tier, pro_scans_today, last_pro_scan_date')
-        .eq('id', userId)
+        .eq('user_id', userId)
         .single();
 
       if (error) {

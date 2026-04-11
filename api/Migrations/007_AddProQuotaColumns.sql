@@ -13,6 +13,15 @@ ALTER TABLE user_profiles
     ADD COLUMN IF NOT EXISTS last_pro_scan_date  DATE NOT NULL DEFAULT CURRENT_DATE;
 
 -- Validate tier values; extend this check when new tiers are introduced.
-ALTER TABLE user_profiles
-    ADD CONSTRAINT IF NOT EXISTS user_profiles_tier_check
-    CHECK (subscription_tier IN ('free', 'pro'));
+-- PostgreSQL does not support ADD CONSTRAINT IF NOT EXISTS, so guard with a DO block.
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'user_profiles_tier_check'
+    ) THEN
+        ALTER TABLE user_profiles
+            ADD CONSTRAINT user_profiles_tier_check
+            CHECK (subscription_tier IN ('free', 'pro'));
+    END IF;
+END;
+$$;

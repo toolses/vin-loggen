@@ -142,6 +142,7 @@ export class WineService {
       .upload(path, file, { contentType: file.type, upsert: false });
 
     if (error) {
+      console.error('Storage upload error:', JSON.stringify(error));
       this._error.set(error.message);
       return null;
     }

@@ -55,12 +55,16 @@ public sealed class WineOrchestratorService
     /// Runs the full analysis pipeline for the supplied image bytes.
     /// <paramref name="userId"/> may be <c>null</c> for unauthenticated calls
     /// (dedup + quota features are skipped).
+    /// <paramref name="backImageBytes"/> and <paramref name="backMimeType"/> are optional
+    /// (omit when only a front label image is available).
     /// </summary>
     public async Task<ApiResult<WineAnalysisResponse>> AnalyzeAsync(
         byte[]  imageBytes,
         string  mimeType,
         Guid?   userId,
-        CancellationToken ct)
+        CancellationToken ct,
+        byte[]? backImageBytes = null,
+        string? backMimeType   = null)
     {
         // ── Step 1: Gemini OCR ────────────────────────────────────────────────
         if (!_settings.EnableGemini)
@@ -70,7 +74,9 @@ public sealed class WineOrchestratorService
                 ApiErrorCode.ExternalServiceDown, "AI-analyse er deaktivert");
         }
 
-        var geminiResult = await _gemini.AnalyzeLabelAsync(imageBytes, mimeType, ct);
+        var geminiResult = backImageBytes is { Length: > 0 }
+            ? await _gemini.AnalyzeLabelsAsync(imageBytes, mimeType, backImageBytes, backMimeType, ct)
+            : await _gemini.AnalyzeLabelAsync(imageBytes, mimeType, ct);
         if (!geminiResult.IsSuccess)
         {
             _logger.LogError("OrchestratorService: Gemini OCR failed: {Error}", geminiResult.Error);

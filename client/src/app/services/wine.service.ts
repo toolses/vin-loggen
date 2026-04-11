@@ -366,56 +366,96 @@ export class WineService {
 
   /**
    * Uploads both the full-size and thumbnail images to Supabase Storage.
-   * Path structure: {userId}/scans/{timestamp}/full.webp + thumb.webp
+   * Supports front and optional back label images.
+   * Path structure: {userId}/{wineId}/front/full.webp + thumb.webp
+   *                 {userId}/{wineId}/back/full.webp + thumb.webp
    */
   async uploadLabelImages(
-    full: Blob,
-    thumbnail: Blob,
-  ): Promise<{ imageUrl: string; thumbnailUrl: string } | null> {
+    frontFull: Blob,
+    frontThumb: Blob,
+    backFull?: Blob | null,
+    backThumb?: Blob | null,
+  ): Promise<{ imageUrl: string; thumbnailUrl: string; backImageUrl?: string; backThumbnailUrl?: string } | null> {
     const { data: { user } } = await this.supabase.auth.getUser();
-    const prefix = user ? `${user.id}/scans/${Date.now()}` : `labels/${Date.now()}`;
-    const ext = full.type === 'image/webp' ? 'webp' : 'jpg';
+    const ts = Date.now();
+    const prefix = user ? `${user.id}/scans/${ts}` : `labels/${ts}`;
+    const ext = frontFull.type === 'image/webp' ? 'webp' : 'jpg';
 
-    const [fullResult, thumbResult] = await Promise.all([
+    // Upload front images
+    const [frontFullResult, frontThumbResult] = await Promise.all([
       this.supabase.storage
         .from('wine-labels')
-        .upload(`${prefix}/full.${ext}`, full, { contentType: full.type, upsert: false }),
+        .upload(`${prefix}/front/full.${ext}`, frontFull, { contentType: frontFull.type, upsert: false }),
       this.supabase.storage
         .from('wine-labels')
-        .upload(`${prefix}/thumb.${ext}`, thumbnail, { contentType: thumbnail.type, upsert: false }),
+        .upload(`${prefix}/front/thumb.${ext}`, frontThumb, { contentType: frontThumb.type, upsert: false }),
     ]);
 
-    if (fullResult.error || thumbResult.error) {
-      const msg = fullResult.error?.message ?? thumbResult.error?.message ?? 'Bildeopplasting feilet';
-      console.error('Storage upload error:', msg);
+    if (frontFullResult.error || frontThumbResult.error) {
+      const msg = frontFullResult.error?.message ?? frontThumbResult.error?.message ?? 'Bildeopplasting feilet';
+      console.error('Storage upload error (front):', msg);
       this._error.set(msg);
       return null;
     }
 
-    const { data: fullUrl } = this.supabase.storage
+    const { data: frontFullUrl } = this.supabase.storage
       .from('wine-labels')
-      .getPublicUrl(fullResult.data.path);
+      .getPublicUrl(frontFullResult.data.path);
 
-    const { data: thumbUrl } = this.supabase.storage
+    const { data: frontThumbUrl } = this.supabase.storage
       .from('wine-labels')
-      .getPublicUrl(thumbResult.data.path);
+      .getPublicUrl(frontThumbResult.data.path);
 
-    return { imageUrl: fullUrl.publicUrl, thumbnailUrl: thumbUrl.publicUrl };
+    const result: { imageUrl: string; thumbnailUrl: string; backImageUrl?: string; backThumbnailUrl?: string } = {
+      imageUrl: frontFullUrl.publicUrl,
+      thumbnailUrl: frontThumbUrl.publicUrl,
+    };
+
+    // Upload back images if provided
+    if (backFull && backThumb) {
+      const backExt = backFull.type === 'image/webp' ? 'webp' : 'jpg';
+      const [backFullResult, backThumbResult] = await Promise.all([
+        this.supabase.storage
+          .from('wine-labels')
+          .upload(`${prefix}/back/full.${backExt}`, backFull, { contentType: backFull.type, upsert: false }),
+        this.supabase.storage
+          .from('wine-labels')
+          .upload(`${prefix}/back/thumb.${backExt}`, backThumb, { contentType: backThumb.type, upsert: false }),
+      ]);
+
+      if (!backFullResult.error && !backThumbResult.error) {
+        const { data: backFullUrl } = this.supabase.storage
+          .from('wine-labels')
+          .getPublicUrl(backFullResult.data.path);
+        const { data: backThumbUrl } = this.supabase.storage
+          .from('wine-labels')
+          .getPublicUrl(backThumbResult.data.path);
+        result.backImageUrl = backFullUrl.publicUrl;
+        result.backThumbnailUrl = backThumbUrl.publicUrl;
+      } else {
+        console.warn('Storage upload error (back), continuing with front only');
+      }
+    }
+
+    return result;
   }
 
   // ── AI Analysis ─────────────────────────────────────────────────────────────
 
   /**
-   * Sends the raw image blob as multipart/form-data to POST /api/wine/analyze.
+   * Sends the raw image blob(s) as multipart/form-data to POST /api/wine/analyze.
    * The backend calls Gemini and checks the catalogue for de-duplication.
    * Sets the `processing` signal while the request is in flight.
    */
-  async analyzeLabel(file: Blob): Promise<WineAnalysisResult | null> {
+  async analyzeLabel(frontImage: Blob, backImage?: Blob | null): Promise<WineAnalysisResult | null> {
     this._processing.set(true);
     this._error.set(null);
     try {
       const formData = new FormData();
-      formData.append('image', file, 'label.jpg');
+      formData.append('image', frontImage, 'label.jpg');
+      if (backImage) {
+        formData.append('backImage', backImage, 'back-label.jpg');
+      }
 
       const result = await firstValueFrom(
         this.http.post<WineAnalysisResult>(`${environment.apiBaseUrl}/wine/analyze`, formData)

@@ -73,7 +73,7 @@ public sealed class GeminiService : IGeminiService
     private const string GeminiEndpoint =
         "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-preview:generateContent";
 
-    // Norwegian prompt as specified in the requirements
+    // Norwegian prompt for single-image analysis
     private const string SystemPrompt = """
         Du er en sommelier-ekspert. Analyser bildet av vinetiketten og returner KUN rå JSON (uten markdown-formatering).
         JSON-struktur:
@@ -94,6 +94,35 @@ public sealed class GeminiService : IGeminiService
         - Ikke gjenta produsentnavnet i wineName-feltet.
         - Bruk offisielle navn fra etiketten, ikke forkortelser eller omskrivninger.
 
+        Hvis du er usikker på et felt, sett det til null.
+        """;
+
+    // Norwegian prompt for dual-image (front + back label) analysis
+    private const string MultiImageSystemPrompt = """
+        Du er en sommelier-ekspert. Analyser de vedlagte bildene av forside og bakside av flasken.
+        Trekk ut data fra BEGGE etiketter for å fylle ut følgende JSON.
+        Returner KUN rå JSON (uten markdown-formatering).
+        JSON-struktur:
+        {
+          "wineName": string,
+          "producer": string,
+          "vintage": integer,
+          "country": string,
+          "region": string,
+          "grapes": string[],
+          "type": "Rød"|"Hvit"|"Musserende"|"Rosé"|"Oransje",
+          "alcoholContent": number,
+          "foodPairings": string[]
+        }
+
+        VIKTIGE REGLER for konsistens:
+        - "producer": Bruk FULLT produsentnavn nøyaktig som det står på etiketten (f.eks. "Markus Molitor", ikke bare "Molitor").
+        - "wineName": Vinens eget navn UTEN produsentnavnet. Hvis etiketten bare viser produsent + druesort + region, bruk druesort + region som wineName (f.eks. "Riesling Spätlese Zeltinger Sonnenuhr").
+        - Ikke gjenta produsentnavnet i wineName-feltet.
+        - Bruk offisielle navn fra etiketten, ikke forkortelser eller omskrivninger.
+        - "foodPairings": Matanbefalinger fra baketiketten. Hvis ingen finnes, returner null.
+
+        Hvis du er usikker, bruk data fra baketiketten som fallback.
         Hvis du er usikker på et felt, sett det til null.
         """;
 
@@ -208,6 +237,111 @@ public sealed class GeminiService : IGeminiService
         {
             _logger.LogError(ex, "GeminiService: JSON parsing failed. Raw: {Raw}", rawJson);
             return new(null, $"Failed to parse AI response as wine data");
+        }
+    }
+
+    public async Task<GeminiResult<WineAnalysisResponse>> AnalyzeLabelsAsync(
+        byte[]            frontImageBytes,
+        string            frontMimeType,
+        byte[]?           backImageBytes,
+        string?           backMimeType,
+        CancellationToken ct)
+    {
+        // If no back image, fall back to single-image analysis
+        if (backImageBytes is null || backImageBytes.Length == 0)
+            return await AnalyzeLabelAsync(frontImageBytes, frontMimeType, ct);
+
+        var apiKey = _configuration["GEMINI_API_KEY"];
+        if (string.IsNullOrWhiteSpace(apiKey))
+        {
+            _logger.LogError("GeminiService: GEMINI_API_KEY is not configured");
+            return new(null, "GEMINI_API_KEY is not configured");
+        }
+
+        var frontBase64 = Convert.ToBase64String(frontImageBytes);
+        var backBase64  = Convert.ToBase64String(backImageBytes);
+
+        var payload = new
+        {
+            contents = new[]
+            {
+                new
+                {
+                    parts = new object[]
+                    {
+                        new { text = MultiImageSystemPrompt },
+                        new { inline_data = new { mime_type = frontMimeType, data = frontBase64 } },
+                        new { inline_data = new { mime_type = backMimeType!, data = backBase64 } },
+                    }
+                }
+            }
+        };
+
+        var client = _httpClientFactory.CreateClient("gemini");
+
+        HttpResponseMessage response;
+        try
+        {
+            response = await client.PostAsJsonAsync($"{GeminiEndpoint}?key={apiKey}", payload, ct);
+        }
+        catch (TaskCanceledException ex) when (!ct.IsCancellationRequested)
+        {
+            _logger.LogError(ex, "GeminiService: HTTP request to Gemini timed out (multi-image)");
+            return new(null, "Gemini API request timed out");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "GeminiService: HTTP request to Gemini failed (multi-image)");
+            return new(null, $"HTTP request to Gemini failed: {ex.Message}");
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var errorBody = await response.Content.ReadAsStringAsync(ct);
+            _logger.LogError("GeminiService: Gemini returned {Status} (multi-image): {Body}", response.StatusCode, errorBody);
+            return new(null, $"Gemini returned {(int)response.StatusCode} {response.StatusCode}: {errorBody}");
+        }
+
+        string rawJson;
+        try
+        {
+            using var doc = await JsonDocument.ParseAsync(
+                await response.Content.ReadAsStreamAsync(ct), cancellationToken: ct);
+
+            rawJson = doc.RootElement
+                .GetProperty("candidates")[0]
+                .GetProperty("content")
+                .GetProperty("parts")[0]
+                .GetProperty("text")
+                .GetString() ?? string.Empty;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "GeminiService: failed to navigate Gemini response structure (multi-image)");
+            return new(null, "Failed to parse Gemini response structure");
+        }
+
+        rawJson = Regex.Replace(
+            rawJson.Trim(),
+            @"^```(?:json)?\s*|\s*```$",
+            "",
+            RegexOptions.Multiline).Trim();
+
+        try
+        {
+            var extraction = JsonSerializer.Deserialize<WineAnalysisResponse>(
+                rawJson,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+            _logger.LogInformation(
+                "GeminiService: multi-image extracted '{WineName}' ({Vintage})", extraction?.WineName, extraction?.Vintage);
+
+            return new(extraction, null);
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogError(ex, "GeminiService: JSON parsing failed (multi-image). Raw: {Raw}", rawJson);
+            return new(null, "Failed to parse AI response as wine data");
         }
     }
 

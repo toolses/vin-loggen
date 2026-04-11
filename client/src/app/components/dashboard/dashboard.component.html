@@ -4,7 +4,7 @@
   <section class="px-6 pt-12 pb-8 text-center">
     <span class="text-5xl block mb-4" aria-hidden="true">🍷</span>
     <h1 class="font-serif text-4xl font-bold text-cream tracking-tight">VinLoggen</h1>
-    <p class="text-cream-dark mt-2 text-sm">AI-drevet vinregistrering</p>
+    <p class="text-cream-dark mt-2 text-sm">Din personlige vinjournal</p>
 
     @if (wineService.wineCount() > 0) {
       <p class="text-cream-muted mt-3 text-xs uppercase tracking-widest font-medium">
@@ -40,11 +40,22 @@
     </div>
   }
 
-  <!-- ── Loading ───────────────────────────────────────────── -->
+  <!-- ── Loading (Skeleton) ────────────────────────────────── -->
   @if (wineService.loading()) {
-    <div class="flex justify-center py-10" role="status" aria-label="Laster viner…">
-      <span class="w-8 h-8 rounded-full border-4 border-burgundy/30 border-t-burgundy animate-spin" aria-hidden="true"></span>
-    </div>
+    <section class="px-6">
+      <div class="flex items-center justify-between mb-4">
+        <div class="h-5 w-28 bg-white/10 rounded animate-shimmer"></div>
+      </div>
+      <div class="flex gap-4 overflow-x-auto no-scrollbar pb-2 -mx-1 px-1">
+        @for (i of [1,2,3,4]; track i) {
+          <div class="glass rounded-2xl p-3 min-w-[160px] max-w-[160px] flex-shrink-0">
+            <div class="w-full h-28 bg-white/10 rounded-xl mb-3 animate-shimmer"></div>
+            <div class="h-4 w-3/4 bg-white/10 rounded animate-shimmer mb-1"></div>
+            <div class="h-3 w-1/2 bg-white/10 rounded animate-shimmer"></div>
+          </div>
+        }
+      </div>
+    </section>
   }
 
   <!-- ── Recent Wines Section ──────────────────────────────── -->

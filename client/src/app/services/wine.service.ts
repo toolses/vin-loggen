@@ -1,8 +1,8 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { environment } from '../../environments/environment';
 import { firstValueFrom } from 'rxjs';
+import { SupabaseService } from './supabase.service';
 
 export interface Wine {
   id: string;
@@ -35,7 +35,7 @@ export interface WineAnalysisResult {
 @Injectable({ providedIn: 'root' })
 export class WineService {
   private readonly http = inject(HttpClient);
-  private readonly supabase: SupabaseClient;
+  private readonly supabase = inject(SupabaseService).client;
 
   private readonly _wines = signal<Wine[]>([]);
   private readonly _loading = signal(false);
@@ -51,10 +51,6 @@ export class WineService {
   readonly processing = this._processing.asReadonly();
   readonly lastScanResult = this._lastScanResult.asReadonly();
   readonly lastScanImageUrl = this._lastScanImageUrl.asReadonly();
-
-  constructor() {
-    this.supabase = createClient(environment.supabaseUrl, environment.supabaseAnonKey);
-  }
 
   async loadWines(): Promise<void> {
     this._loading.set(true);
@@ -75,7 +71,11 @@ export class WineService {
 
   async addWine(wine: NewWine): Promise<boolean> {
     this._error.set(null);
-    const { error } = await this.supabase.from('wines').insert(wine);
+    const { data: { user } } = await this.supabase.auth.getUser();
+    const { error } = await this.supabase.from('wines').insert({
+      ...wine,
+      user_id: user?.id,
+    });
     if (error) {
       this._error.set(error.message);
       return false;

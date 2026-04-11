@@ -85,6 +85,15 @@
   animation: shimmer 2s ease-in-out infinite;
 }
 
+/* ── Bar Chart Animation ─────────────────────────────────── */
+@keyframes bar-fill {
+  from { width: 0; }
+}
+
+@utility animate-bar-fill {
+  animation: bar-fill 0.8s ease-out both;
+}
+
 /* ── Safe-area insets for notched mobile devices ───────────── */
 :root {
   --sat: env(safe-area-inset-top);

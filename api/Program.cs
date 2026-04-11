@@ -1,3 +1,6 @@
+using DbUp;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
 using Npgsql;
 using Scalar.AspNetCore;
 using VinLoggen.Api.Endpoints;
@@ -26,6 +29,36 @@ builder.Services.AddHttpClient("gemini");
 
 // ── AI / Gemini ───────────────────────────────────────────────────────────────
 builder.Services.AddScoped<GeminiService>();
+builder.Services.AddScoped<TasteProfileService>();
+
+// ── Auth (Supabase JWT via JWKS) ─────────────────────────────────────────────
+var supabaseUrl = builder.Configuration["SUPABASE_URL"] ?? string.Empty;
+
+if (!string.IsNullOrWhiteSpace(supabaseUrl))
+{
+    builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+        .AddJwtBearer(options =>
+        {
+            options.Authority = $"{supabaseUrl}/auth/v1";
+            options.MetadataAddress = $"{supabaseUrl}/auth/v1/.well-known/openid-configuration";
+            options.TokenValidationParameters = new TokenValidationParameters
+            {
+                ValidateIssuer = true,
+                ValidIssuer = $"{supabaseUrl}/auth/v1",
+                ValidateAudience = true,
+                ValidAudience = "authenticated",
+                ValidateLifetime = true,
+                ValidateIssuerSigningKey = true,
+            };
+        });
+}
+else
+{
+    // Allow the app to start without auth for local/dev setups
+    builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+        .AddJwtBearer();
+}
+builder.Services.AddAuthorization();
 
 // ── Database ──────────────────────────────────────────────────────────────────
 // Reads SUPABASE_CONNECTION_STRING from env / appsettings.
@@ -33,10 +66,22 @@ builder.Services.AddScoped<GeminiService>();
 var connectionString = builder.Configuration["SUPABASE_CONNECTION_STRING"]
     ?? string.Empty;
 
-builder.Services.AddNpgsqlDataSource(
-    !string.IsNullOrWhiteSpace(connectionString)
-        ? connectionString
-        : "Host=localhost;Database=vinloggen_placeholder");
+if (!string.IsNullOrWhiteSpace(connectionString))
+{
+    var csBuilder = new NpgsqlConnectionStringBuilder(connectionString)
+    {
+        MaxPoolSize = 10,
+        MinPoolSize = 1,
+        ConnectionIdleLifetime = 300, // seconds – reclaim idle connections
+        Timeout = 15,                 // connect timeout in seconds
+        CommandTimeout = 30,          // query timeout in seconds
+    };
+    builder.Services.AddNpgsqlDataSource(csBuilder.ConnectionString);
+}
+else
+{
+    builder.Services.AddNpgsqlDataSource("Host=localhost;Database=vinloggen_placeholder");
+}
 
 // ── Render support ────────────────────────────────────────────────────────────
 // Render injects a dynamic $PORT. Map it to ASP.NET Core's listener.
@@ -49,6 +94,30 @@ if (!string.IsNullOrEmpty(renderPort))
 // ── Build ─────────────────────────────────────────────────────────────────────
 var app = builder.Build();
 
+// ── Database Migrations (DbUp) ────────────────────────────────────────────────
+if (!string.IsNullOrWhiteSpace(connectionString))
+{
+    var upgrader = DeployChanges.To
+        .PostgresqlDatabase(connectionString)
+        .WithScriptsEmbeddedInAssembly(typeof(Program).Assembly)
+        .LogToConsole()
+        .Build();
+
+    var result = upgrader.PerformUpgrade();
+
+    if (!result.Successful)
+    {
+        Console.ForegroundColor = ConsoleColor.Red;
+        Console.WriteLine($"Database migration failed: {result.Error}");
+        Console.ResetColor();
+        return;
+    }
+
+    Console.ForegroundColor = ConsoleColor.Green;
+    Console.WriteLine("Database migrations applied successfully.");
+    Console.ResetColor();
+}
+
 // ── Middleware ────────────────────────────────────────────────────────────────
 if (app.Environment.IsDevelopment())
 {
@@ -57,12 +126,15 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseCors("Frontend");
+app.UseAuthentication();
+app.UseAuthorization();
 
 // ── Endpoints ─────────────────────────────────────────────────────────────────
 app.MapHealthEndpoint();
 app.MapWineEndpoints();
 app.MapProcessLabelEndpoints();
 app.MapWineAnalyzeEndpoints();
+app.MapTasteProfileEndpoints();
 
 app.Run();
 

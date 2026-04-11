@@ -12,23 +12,29 @@ import {
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { WineService, Wine } from '../../services/wine.service';
+import { ShareService } from '../../services/share.service';
+import { WineShareCardComponent } from '../wine-share-card/wine-share-card.component';
 
 @Component({
   selector: 'app-wine-list',
   standalone: true,
-  imports: [FormsModule, RouterLink],
+  imports: [FormsModule, RouterLink, WineShareCardComponent],
   templateUrl: './wine-list.component.html',
 })
 export class WineListComponent implements OnInit, OnDestroy {
   private readonly wineService = inject(WineService);
+  private readonly shareService = inject(ShareService);
 
   protected readonly sentinelRef = viewChild<ElementRef<HTMLDivElement>>('sentinel');
+  protected readonly shareCardRef = viewChild<ElementRef<HTMLDivElement>>('shareCard');
 
   protected readonly search = signal('');
   protected readonly typeFilter = signal<string | null>(null);
   protected readonly displayCount = signal(20);
   protected readonly loading = this.wineService.loading;
   protected readonly error = this.wineService.error;
+  protected readonly sharingWine = signal<Wine | null>(null);
+  protected readonly isSharing = signal(false);
 
   protected readonly wineTypes = ['Rød', 'Hvit', 'Rosé', 'Musserende', 'Oransje', 'Dessert'];
 
@@ -113,6 +119,31 @@ export class WineListComponent implements OnInit, OnDestroy {
       case 'Oransje': return 'bg-orange-900/30 text-orange-300 border-orange-500/20';
       case 'Dessert': return 'bg-purple-900/30 text-purple-300 border-purple-500/20';
       default: return 'bg-white/5 text-cream-dark border-white/10';
+    }
+  }
+
+  protected async shareWine(wine: Wine): Promise<void> {
+    this.sharingWine.set(wine);
+    this.isSharing.set(true);
+
+    // Wait for Angular to render the share card
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    const el = this.shareCardRef()?.nativeElement;
+    if (!el) {
+      this.isSharing.set(false);
+      this.sharingWine.set(null);
+      return;
+    }
+
+    try {
+      const blob = await this.shareService.generateShareImage(el);
+      await this.shareService.shareWine(wine, blob);
+    } catch {
+      // User cancelled share or error
+    } finally {
+      this.isSharing.set(false);
+      this.sharingWine.set(null);
     }
   }
 

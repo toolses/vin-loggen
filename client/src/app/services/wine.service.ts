@@ -269,10 +269,32 @@ export class WineService {
     return true;
   }
 
-  /** Updates a specific tasting log (identified by its log_id). */
-  async updateWine(logId: string, wine: Partial<NewWine>): Promise<boolean> {
+  /** Updates a specific tasting log and its master wine record. */
+  async updateWine(logId: string, wineId: string, wine: Partial<NewWine>): Promise<boolean> {
     this._error.set(null);
-    const { error } = await this.supabase
+
+    // Update master wine data
+    const { error: wineError } = await this.supabase
+      .from('wines' as any)
+      .update({
+        name:             wine.name,
+        producer:         wine.producer,
+        vintage:          wine.vintage,
+        type:             wine.type,
+        country:          wine.country,
+        region:           wine.region,
+        grapes:           wine.grapes,
+        alcohol_content:  wine.alcohol_content,
+      })
+      .eq('id', wineId);
+
+    if (wineError) {
+      this._error.set(wineError.message);
+      return false;
+    }
+
+    // Update tasting log data
+    const { error: logError } = await this.supabase
       .from('wine_logs' as any)
       .update({
         rating:        wine.rating,
@@ -286,8 +308,8 @@ export class WineService {
       })
       .eq('id', logId);
 
-    if (error) {
-      this._error.set(error.message);
+    if (logError) {
+      this._error.set(logError.message);
       return false;
     }
     await this.loadWines();

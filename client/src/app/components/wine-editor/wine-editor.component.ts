@@ -1,7 +1,7 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
-import { SlicePipe } from '@angular/common';
+import { DatePipe, SlicePipe } from '@angular/common';
 import { WineService, NewWine, WineLog } from '../../services/wine.service';
 import { ProfileService } from '../../services/profile.service';
 import { LocationService } from '../../services/location.service';
@@ -14,7 +14,7 @@ import {
 @Component({
   selector: 'app-wine-editor',
   standalone: true,
-  imports: [FormsModule, SlicePipe, StarRatingComponent, LocationSearchComponent],
+  imports: [FormsModule, DatePipe, SlicePipe, StarRatingComponent, LocationSearchComponent],
   templateUrl: './wine-editor.component.html',
 })
 export class WineEditorComponent implements OnInit {
@@ -49,7 +49,8 @@ export class WineEditorComponent implements OnInit {
 
   // Edit mode
   protected readonly editMode = signal(false);
-  private editLogId = '';   // wine_log id used for updateWine
+  private editLogId = '';    // wine_log id used for updateWine
+  private editWineId = '';   // master wine id used for updateWine
 
   // Re-drinking / deduplication
   protected readonly alreadyTasted = signal(false);
@@ -152,8 +153,9 @@ export class WineEditorComponent implements OnInit {
       return;
     }
 
-    // Store the log_id for the update call
+    // Store the log_id and wine_id for the update call
     this.editLogId = wine.log_id;
+    this.editWineId = wine.id;
 
     this.name.set(wine.name);
     this.producer.set(wine.producer);
@@ -167,6 +169,8 @@ export class WineEditorComponent implements OnInit {
     this.tastedAt.set(wine.tasted_at ?? '');
     if (wine.grapes?.length)   this.grapeVariety.set(wine.grapes.join(', '));
     if (wine.alcohol_content != null) this.alcoholContent.set(`${wine.alcohol_content}%`);
+    this.grapes = wine.grapes ?? null;
+    this.alcoholNum = wine.alcohol_content ?? null;
 
     if (wine.location_name) {
       this.locationName.set(wine.location_name);
@@ -197,6 +201,7 @@ export class WineEditorComponent implements OnInit {
     }
 
     this.editLogId = logId;
+    this.editWineId = wineId;
 
     // Master data from wine
     this.name.set(wine.name);
@@ -207,6 +212,8 @@ export class WineEditorComponent implements OnInit {
     this.region.set(wine.region ?? '');
     if (wine.grapes?.length)   this.grapeVariety.set(wine.grapes.join(', '));
     if (wine.alcohol_content != null) this.alcoholContent.set(`${wine.alcohol_content}%`);
+    this.grapes = wine.grapes ?? null;
+    this.alcoholNum = wine.alcohol_content ?? null;
 
     // Log-specific data
     this.notes.set(log.notes ?? '');
@@ -228,6 +235,12 @@ export class WineEditorComponent implements OnInit {
 
     this.saving.set(true);
 
+    // Parse grapes and alcohol from display signals so edits are captured
+    const gv = this.grapeVariety().trim();
+    const parsedGrapes = gv ? gv.split(',').map(g => g.trim()).filter(Boolean) : null;
+    const ac = this.alcoholContent().replace('%', '').trim();
+    const parsedAlcohol = ac ? parseFloat(ac) : null;
+
     const wine: NewWine = {
       name:             this.name(),
       producer:         this.producer(),
@@ -235,8 +248,8 @@ export class WineEditorComponent implements OnInit {
       type:             this.type(),
       country:          this.country() || null,
       region:           this.region() || null,
-      grapes:           this.grapes,
-      alcohol_content:  this.alcoholNum,
+      grapes:           parsedGrapes,
+      alcohol_content:  parsedAlcohol !== null && !isNaN(parsedAlcohol) ? parsedAlcohol : null,
       food_pairings:    this.foodPairings(),
       description:      this.description(),
       technical_notes:  this.technicalNotes(),
@@ -252,7 +265,7 @@ export class WineEditorComponent implements OnInit {
 
     let success: boolean;
     if (this.editMode()) {
-      success = await this.wineService.updateWine(this.editLogId, wine);
+      success = await this.wineService.updateWine(this.editLogId, this.editWineId, wine);
     } else {
       // Pass existingWineId to skip the wines upsert when re-drinking
       success = await this.wineService.addWine(

@@ -28,7 +28,7 @@
         <p class="text-xs text-cream-dark mt-0.5 leading-relaxed">
           Du har smakt denne vinen før
           @if (previousTastedAt()) {
-            <span> – sist {{ previousTastedAt() | slice:0:10 }}</span>
+            <span> – sist {{ previousTastedAt() | date:'d. MMMM yyyy' }}</span>
           }
           @if (previousRating()) {
             <span> med karakter {{ previousRating() }}/6</span>

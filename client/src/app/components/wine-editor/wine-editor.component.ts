@@ -1,6 +1,7 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
+import { SlicePipe } from '@angular/common';
 import { WineService, NewWine } from '../../services/wine.service';
 import { LocationService } from '../../services/location.service';
 import { StarRatingComponent } from '../star-rating/star-rating.component';
@@ -12,7 +13,7 @@ import {
 @Component({
   selector: 'app-wine-editor',
   standalone: true,
-  imports: [FormsModule, StarRatingComponent, LocationSearchComponent],
+  imports: [FormsModule, SlicePipe, StarRatingComponent, LocationSearchComponent],
   templateUrl: './wine-editor.component.html',
 })
 export class WineEditorComponent implements OnInit {
@@ -44,20 +45,28 @@ export class WineEditorComponent implements OnInit {
   protected readonly imageUrl = signal<string | null>(null);
   protected readonly wineTypes = ['Rød', 'Hvit', 'Rosé', 'Musserende', 'Oransje', 'Dessert'];
 
-  // Edit mode state
+  // Edit mode
   protected readonly editMode = signal(false);
-  private editId = '';
+  private editLogId = '';   // wine_log id used for updateWine
+
+  // Re-drinking / deduplication
+  protected readonly alreadyTasted = signal(false);
+  protected readonly previousRating = signal<number | null>(null);
+  protected readonly previousTastedAt = signal<string | null>(null);
+  private existingWineId: string | null = null;
+  /** Parsed grapes array for master-data upsert */
+  private grapes: string[] | null = null;
+  private alcoholNum: number | null = null;
 
   ngOnInit(): void {
     const id = this.route.snapshot.paramMap.get('id');
 
     if (id) {
-      // Edit mode: load existing wine
+      // Edit mode: load existing wine (id = wine master id from URL)
       this.editMode.set(true);
-      this.editId = id;
       this.loadExistingWine(id);
     } else {
-      // Create mode: pre-fill from scan result and default tasted_at to today
+      // Create mode: pre-fill from scan result
       this.imageUrl.set(this.wineService.lastScanImageUrl());
       this.tastedAt.set(new Date().toISOString().slice(0, 10));
       const scan = this.wineService.lastScanResult();
@@ -70,6 +79,19 @@ export class WineEditorComponent implements OnInit {
         if (scan.region)          this.region.set(scan.region);
         if (scan.grapes?.length)  this.grapeVariety.set(scan.grapes.join(', '));
         if (scan.alcoholContent != null) this.alcoholContent.set(`${scan.alcoholContent}%`);
+
+        this.grapes = scan.grapes?.length ? scan.grapes : null;
+        this.alcoholNum = scan.alcoholContent ?? null;
+
+        // Deduplication state from backend
+        if (scan.alreadyTasted) {
+          this.alreadyTasted.set(true);
+          this.previousRating.set(scan.lastRating);
+          this.previousTastedAt.set(scan.lastTastedAt);
+        }
+        if (scan.existingWineId) {
+          this.existingWineId = scan.existingWineId;
+        }
       }
 
       // Pre-fill location from scan GPS
@@ -87,15 +109,18 @@ export class WineEditorComponent implements OnInit {
     }
   }
 
-  private async loadExistingWine(id: string): Promise<void> {
-    let wine = this.wineService.getWine(id);
+  private async loadExistingWine(wineId: string): Promise<void> {
+    let wine = this.wineService.getWine(wineId);
     if (!wine) {
-      wine = await this.wineService.fetchWine(id) ?? undefined;
+      wine = await this.wineService.fetchWine(wineId) ?? undefined;
     }
     if (!wine) {
       this.router.navigate(['/cellar']);
       return;
     }
+
+    // Store the log_id for the update call
+    this.editLogId = wine.log_id;
 
     this.name.set(wine.name);
     this.producer.set(wine.producer);
@@ -107,8 +132,9 @@ export class WineEditorComponent implements OnInit {
     this.rating.set(wine.rating ?? 0);
     this.imageUrl.set(wine.image_url);
     this.tastedAt.set(wine.tasted_at ?? '');
+    if (wine.grapes?.length)   this.grapeVariety.set(wine.grapes.join(', '));
+    if (wine.alcohol_content != null) this.alcoholContent.set(`${wine.alcohol_content}%`);
 
-    // Load location if present
     if (wine.location_name) {
       this.locationName.set(wine.location_name);
       this.locationLat.set(wine.location_lat);
@@ -124,45 +150,50 @@ export class WineEditorComponent implements OnInit {
     this.saving.set(true);
 
     const wine: NewWine = {
-      name: this.name(),
-      producer: this.producer(),
-      vintage: this.vintage(),
-      type: this.type(),
-      country: this.country() || null,
-      region: this.region() || null,
-      rating: this.rating() > 0 ? this.rating() : null,
-      notes: this.notes() || null,
-      image_url: this.imageUrl() || null,
-      tasted_at: this.tastedAt() || null,
-      location_name: this.locationName(),
-      location_lat: this.locationLat(),
-      location_lng: this.locationLng(),
-      location_type: this.locationType(),
+      name:             this.name(),
+      producer:         this.producer(),
+      vintage:          this.vintage(),
+      type:             this.type(),
+      country:          this.country() || null,
+      region:           this.region() || null,
+      grapes:           this.grapes,
+      alcohol_content:  this.alcoholNum,
+      rating:           this.rating() > 0 ? this.rating() : null,
+      notes:            this.notes() || null,
+      image_url:        this.imageUrl() || null,
+      tasted_at:        this.tastedAt() || null,
+      location_name:    this.locationName(),
+      location_lat:     this.locationLat(),
+      location_lng:     this.locationLng(),
+      location_type:    this.locationType(),
     };
 
     let success: boolean;
     if (this.editMode()) {
-      success = await this.wineService.updateWine(this.editId, wine);
+      success = await this.wineService.updateWine(this.editLogId, wine);
     } else {
-      success = await this.wineService.addWine(wine);
+      // Pass existingWineId to skip the wines upsert when re-drinking
+      success = await this.wineService.addWine(
+        wine,
+        this.existingWineId ?? undefined
+      );
     }
 
     if (success) {
-      if (navigator.vibrate) {
-        navigator.vibrate([100, 50, 100]);
-      }
-      if (!this.editMode()) {
-        this.wineService.clearScanResult();
-      }
-      this.router.navigate(this.editMode() ? ['/wines', this.editId] : ['/cellar']);
+      if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+      if (!this.editMode()) this.wineService.clearScanResult();
+      // Navigate to the wine detail using the master wine id (from route or existingWineId)
+      const targetId = this.route.snapshot.paramMap.get('id') ?? this.existingWineId;
+      this.router.navigate(targetId ? ['/wines', targetId] : ['/cellar']);
     }
 
     this.saving.set(false);
   }
 
   protected goBack(): void {
-    if (this.editMode()) {
-      this.router.navigate(['/wines', this.editId]);
+    const id = this.route.snapshot.paramMap.get('id');
+    if (id) {
+      this.router.navigate(['/wines', id]);
     } else {
       this.router.navigate(['/']);
     }

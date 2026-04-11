@@ -1,7 +1,7 @@
 import { Component, OnInit, inject, signal, computed } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { DatePipe } from '@angular/common';
-import { WineService, Wine } from '../../services/wine.service';
+import { WineService, Wine, WineLog } from '../../services/wine.service';
 import { SharePreviewComponent } from '../share-preview/share-preview.component';
 
 @Component({
@@ -16,11 +16,10 @@ export class WineDetailComponent implements OnInit {
   protected readonly wineService = inject(WineService);
 
   protected readonly wine = signal<Wine | null>(null);
+  protected readonly logs = signal<WineLog[]>([]);
   protected readonly loading = signal(true);
   protected readonly showDeleteConfirm = signal(false);
   protected readonly deleting = signal(false);
-
-  // Share preview state
   protected readonly showSharePreview = signal(false);
 
   protected readonly stars = computed(() => {
@@ -30,6 +29,12 @@ export class WineDetailComponent implements OnInit {
     return '★'.repeat(full) + '☆'.repeat(6 - full);
   });
 
+  protected starsForRating(rating: number | null): string {
+    if (rating == null) return '';
+    const full = Math.floor(rating);
+    return '★'.repeat(full) + '☆'.repeat(6 - full);
+  }
+
   async ngOnInit(): Promise<void> {
     const id = this.route.snapshot.paramMap.get('id');
     if (!id) {
@@ -37,7 +42,6 @@ export class WineDetailComponent implements OnInit {
       return;
     }
 
-    // Try local cache first
     let wine = this.wineService.getWine(id);
     if (!wine) {
       wine = await this.wineService.fetchWine(id) ?? undefined;
@@ -45,6 +49,8 @@ export class WineDetailComponent implements OnInit {
 
     if (wine) {
       this.wine.set(wine);
+      // Fetch all logs for the timeline (non-blocking)
+      this.wineService.fetchWineLogs(id).then(logs => this.logs.set(logs));
     } else {
       this.router.navigate(['/cellar']);
     }
@@ -56,7 +62,8 @@ export class WineDetailComponent implements OnInit {
     if (!wine) return;
 
     this.deleting.set(true);
-    const success = await this.wineService.deleteWine(wine.id);
+    // Delete the specific log, not the master wine record
+    const success = await this.wineService.deleteWine(wine.log_id);
     if (success) {
       if (navigator.vibrate) navigator.vibrate(100);
       this.router.navigate(['/cellar']);

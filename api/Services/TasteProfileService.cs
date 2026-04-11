@@ -30,20 +30,20 @@ public sealed class TasteProfileService
         var profile = await conn.QuerySingleOrDefaultAsync<UserProfile>(
             """
             SELECT
-                user_id    AS UserId,
+                user_id            AS UserId,
                 taste_profile_json AS TasteProfileJson,
                 wines_at_last_analysis AS WinesAtLastAnalysis,
-                last_analysis_at AS LastAnalysisAt,
-                created_at AS CreatedAt,
-                updated_at AS UpdatedAt
+                last_analysis_at   AS LastAnalysisAt,
+                created_at         AS CreatedAt,
+                updated_at         AS UpdatedAt
             FROM user_profiles
             WHERE user_id = @UserId
             """,
             new { UserId = userId });
 
-        // 2. Count current wines
+        // 2. Count distinct wines the user has logged
         var currentWineCount = await conn.ExecuteScalarAsync<int>(
-            "SELECT COUNT(*) FROM wines WHERE user_id = @UserId",
+            "SELECT COUNT(DISTINCT wine_id) FROM wine_logs WHERE user_id = @UserId",
             new { UserId = userId });
 
         // 3. Check cache validity
@@ -70,15 +70,21 @@ public sealed class TasteProfileService
             return null;
         }
 
-        // 6. Fetch all user wines
-        var wines = await conn.QueryAsync<WineRecord>(
+        // 6. Fetch user's wines joined with their most-recent log (for rating)
+        var wines = await conn.QueryAsync<WineProfileData>(
             """
-            SELECT
-                id, name, producer, vintage, type, country, region, rating, notes,
-                image_url AS ImageUrl, created_at AS CreatedAt, user_id AS UserId
-            FROM wines
-            WHERE user_id = @UserId
-            ORDER BY created_at DESC
+            SELECT DISTINCT ON (wl.wine_id)
+                w.name       AS Name,
+                w.producer   AS Producer,
+                w.vintage    AS Vintage,
+                w.type       AS Type,
+                w.country    AS Country,
+                w.region     AS Region,
+                wl.rating    AS Rating
+            FROM wine_logs wl
+            JOIN wines w ON w.id = wl.wine_id
+            WHERE wl.user_id = @UserId
+            ORDER BY wl.wine_id, wl.created_at DESC
             """,
             new { UserId = userId });
 
@@ -105,10 +111,10 @@ public sealed class TasteProfileService
             INSERT INTO user_profiles (user_id, taste_profile_json, wines_at_last_analysis, last_analysis_at, updated_at)
             VALUES (@UserId, @ProfileJson::jsonb, @WineCount, NOW(), NOW())
             ON CONFLICT (user_id) DO UPDATE SET
-                taste_profile_json = @ProfileJson::jsonb,
+                taste_profile_json     = @ProfileJson::jsonb,
                 wines_at_last_analysis = @WineCount,
-                last_analysis_at = NOW(),
-                updated_at = NOW()
+                last_analysis_at       = NOW(),
+                updated_at             = NOW()
             """,
             new { UserId = userId, ProfileJson = profileJson, WineCount = currentWineCount });
 

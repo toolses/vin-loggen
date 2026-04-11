@@ -104,6 +104,59 @@
         </div>
       }
 
+      <!-- ── Tasting timeline ──────────────────────────────── -->
+      @if (logs().length > 1) {
+        <div class="mt-6">
+          <h2 class="text-xs uppercase tracking-wider text-cream-dark font-medium mb-3">
+            Smakshistorikk ({{ logs().length }} ganger)
+          </h2>
+          <ol class="relative border-l border-white/10 space-y-4 pl-5">
+            @for (log of logs(); track log.id) {
+              <li class="relative">
+                <!-- Timeline dot -->
+                <span class="absolute -left-[1.15rem] top-1.5 w-2.5 h-2.5 rounded-full
+                             bg-burgundy border-2 border-cellar-surface"></span>
+
+                <div class="glass rounded-xl px-4 py-3">
+                  <!-- Date -->
+                  <p class="text-[10px] uppercase tracking-wider text-cream-dark font-medium">
+                    {{ log.tasted_at ? (log.tasted_at | date:'d. MMMM yyyy') : (log.created_at | date:'d. MMMM yyyy') }}
+                  </p>
+
+                  <!-- Rating -->
+                  @if (log.rating != null) {
+                    <div class="flex items-center gap-1.5 mt-1">
+                      <span class="text-gold text-sm tracking-wide">{{ starsForRating(log.rating) }}</span>
+                      <span class="text-cream text-sm font-semibold">{{ log.rating }}/6</span>
+                    </div>
+                  }
+
+                  <!-- Notes -->
+                  @if (log.notes) {
+                    <p class="text-xs text-cream-dark mt-1.5 leading-relaxed whitespace-pre-line">
+                      {{ log.notes }}
+                    </p>
+                  }
+
+                  <!-- Location -->
+                  @if (log.location_name) {
+                    <p class="text-[10px] text-cream-dark/60 mt-1.5 flex items-center gap-1">
+                      <svg class="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                              d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                              d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
+                      </svg>
+                      {{ log.location_name }}
+                    </p>
+                  }
+                </div>
+              </li>
+            }
+          </ol>
+        </div>
+      }
+
       <!-- Action buttons -->
       <div class="flex gap-3 mt-6">
         <a
@@ -160,7 +213,12 @@
       >
         <h3 class="font-serif text-xl text-cream mb-2">Slett vin?</h3>
         <p class="text-sm text-cream-dark mb-6">
-          Er du sikker på at du vil slette <strong class="text-cream">{{ w.name }}</strong>? Dette kan ikke angres.
+          Er du sikker på at du vil slette denne smaksloggen for
+          <strong class="text-cream">{{ w.name }}</strong>?
+          @if (w.log_count > 1) {
+            Du har {{ w.log_count }} logger for denne vinen – de andre beholdes.
+          }
+          Dette kan ikke angres.
         </p>
         <div class="flex gap-3">
           <button

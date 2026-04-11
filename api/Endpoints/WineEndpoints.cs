@@ -16,13 +16,13 @@ public static class WineEndpoints
 
         group.MapGet("/", GetAllWines)
             .WithName("GetWines")
-            .WithSummary("List all logged wines for the authenticated user, newest first");
+            .WithSummary("List all logged wines for the authenticated user (latest log per wine), newest first");
 
         return app;
     }
 
-    private static async Task<Results<Ok<IEnumerable<WineRecord>>, ProblemHttpResult>> GetAllWines(
-        ClaimsPrincipal user,
+    private static async Task<Results<Ok<IEnumerable<WineLogRecord>>, ProblemHttpResult>> GetAllWines(
+        ClaimsPrincipal  user,
         NpgsqlDataSource dataSource,
         ILogger<Program> logger,
         CancellationToken ct)
@@ -43,34 +43,31 @@ public static class WineEndpoints
         {
             await using var conn = await dataSource.OpenConnectionAsync(ct);
 
-            var wines = await conn.QueryAsync<WineRecord>(
+            // Returns the most-recent wine_log per wine for this user, joined
+            // with the wine master record for display metadata.
+            var logs = await conn.QueryAsync<WineLogRecord>(
                 """
-                SELECT
-                    id,
-                    name,
-                    producer,
-                    vintage,
-                    type,
-                    country,
-                    region,
-                    rating,
-                    notes,
-                    image_url      AS ImageUrl,
-                    tasted_at      AS TastedAt,
-                    location_name  AS LocationName,
-                    location_lat   AS LocationLat,
-                    location_lng   AS LocationLng,
-                    location_type  AS LocationType,
-                    created_at     AS CreatedAt,
-                    user_id        AS UserId
-                FROM wines
-                WHERE user_id = @UserId
-                ORDER BY created_at DESC
+                SELECT DISTINCT ON (wl.wine_id)
+                    wl.id            AS Id,
+                    wl.wine_id       AS WineId,
+                    wl.user_id       AS UserId,
+                    wl.rating        AS Rating,
+                    wl.notes         AS Notes,
+                    wl.image_url     AS ImageUrl,
+                    wl.tasted_at     AS TastedAt,
+                    wl.location_name AS LocationName,
+                    wl.location_lat  AS LocationLat,
+                    wl.location_lng  AS LocationLng,
+                    wl.location_type AS LocationType,
+                    wl.created_at    AS CreatedAt
+                FROM wine_logs wl
+                WHERE wl.user_id = @UserId
+                ORDER BY wl.wine_id, wl.created_at DESC
                 """,
                 new { UserId = userId }
             );
 
-            return TypedResults.Ok(wines);
+            return TypedResults.Ok(logs);
         }
         catch (NpgsqlException ex)
         {

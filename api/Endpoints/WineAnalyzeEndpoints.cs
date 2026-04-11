@@ -1,4 +1,7 @@
+using System.Security.Claims;
+using Dapper;
 using Microsoft.AspNetCore.Http.HttpResults;
+using Npgsql;
 using VinLoggen.Api.Services;
 
 namespace VinLoggen.Api.Endpoints;
@@ -14,16 +17,21 @@ public static class WineAnalyzeEndpoints
     {
         app.MapPost("/api/wine/analyze", AnalyzeLabel)
             .WithName("AnalyzeWineLabel")
-            .WithSummary("Accept a label image (multipart), call Gemini 2.0 Flash, return structured wine data")
+            .WithSummary("Accept a label image (multipart), call Gemini, return structured wine data with deduplication info")
             .WithTags("AI")
             .DisableAntiforgery(); // Pure API endpoint — no browser form token needed
 
         return app;
     }
 
+    // File-scoped helper – only used within this endpoint
+    private record ExistingWineMatch(Guid WineId, int UserLogCount, decimal? LastRating, DateOnly? LastTastedAt);
+
     private static async Task<Results<Ok<WineAnalysisResponse>, ProblemHttpResult>> AnalyzeLabel(
         IFormFile        image,
+        ClaimsPrincipal  user,
         GeminiService    geminiService,
+        NpgsqlDataSource dataSource,
         ILogger<Program> logger,
         CancellationToken ct)
     {
@@ -58,6 +66,73 @@ public static class WineAnalyzeEndpoints
                 $"AI analysis failed: {result.Error}",
                 statusCode: StatusCodes.Status502BadGateway);
 
-        return TypedResults.Ok(result.Value);
+        var analysis = result.Value!;
+
+        // ── Deduplication check ───────────────────────────────────────────────
+        // Requires both a recognisable wine identity and an authenticated user.
+        var userIdClaim = user.FindFirstValue(ClaimTypes.NameIdentifier)
+                       ?? user.FindFirstValue("sub");
+
+        if (!string.IsNullOrEmpty(analysis.WineName)
+            && !string.IsNullOrEmpty(analysis.Producer)
+            && Guid.TryParse(userIdClaim, out var userId))
+        {
+            try
+            {
+                await using var conn = await dataSource.OpenConnectionAsync(ct);
+
+                // Look for a matching wine in the catalogue and count this
+                // user's existing logs for it.
+                var match = await conn.QueryFirstOrDefaultAsync<ExistingWineMatch>(
+                    """
+                    SELECT
+                        w.id                                                    AS WineId,
+                        COUNT(wl.id)                                            AS UserLogCount,
+                        (SELECT rating    FROM wine_logs
+                         WHERE wine_id = w.id AND user_id = @UserId
+                         ORDER BY created_at DESC LIMIT 1)                     AS LastRating,
+                        (SELECT tasted_at FROM wine_logs
+                         WHERE wine_id = w.id AND user_id = @UserId
+                         ORDER BY created_at DESC LIMIT 1)                     AS LastTastedAt
+                    FROM wines w
+                    LEFT JOIN wine_logs wl
+                           ON wl.wine_id = w.id AND wl.user_id = @UserId
+                    WHERE LOWER(TRIM(w.producer)) = LOWER(TRIM(@Producer))
+                      AND LOWER(TRIM(w.name))     = LOWER(TRIM(@Name))
+                      AND COALESCE(w.vintage, -1) = COALESCE(@Vintage::INT, -1)
+                    GROUP BY w.id
+                    LIMIT 1
+                    """,
+                    new
+                    {
+                        Producer = analysis.Producer,
+                        Name     = analysis.WineName,
+                        Vintage  = analysis.Vintage,
+                        UserId   = userId,
+                    });
+
+                if (match is not null)
+                {
+                    logger.LogInformation(
+                        "AnalyzeLabel: found existing wine {WineId} (user logs: {Count})",
+                        match.WineId, match.UserLogCount);
+
+                    return TypedResults.Ok(analysis with
+                    {
+                        AlreadyTasted  = match.UserLogCount > 0,
+                        ExistingWineId = match.WineId,
+                        LastRating     = match.LastRating,
+                        LastTastedAt   = match.LastTastedAt,
+                    });
+                }
+            }
+            catch (NpgsqlException ex)
+            {
+                // Non-fatal: log and fall through, returning raw analysis without dedup info
+                logger.LogWarning(ex, "AnalyzeLabel: deduplication DB check failed, skipping");
+            }
+        }
+
+        return TypedResults.Ok(analysis);
     }
 }

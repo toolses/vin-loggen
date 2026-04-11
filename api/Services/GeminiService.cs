@@ -5,7 +5,7 @@ using VinLoggen.Api.Models;
 
 namespace VinLoggen.Api.Services;
 
-// ── Public response DTO (used by both this service and the endpoint layer) ────
+// ── Public response DTOs ──────────────────────────────────────────────────────
 
 public record WineAnalysisResponse(
     string?   WineName,
@@ -15,7 +15,26 @@ public record WineAnalysisResponse(
     string?   Region,
     string[]? Grapes,
     string?   Type,
-    double?   AlcoholContent
+    double?   AlcoholContent,
+    // Deduplication fields – populated by WineAnalyzeEndpoints after the DB check
+    bool      AlreadyTasted   = false,
+    Guid?     ExistingWineId  = null,
+    decimal?  LastRating      = null,
+    DateOnly? LastTastedAt    = null
+);
+
+/// <summary>
+/// Minimal wine info used as input for taste-profile generation.
+/// Combines master data from <c>wines</c> with the user's rating from <c>wine_logs</c>.
+/// </summary>
+public record WineProfileData(
+    string   Name,
+    string   Producer,
+    int?     Vintage,
+    string   Type,
+    string?  Country,
+    string?  Region,
+    decimal? Rating
 );
 
 public record TasteProfileResponse(
@@ -199,7 +218,7 @@ public sealed class GeminiService
         """;
 
     public async Task<TasteProfileResponse?> GenerateTasteProfileAsync(
-        IEnumerable<WineRecord> wines,
+        IEnumerable<WineProfileData> wines,
         CancellationToken ct)
     {
         var apiKey = _configuration["GEMINI_API_KEY"];

@@ -41,6 +41,7 @@ builder.Services.AddHttpClient("gemini");
 // ── AI / Gemini ───────────────────────────────────────────────────────────────
 builder.Services.AddScoped<GeminiService>();
 builder.Services.AddScoped<TasteProfileService>();
+builder.Services.AddScoped<EnrichmentService>();
 
 // ── Auth (Supabase JWT via JWKS) ─────────────────────────────────────────────
 var supabaseUrl = builder.Configuration["SUPABASE_URL"] ?? string.Empty;
@@ -157,6 +158,7 @@ app.UseAuthorization();
 // ── Endpoints ─────────────────────────────────────────────────────────────────
 app.MapHealthEndpoint();
 app.MapWineEndpoints();
+app.MapWineLogsEndpoints();
 app.MapProcessLabelEndpoints();
 app.MapWineAnalyzeEndpoints();
 app.MapTasteProfileEndpoints();

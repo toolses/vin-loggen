@@ -12,7 +12,9 @@
         <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
       </svg>
     </button>
-    <h1 class="font-serif text-2xl text-cream font-semibold">Legg til vin</h1>
+    <h1 class="font-serif text-2xl text-cream font-semibold">
+      {{ editMode() ? 'Rediger vin' : 'Legg til vin' }}
+    </h1>
   </div>
 
   <!-- ── Image Preview ─────────────────────────────────────── -->
@@ -177,6 +179,22 @@
       <app-star-rating [(rating)]="rating" />
     </div>
 
+    <!-- Tasting date -->
+    <div>
+      <label for="wine-tasted" class="block text-xs uppercase tracking-wider text-cream-dark mb-1.5 font-medium">
+        Smaksdato
+      </label>
+      <input
+        id="wine-tasted"
+        type="date"
+        [ngModel]="tastedAt()"
+        (ngModelChange)="tastedAt.set($event)"
+        class="w-full min-h-12 px-4 rounded-xl bg-white/5 text-cream
+               border border-white/10 focus:border-burgundy-light focus:ring-1 focus:ring-burgundy-light
+               transition-colors outline-none"
+      />
+    </div>
+
     <!-- Notes -->
     <div>
       <label for="wine-notes" class="block text-xs uppercase tracking-wider text-cream-dark mb-1.5 font-medium">
@@ -220,7 +238,7 @@
           <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
           </svg>
-          Lagre vin
+          {{ editMode() ? 'Oppdater vin' : 'Lagre vin' }}
         </span>
       }
     </button>

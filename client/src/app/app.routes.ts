@@ -31,6 +31,18 @@ export const routes: Routes = [
       import('./components/wine-list/wine-list.component').then(m => m.WineListComponent),
   },
   {
+    path: 'wines/:id',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./components/wine-detail/wine-detail.component').then(m => m.WineDetailComponent),
+  },
+  {
+    path: 'wines/:id/edit',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./components/wine-editor/wine-editor.component').then(m => m.WineEditorComponent),
+  },
+  {
     path: 'profile',
     canActivate: [authGuard],
     loadComponent: () =>

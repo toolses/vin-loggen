@@ -15,6 +15,7 @@ public record WineRecord(
     decimal? Rating,
     string? Notes,
     string? ImageUrl,     // mapped from image_url
+    DateOnly? TastedAt,   // mapped from tasted_at
     DateTime CreatedAt,   // mapped from created_at
     Guid? UserId          // mapped from user_id
 );

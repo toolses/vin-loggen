@@ -91,9 +91,10 @@
         <!-- Horizontal scroll of recent wines -->
         <div class="flex gap-4 overflow-x-auto no-scrollbar pb-2 -mx-1 px-1">
           @for (wine of recentWines(); track wine.id) {
-            <div
+            <a
+              [routerLink]="['/wines', wine.id]"
               class="glass rounded-2xl p-3 min-w-[160px] max-w-[160px] flex-shrink-0
-                     transition-all duration-200 hover:bg-white/[0.08] cursor-default"
+                     transition-all duration-200 hover:bg-white/[0.08] cursor-pointer block"
               [style.animation-delay]="($index * 80) + 'ms'"
               style="animation: fade-in 0.5s ease-out both"
             >
@@ -127,7 +128,7 @@
                   </div>
                 }
               </div>
-            </div>
+            </a>
           }
         </div>
       }

@@ -1,0 +1,194 @@
+<div class="animate-fade-in max-w-lg mx-auto">
+
+  @if (loading()) {
+    <div class="flex justify-center py-16">
+      <span class="w-8 h-8 rounded-full border-4 border-burgundy/30 border-t-burgundy animate-spin" aria-hidden="true"></span>
+    </div>
+  }
+
+  @if (wine(); as w) {
+    <!-- ── Hero Image ─────────────────────────────────────── -->
+    @if (w.image_url) {
+      <div class="relative">
+        <img
+          [src]="w.image_url"
+          [alt]="w.name + ' etikett'"
+          class="w-full h-64 object-cover"
+        />
+        <div class="absolute inset-0 bg-gradient-to-t from-cellar-surface via-transparent to-cellar-surface/60"></div>
+
+        <!-- Back button (on image) -->
+        <button
+          (click)="goBack()"
+          class="absolute top-4 left-4 w-10 h-10 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center text-cream transition-colors hover:bg-black/60"
+          aria-label="Tilbake"
+        >
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
+          </svg>
+        </button>
+      </div>
+    } @else {
+      <!-- Back button (no image) -->
+      <div class="px-4 pt-6">
+        <button
+          (click)="goBack()"
+          class="w-10 h-10 rounded-full glass flex items-center justify-center text-cream transition-colors hover:bg-white/10"
+          aria-label="Tilbake"
+        >
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
+          </svg>
+        </button>
+      </div>
+    }
+
+    <!-- ── Content ────────────────────────────────────────── -->
+    <div class="px-6 pb-8" [class.-mt-8]="!!w.image_url" [class.relative]="!!w.image_url" [class.z-10]="!!w.image_url">
+
+      <!-- Name + Producer -->
+      <h1 class="font-serif text-3xl font-bold text-cream leading-tight mt-4">{{ w.name }}</h1>
+      <p class="text-cream-dark text-lg mt-1">{{ w.producer }}</p>
+
+      <!-- Rating -->
+      @if (w.rating != null) {
+        <div class="flex items-center gap-2 mt-4">
+          <span class="text-gold text-xl tracking-wider">{{ stars() }}</span>
+          <span class="text-cream text-2xl font-bold">{{ w.rating }}</span>
+          <span class="text-cream-dark text-sm">/ 6</span>
+        </div>
+      }
+
+      <!-- Badges -->
+      <div class="flex flex-wrap gap-2 mt-5">
+        @if (w.vintage) {
+          <span class="text-xs bg-burgundy/30 text-cream-muted px-3 py-1 rounded-full font-medium">
+            {{ w.vintage }}
+          </span>
+        }
+        @if (w.type) {
+          <span class="text-xs bg-gold/15 text-gold px-3 py-1 rounded-full font-medium">
+            {{ w.type }}
+          </span>
+        }
+        @if (w.country) {
+          <span class="text-xs bg-white/5 text-cream-dark px-3 py-1 rounded-full border border-white/10">
+            {{ w.country }}
+          </span>
+        }
+        @if (w.region) {
+          <span class="text-xs bg-white/5 text-cream-dark px-3 py-1 rounded-full border border-white/10">
+            {{ w.region }}
+          </span>
+        }
+      </div>
+
+      <!-- Tasting date -->
+      @if (w.tasted_at) {
+        <div class="glass rounded-xl px-4 py-3 mt-5 flex items-center gap-3">
+          <svg class="w-5 h-5 text-cream-dark flex-shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
+          </svg>
+          <div>
+            <p class="text-[10px] uppercase tracking-wider text-cream-dark font-medium">Smakt</p>
+            <p class="text-sm text-cream">{{ w.tasted_at | date:'d. MMMM yyyy' }}</p>
+          </div>
+        </div>
+      }
+
+      <!-- Notes -->
+      @if (w.notes) {
+        <div class="glass rounded-xl px-4 py-3 mt-4">
+          <p class="text-[10px] uppercase tracking-wider text-cream-dark font-medium mb-1.5">Notater</p>
+          <p class="text-sm text-cream leading-relaxed whitespace-pre-line">{{ w.notes }}</p>
+        </div>
+      }
+
+      <!-- Action buttons -->
+      <div class="flex gap-3 mt-6">
+        <a
+          [routerLink]="['/wines', w.id, 'edit']"
+          class="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-burgundy text-cream font-medium
+                 hover:bg-burgundy-light transition-colors"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125" />
+          </svg>
+          Rediger
+        </a>
+        <button
+          (click)="showSharePreview.set(true)"
+          class="flex items-center justify-center gap-2 px-5 py-3 rounded-xl glass text-cream
+                 hover:bg-white/10 transition-colors"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M7.217 10.907a2.25 2.25 0 1 0 0 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186 9.566-5.314m-9.566 7.5 9.566 5.314m0 0a2.25 2.25 0 1 0 3.935 2.186 2.25 2.25 0 0 0-3.935-2.186Zm0-12.814a2.25 2.25 0 1 0 3.933-2.185 2.25 2.25 0 0 0-3.933 2.185Z" />
+          </svg>
+          Del
+        </button>
+        <button
+          (click)="showDeleteConfirm.set(true)"
+          class="flex items-center justify-center px-4 py-3 rounded-xl glass text-red-400
+                 hover:bg-red-500/10 transition-colors"
+          aria-label="Slett vin"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
+          </svg>
+        </button>
+      </div>
+
+      <!-- Meta -->
+      <p class="text-[10px] text-cream-dark/40 mt-6 text-center">
+        Lagt til {{ w.created_at | date:'d. MMM yyyy' }}
+      </p>
+    </div>
+
+    <!-- ── Delete Confirm Dialog ─────────────────────────── -->
+    @if (showDeleteConfirm()) {
+      <div
+        class="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in"
+        (click)="showDeleteConfirm.set(false)"
+      >
+        <div
+          class="glass rounded-2xl p-6 w-full max-w-sm border border-white/10 animate-slide-up"
+          (click)="$event.stopPropagation()"
+        >
+          <h3 class="font-serif text-xl text-cream mb-2">Slett vin?</h3>
+          <p class="text-sm text-cream-dark mb-6">
+            Er du sikker på at du vil slette <strong class="text-cream">{{ w.name }}</strong>? Dette kan ikke angres.
+          </p>
+          <div class="flex gap-3">
+            <button
+              (click)="showDeleteConfirm.set(false)"
+              class="flex-1 py-3 rounded-xl glass text-cream font-medium hover:bg-white/10 transition-colors"
+            >
+              Avbryt
+            </button>
+            <button
+              (click)="confirmDelete()"
+              [disabled]="deleting()"
+              class="flex-1 py-3 rounded-xl bg-red-600 text-cream font-medium hover:bg-red-500 transition-colors
+                     disabled:opacity-40"
+            >
+              @if (deleting()) {
+                <span class="flex items-center justify-center gap-2">
+                  <span class="w-4 h-4 rounded-full border-2 border-cream/30 border-t-cream animate-spin"></span>
+                  Sletter...
+                </span>
+              } @else {
+                Slett
+              }
+            </button>
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- ── Share Preview Modal ───────────────────────────── -->
+    @if (showSharePreview()) {
+      <app-share-preview [wine]="w" (closed)="showSharePreview.set(false)" />
+    }
+  }
+
+</div>

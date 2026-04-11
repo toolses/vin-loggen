@@ -56,6 +56,7 @@ public static class WineEndpoints
                     rating,
                     notes,
                     image_url  AS ImageUrl,
+                    tasted_at  AS TastedAt,
                     created_at AS CreatedAt,
                     user_id    AS UserId
                 FROM wines

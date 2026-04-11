@@ -93,7 +93,8 @@
       <ul class="space-y-3" role="list">
         @for (wine of displayedWines(); track wine.id) {
           <li
-            class="glass rounded-2xl flex gap-4 p-4 transition-all duration-200 hover:bg-white/[0.08]"
+            [routerLink]="['/wines', wine.id]"
+            class="glass rounded-2xl flex gap-4 p-4 transition-all duration-200 hover:bg-white/[0.08] cursor-pointer"
             [style.animation-delay]="($index * 50) + 'ms'"
             style="animation: fade-in 0.4s ease-out both"
           >
@@ -150,8 +151,7 @@
 
             <!-- Share button -->
             <button
-              (click)="shareWine(wine); $event.stopPropagation()"
-              [disabled]="isSharing()"
+              (click)="openSharePreview(wine); $event.stopPropagation(); $event.preventDefault()"
               class="flex items-center justify-center w-8 h-8 rounded-full bg-white/5 text-cream-dark
                      hover:bg-white/10 hover:text-cream transition-colors flex-shrink-0 self-start mt-1"
               aria-label="Del denne vinen"
@@ -175,11 +175,7 @@
 
 </div>
 
-<!-- Off-screen share card for image generation -->
-@if (sharingWine()) {
-  <div class="fixed -left-[9999px] -top-[9999px]" aria-hidden="true">
-    <div #shareCard>
-      <app-wine-share-card [wine]="sharingWine()!" />
-    </div>
-  </div>
+<!-- Share preview modal -->
+@if (sharingWine(); as wine) {
+  <app-share-preview [wine]="wine" (closed)="closeSharePreview()" />
 }

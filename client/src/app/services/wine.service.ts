@@ -15,6 +15,7 @@ export interface Wine {
   rating: number | null;
   notes: string | null;
   image_url: string | null;
+  tasted_at: string | null;
   created_at: string;
 }
 
@@ -76,6 +77,48 @@ export class WineService {
       ...wine,
       user_id: user?.id,
     });
+    if (error) {
+      this._error.set(error.message);
+      return false;
+    }
+    await this.loadWines();
+    return true;
+  }
+
+  getWine(id: string): Wine | undefined {
+    return this._wines().find(w => w.id === id);
+  }
+
+  async fetchWine(id: string): Promise<Wine | null> {
+    const { data, error } = await this.supabase
+      .from('wines')
+      .select('*')
+      .eq('id', id)
+      .single();
+    if (error || !data) return null;
+    return data as Wine;
+  }
+
+  async updateWine(id: string, wine: Partial<NewWine>): Promise<boolean> {
+    this._error.set(null);
+    const { error } = await this.supabase
+      .from('wines')
+      .update(wine)
+      .eq('id', id);
+    if (error) {
+      this._error.set(error.message);
+      return false;
+    }
+    await this.loadWines();
+    return true;
+  }
+
+  async deleteWine(id: string): Promise<boolean> {
+    this._error.set(null);
+    const { error } = await this.supabase
+      .from('wines')
+      .delete()
+      .eq('id', id);
     if (error) {
       this._error.set(error.message);
       return false;

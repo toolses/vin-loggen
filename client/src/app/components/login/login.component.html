@@ -1,0 +1,124 @@
+<div class="min-h-screen bg-cellar-bg flex items-center justify-center px-6">
+  <div class="animate-fade-in w-full max-w-sm">
+
+    <!-- Logo / Branding -->
+    <div class="text-center mb-10">
+      <div class="text-5xl mb-4" aria-hidden="true">🍷</div>
+      <h1 class="font-serif text-4xl text-cream font-bold tracking-tight">VinLoggen</h1>
+      <p class="text-cream-dark text-sm mt-2">Din personlige vinjournal</p>
+    </div>
+
+    <!-- Login / Register Card -->
+    <div class="glass rounded-3xl p-8">
+      <h2 class="font-serif text-xl text-cream text-center mb-6">
+        {{ isRegistering() ? 'Opprett konto' : 'Logg inn' }}
+      </h2>
+
+      <form (ngSubmit)="submit()" class="space-y-4">
+
+        <!-- Name (only for registration) -->
+        @if (isRegistering()) {
+          <div>
+            <label for="name" class="block text-cream-dark text-xs mb-1.5">Navn</label>
+            <input
+              id="name"
+              type="text"
+              [(ngModel)]="name"
+              name="name"
+              required
+              autocomplete="name"
+              placeholder="Ditt navn"
+              class="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/10 text-cream
+                     placeholder:text-cream-dark/50 text-sm
+                     focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-gold/50
+                     transition-all duration-200"
+            />
+          </div>
+        }
+
+        <!-- Email -->
+        <div>
+          <label for="email" class="block text-cream-dark text-xs mb-1.5">E-post</label>
+          <input
+            id="email"
+            type="email"
+            [(ngModel)]="email"
+            name="email"
+            required
+            autocomplete="email"
+            placeholder="din@epost.no"
+            class="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/10 text-cream
+                   placeholder:text-cream-dark/50 text-sm
+                   focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-gold/50
+                   transition-all duration-200"
+          />
+        </div>
+
+        <!-- Password -->
+        <div>
+          <label for="password" class="block text-cream-dark text-xs mb-1.5">Passord</label>
+          <input
+            id="password"
+            type="password"
+            [(ngModel)]="password"
+            name="password"
+            required
+            autocomplete="{{ isRegistering() ? 'new-password' : 'current-password' }}"
+            placeholder="Minimum 6 tegn"
+            class="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/10 text-cream
+                   placeholder:text-cream-dark/50 text-sm
+                   focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-gold/50
+                   transition-all duration-200"
+          />
+        </div>
+
+        <!-- Error -->
+        @if (errorMessage()) {
+          <p class="text-red-400 text-xs text-center">{{ errorMessage() }}</p>
+        }
+
+        <!-- Success -->
+        @if (successMessage()) {
+          <p class="text-green-400 text-xs text-center">{{ successMessage() }}</p>
+        }
+
+        <!-- Submit -->
+        <button
+          type="submit"
+          [disabled]="loading()"
+          class="w-full px-6 py-3.5 rounded-xl bg-burgundy text-cream font-medium text-sm
+                 hover:bg-burgundy-light active:scale-[0.98] transition-all duration-200
+                 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          @if (loading()) {
+            <span class="inline-flex items-center gap-2">
+              <svg class="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+              </svg>
+              Vennligst vent...
+            </span>
+          } @else {
+            {{ isRegistering() ? 'Opprett konto' : 'Logg inn' }}
+          }
+        </button>
+      </form>
+
+      <!-- Toggle mode -->
+      <p class="text-center text-cream-dark text-xs mt-6">
+        {{ isRegistering() ? 'Har du allerede en konto?' : 'Har du ikke en konto?' }}
+        <button
+          (click)="toggleMode()"
+          class="text-gold hover:text-gold-light underline underline-offset-2 ml-1 transition-colors"
+        >
+          {{ isRegistering() ? 'Logg inn' : 'Opprett konto' }}
+        </button>
+      </p>
+    </div>
+
+    <!-- Footer -->
+    <p class="text-center text-cream-dark/40 text-xs mt-8">
+      Ved å logge inn godtar du våre vilkår
+    </p>
+  </div>
+</div>

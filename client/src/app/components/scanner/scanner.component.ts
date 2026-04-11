@@ -8,6 +8,9 @@ import {
 } from '@angular/core';
 import { Router } from '@angular/router';
 import { WineService } from '../../services/wine.service';
+import { ProfileService } from '../../services/profile.service';
+import { AuthService } from '../../services/auth.service';
+import { LocationService } from '../../services/location.service';
 import { ImageProcessingService } from '../../services/image-processing.service';
 
 @Component({
@@ -18,7 +21,10 @@ import { ImageProcessingService } from '../../services/image-processing.service'
 export class ScannerComponent implements OnDestroy {
   private readonly router = inject(Router);
   private readonly wineService = inject(WineService);
+  private readonly locationService = inject(LocationService);
   private readonly imageProcessing = inject(ImageProcessingService);
+  protected readonly profileService = inject(ProfileService);
+  protected readonly auth = inject(AuthService);
 
   protected readonly videoRef = viewChild<ElementRef<HTMLVideoElement>>('videoEl');
   protected readonly canvasRef = viewChild<ElementRef<HTMLCanvasElement>>('canvasEl');
@@ -32,18 +38,30 @@ export class ScannerComponent implements OnDestroy {
 
   private stream: MediaStream | null = null;
   private previewObjectUrl: string | null = null;
+  private locationPromise: Promise<{ lat: number; lng: number } | null>;
+
+  constructor() {
+    // Silently request GPS in background — non-blocking
+    this.locationPromise = this.locationService.getCurrentPosition().catch(() => null);
+    // Load quota state for the counter
+    this.profileService.loadProQuota();
+  }
 
   async startCamera(): Promise<void> {
     try {
       this.stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } },
       });
+      // Set cameraActive first so Angular renders the <video> element
+      this.cameraActive.set(true);
+      this.cameraError.set(null);
+
+      // Wait for the DOM to update before assigning the stream
+      await new Promise(r => requestAnimationFrame(r));
       const video = this.videoRef()?.nativeElement;
       if (video) {
         video.srcObject = this.stream;
         await video.play();
-        this.cameraActive.set(true);
-        this.cameraError.set(null);
       }
     } catch {
       this.cameraError.set('Kunne ikke åpne kamera. Sjekk tillatelser.');
@@ -106,6 +124,12 @@ export class ScannerComponent implements OnDestroy {
 
       if (imageUrl) {
         this.wineService.setScanImageUrl(imageUrl);
+      }
+
+      // Store GPS if captured
+      const loc = await this.locationPromise;
+      if (loc) {
+        this.wineService.setScanLocation(loc.lat, loc.lng);
       }
 
       if (navigator.vibrate) {

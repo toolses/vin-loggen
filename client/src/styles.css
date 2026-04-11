@@ -1,6 +1,9 @@
 /* Tailwind CSS v4 – single import, no config file required */
 @import "tailwindcss";
 
+/* Mapbox GL JS */
+@import "mapbox-gl/dist/mapbox-gl.css";
+
 /* ── Design System: "Dark Cellar" Theme ────────────────────── */
 @theme {
   --color-cellar-bg: #121212;
@@ -73,6 +76,8 @@
 
 @utility animate-pulse-burgundy {
   animation: pulse-burgundy 2s ease-in-out infinite;
+  transform: translateZ(0);
+  will-change: box-shadow;
 }
 
 @utility animate-scan-line {
@@ -83,6 +88,15 @@
   background: linear-gradient(90deg, transparent 25%, rgba(128, 0, 32, 0.15) 50%, transparent 75%);
   background-size: 200% 100%;
   animation: shimmer 2s ease-in-out infinite;
+}
+
+/* ── Bar Chart Animation ─────────────────────────────────── */
+@keyframes bar-fill {
+  from { width: 0; }
+}
+
+@utility animate-bar-fill {
+  animation: bar-fill 0.8s ease-out both;
 }
 
 /* ── Safe-area insets for notched mobile devices ───────────── */
@@ -96,6 +110,7 @@
 html,
 body {
   height: 100%;
+  overflow: hidden;
   overscroll-behavior-y: none;
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
 }
@@ -133,4 +148,29 @@ body {
 .no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
+}
+
+/* ── Mapbox GL Popup Theme ───────────────────────────────────── */
+.mapboxgl-popup-content {
+  background: #1a1a1a !important;
+  color: #F5F5F5 !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 1rem !important;
+  padding: 0 !important;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5) !important;
+}
+
+.mapboxgl-popup-tip {
+  border-top-color: #1a1a1a !important;
+}
+
+.mapboxgl-popup-close-button {
+  color: #a3a3a3 !important;
+  font-size: 18px !important;
+  padding: 4px 8px !important;
+}
+
+.mapboxgl-popup-close-button:hover {
+  color: #F5F5F5 !important;
+  background: transparent !important;
 }

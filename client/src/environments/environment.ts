@@ -5,4 +5,5 @@ export const environment = {
   supabaseUrl: 'https://quvkgyiybiyfwnjpembr.supabase.co',
   supabaseAnonKey: 'sb_publishable_HOSKA-LisfvKIj_Z61Wu1g_Ag8DnmPP',
   apiBaseUrl: '/api',
+  mapboxToken: '',
 } as const;

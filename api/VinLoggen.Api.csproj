@@ -11,12 +11,27 @@
   <ItemGroup>
     <!-- Data access -->
     <PackageReference Include="Dapper"                    Version="2.*" />
+    <PackageReference Include="dbup-postgresql"           Version="5.*" />
     <PackageReference Include="Npgsql"                    Version="9.*" />
     <PackageReference Include="Npgsql.DependencyInjection" Version="9.*" />
+
+    <!-- Auth -->
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.*" />
+
+    <!-- Resilience / Polly (retry + circuit breaker on external HTTP clients) -->
+    <PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="9.*" />
 
     <!-- OpenAPI / Scalar UI (replaces Swashbuckle) -->
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.*" />
     <PackageReference Include="Scalar.AspNetCore"            Version="2.*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Migrations\*.sql" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="VinLoggen.Api.Tests" />
   </ItemGroup>
 
 </Project>

@@ -1,13 +1,24 @@
+using DbUp;
+using Microsoft.AspNetCore.Diagnostics;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpLogging;
+using Microsoft.Extensions.Http.Resilience;
+using Microsoft.IdentityModel.Tokens;
 using Npgsql;
 using Scalar.AspNetCore;
+using VinLoggen.Api.Configuration;
 using VinLoggen.Api.Endpoints;
 using VinLoggen.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// ── Integration settings ──────────────────────────────────────────────────────
+var integrationSettings = builder.Configuration
+    .GetSection(IntegrationSettings.SectionName)
+    .Get<IntegrationSettings>() ?? new IntegrationSettings();
+builder.Services.AddSingleton(integrationSettings);
+
 // ── CORS ──────────────────────────────────────────────────────────────────────
-// Allows all *.vercel.app origins (preview + production) and localhost.
-// For a custom production domain add it to CORS_ALLOWED_ORIGINS (comma-separated).
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("Frontend", policy =>
@@ -20,36 +31,145 @@ builder.Services.AddCors(options =>
 // ── OpenAPI ───────────────────────────────────────────────────────────────────
 builder.Services.AddOpenApi();
 
-// ── HTTP client (used by GeminiService) ─────────────────────────────────────
-builder.Services.AddHttpClient();
-builder.Services.AddHttpClient("gemini");
+// ── HTTP Logging ─────────────────────────────────────────────────────────────
+builder.Services.AddHttpLogging(options =>
+{
+    options.LoggingFields = HttpLoggingFields.RequestMethod
+                          | HttpLoggingFields.RequestPath
+                          | HttpLoggingFields.ResponseStatusCode
+                          | HttpLoggingFields.Duration;
+});
 
-// ── AI / Gemini ───────────────────────────────────────────────────────────────
+// ── HTTP clients ──────────────────────────────────────────────────────────────
+// Gemini: retry up to 3 times with exponential back-off; circuit-break on failure bursts.
+builder.Services.AddHttpClient("gemini")
+    .AddStandardResilienceHandler(opts =>
+    {
+        opts.Retry.MaxRetryAttempts       = 3;
+        opts.CircuitBreaker.SamplingDuration = TimeSpan.FromSeconds(30);
+    });
+
+// wineapi.io: same resilience profile; base address from config.
+builder.Services.AddHttpClient("wineApi", (sp, client) =>
+    {
+        var cfg = sp.GetRequiredService<IntegrationSettings>().WineApi;
+        client.BaseAddress = new Uri(cfg.BaseUrl);
+        client.Timeout     = TimeSpan.FromSeconds(10);
+    })
+    .AddStandardResilienceHandler(opts =>
+    {
+        opts.Retry.MaxRetryAttempts       = 2;
+        opts.TotalRequestTimeout.Timeout  = TimeSpan.FromSeconds(12);
+        opts.CircuitBreaker.SamplingDuration = TimeSpan.FromSeconds(30);
+    });
+
+// Generic named client (kept for backwards compat with GeminiService factory usage)
+builder.Services.AddHttpClient();
+
+// ── Application services ──────────────────────────────────────────────────────
+builder.Services.AddScoped<IGeminiService,   GeminiService>();
+builder.Services.AddScoped<IWineApiService,  WineApiService>();
+builder.Services.AddScoped<IProUsageService, ProUsageService>();
 builder.Services.AddScoped<GeminiService>();
+builder.Services.AddScoped<TasteProfileService>();
+builder.Services.AddScoped<WineApiService>();
+builder.Services.AddScoped<ProUsageService>();
+builder.Services.AddScoped<WineOrchestratorService>();
+// EnrichmentService retained for backwards compat (stub only)
+builder.Services.AddScoped<EnrichmentService>();
+
+// ── Auth (Supabase JWT via JWKS) ─────────────────────────────────────────────
+var supabaseUrl = builder.Configuration["SUPABASE_URL"] ?? string.Empty;
+
+if (!string.IsNullOrWhiteSpace(supabaseUrl))
+{
+    builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+        .AddJwtBearer(options =>
+        {
+            options.Authority        = $"{supabaseUrl}/auth/v1";
+            options.MetadataAddress  = $"{supabaseUrl}/auth/v1/.well-known/openid-configuration";
+            options.TokenValidationParameters = new TokenValidationParameters
+            {
+                ValidateIssuer           = true,
+                ValidIssuer              = $"{supabaseUrl}/auth/v1",
+                ValidateAudience         = true,
+                ValidAudience            = "authenticated",
+                ValidateLifetime         = true,
+                ValidateIssuerSigningKey = true,
+            };
+        });
+}
+else
+{
+    builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+        .AddJwtBearer();
+}
+builder.Services.AddAuthorization();
 
 // ── Database ──────────────────────────────────────────────────────────────────
-// Reads SUPABASE_CONNECTION_STRING from env / appsettings.
-// Falls back to a placeholder so the app starts without a DB configured.
-var connectionString = builder.Configuration["SUPABASE_CONNECTION_STRING"]
-    ?? string.Empty;
+var connectionString = builder.Configuration["SUPABASE_CONNECTION_STRING"] ?? string.Empty;
 
-builder.Services.AddNpgsqlDataSource(
-    !string.IsNullOrWhiteSpace(connectionString)
-        ? connectionString
-        : "Host=localhost;Database=vinloggen_placeholder");
+if (!string.IsNullOrWhiteSpace(connectionString))
+{
+    var csBuilder = new NpgsqlConnectionStringBuilder(connectionString)
+    {
+        MaxPoolSize             = 10,
+        MinPoolSize             = 1,
+        ConnectionIdleLifetime  = 300,
+        Timeout                 = 15,
+        CommandTimeout          = 30,
+    };
+    builder.Services.AddNpgsqlDataSource(csBuilder.ConnectionString);
+}
+else
+{
+    builder.Services.AddNpgsqlDataSource("Host=localhost;Database=vinloggen_placeholder");
+}
 
 // ── Render support ────────────────────────────────────────────────────────────
-// Render injects a dynamic $PORT. Map it to ASP.NET Core's listener.
 var renderPort = Environment.GetEnvironmentVariable("PORT");
 if (!string.IsNullOrEmpty(renderPort))
-{
     builder.WebHost.UseUrls($"http://+:{renderPort}");
-}
 
 // ── Build ─────────────────────────────────────────────────────────────────────
 var app = builder.Build();
 
+// ── Database migrations (DbUp) ────────────────────────────────────────────────
+if (!string.IsNullOrWhiteSpace(connectionString))
+{
+    var upgrader = DeployChanges.To
+        .PostgresqlDatabase(connectionString)
+        .WithScriptsEmbeddedInAssembly(typeof(Program).Assembly)
+        .LogToConsole()
+        .Build();
+
+    var result = upgrader.PerformUpgrade();
+    if (!result.Successful)
+    {
+        Console.ForegroundColor = ConsoleColor.Red;
+        Console.WriteLine($"Database migration failed: {result.Error}");
+        Console.ResetColor();
+        return;
+    }
+
+    Console.ForegroundColor = ConsoleColor.Green;
+    Console.WriteLine("Database migrations applied successfully.");
+    Console.ResetColor();
+}
+
 // ── Middleware ────────────────────────────────────────────────────────────────
+app.UseExceptionHandler(err => err.Run(async ctx =>
+{
+    var logger = ctx.RequestServices.GetRequiredService<ILogger<Program>>();
+    var ex = ctx.Features.Get<IExceptionHandlerFeature>()?.Error;
+    logger.LogError(ex, "Unhandled exception for {Method} {Path}", ctx.Request.Method, ctx.Request.Path);
+    ctx.Response.StatusCode      = 500;
+    ctx.Response.ContentType     = "application/problem+json";
+    await ctx.Response.WriteAsJsonAsync(new { detail = "An unexpected error occurred" });
+}));
+
+app.UseHttpLogging();
+
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
@@ -57,12 +177,16 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseCors("Frontend");
+app.UseAuthentication();
+app.UseAuthorization();
 
 // ── Endpoints ─────────────────────────────────────────────────────────────────
 app.MapHealthEndpoint();
 app.MapWineEndpoints();
+app.MapWineLogsEndpoints();
 app.MapProcessLabelEndpoints();
 app.MapWineAnalyzeEndpoints();
+app.MapTasteProfileEndpoints();
 
 app.Run();
 
@@ -75,9 +199,7 @@ static class OriginPolicy
 
     public static bool IsAllowed(string origin)
     {
-        if (!Uri.TryCreate(origin, UriKind.Absolute, out var uri))
-            return false;
-
+        if (!Uri.TryCreate(origin, UriKind.Absolute, out var uri)) return false;
         return uri.Host is "localhost" or "127.0.0.1"
             || uri.Host.EndsWith(".vercel.app", StringComparison.OrdinalIgnoreCase)
             || _extra.Contains(uri.Host, StringComparer.OrdinalIgnoreCase);

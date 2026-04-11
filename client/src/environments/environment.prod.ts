@@ -5,4 +5,5 @@ export const environment = {
   supabaseUrl: '',
   supabaseAnonKey: '',
   apiBaseUrl: '/api',
+  mapboxToken: '',
 } as const;

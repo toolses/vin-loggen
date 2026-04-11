@@ -12,11 +12,13 @@ import {
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { WineService, Wine } from '../../services/wine.service';
+import { SharePreviewComponent } from '../share-preview/share-preview.component';
+import { WineMapComponent } from '../wine-map/wine-map.component';
 
 @Component({
   selector: 'app-wine-list',
   standalone: true,
-  imports: [FormsModule, RouterLink],
+  imports: [FormsModule, RouterLink, SharePreviewComponent, WineMapComponent],
   templateUrl: './wine-list.component.html',
 })
 export class WineListComponent implements OnInit, OnDestroy {
@@ -27,8 +29,10 @@ export class WineListComponent implements OnInit, OnDestroy {
   protected readonly search = signal('');
   protected readonly typeFilter = signal<string | null>(null);
   protected readonly displayCount = signal(20);
+  protected readonly viewMode = signal<'list' | 'map'>('list');
   protected readonly loading = this.wineService.loading;
   protected readonly error = this.wineService.error;
+  protected readonly sharingWine = signal<Wine | null>(null);
 
   protected readonly wineTypes = ['Rød', 'Hvit', 'Rosé', 'Musserende', 'Oransje', 'Dessert'];
 
@@ -114,6 +118,14 @@ export class WineListComponent implements OnInit, OnDestroy {
       case 'Dessert': return 'bg-purple-900/30 text-purple-300 border-purple-500/20';
       default: return 'bg-white/5 text-cream-dark border-white/10';
     }
+  }
+
+  protected openSharePreview(wine: Wine): void {
+    this.sharingWine.set(wine);
+  }
+
+  protected closeSharePreview(): void {
+    this.sharingWine.set(null);
   }
 
   ngOnDestroy(): void {

@@ -1,7 +1,33 @@
 <div class="animate-fade-in max-w-lg mx-auto px-4 py-6">
 
   <!-- ── Header ────────────────────────────────────────────── -->
-  <h1 class="font-serif text-3xl text-cream font-bold mb-6">Min vinkjeller</h1>
+  <div class="flex items-center justify-between mb-6">
+    <h1 class="font-serif text-3xl text-cream font-bold">Min vinkjeller</h1>
+
+    <!-- List / Map Toggle -->
+    <div class="flex rounded-xl overflow-hidden border border-white/10">
+      <button
+        (click)="viewMode.set('list')"
+        class="px-3 py-1.5 transition-colors"
+        [class]="viewMode() === 'list' ? 'bg-burgundy text-cream' : 'bg-white/5 text-cream-dark hover:bg-white/10'"
+        aria-label="Listevisning"
+      >
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+        </svg>
+      </button>
+      <button
+        (click)="viewMode.set('map')"
+        class="px-3 py-1.5 transition-colors"
+        [class]="viewMode() === 'map' ? 'bg-burgundy text-cream' : 'bg-white/5 text-cream-dark hover:bg-white/10'"
+        aria-label="Kartvisning"
+      >
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 6.75V15m6-6v8.25m.503 3.498 4.875-2.437c.381-.19.622-.58.622-1.006V4.82c0-.836-.88-1.38-1.628-1.006l-3.869 1.934c-.317.159-.69.159-1.006 0L9.503 3.252a1.125 1.125 0 0 0-1.006 0L3.622 5.689C3.24 5.88 3 6.27 3 6.695V19.18c0 .836.88 1.38 1.628 1.006l3.869-1.934c.317-.159.69-.159 1.006 0l4.994 2.497c.317.158.69.158 1.006 0Z" />
+        </svg>
+      </button>
+    </div>
+  </div>
 
   <!-- ── Search ────────────────────────────────────────────── -->
   <div class="relative mb-4">
@@ -43,6 +69,25 @@
       </button>
     }
   </div>
+
+  <!-- ── Map View ─────────────────────────────────────────── -->
+  @if (viewMode() === 'map') {
+    @if (!loading() && filteredWines().length > 0) {
+      <app-wine-map [wines]="filteredWines()" />
+      <p class="text-xs text-cream-dark mt-3 text-center">
+        {{ filteredWines().filter(w => w.location_lat).length }} av {{ filteredWines().length }} viner har lokasjon
+      </p>
+    } @else if (!loading()) {
+      <div class="glass rounded-2xl p-10 text-center mt-4">
+        <div class="text-5xl mb-4" aria-hidden="true">🗺️</div>
+        <h3 class="font-serif text-lg text-cream mb-2">Ingen viner å vise</h3>
+        <p class="text-cream-dark text-sm">Legg til viner med lokasjon for å se dem på kartet</p>
+      </div>
+    }
+  }
+
+  <!-- ── List View ───────────────────────────────────────── -->
+  @if (viewMode() === 'list') {
 
   <!-- ── Loading ───────────────────────────────────────────── -->
   @if (loading()) {
@@ -93,7 +138,8 @@
       <ul class="space-y-3" role="list">
         @for (wine of displayedWines(); track wine.id) {
           <li
-            class="glass rounded-2xl flex gap-4 p-4 transition-all duration-200 hover:bg-white/[0.08]"
+            [routerLink]="['/wines', wine.id]"
+            class="glass rounded-2xl flex gap-4 p-4 transition-all duration-200 hover:bg-white/[0.08] cursor-pointer"
             [style.animation-delay]="($index * 50) + 'ms'"
             style="animation: fade-in 0.4s ease-out both"
           >
@@ -142,11 +188,23 @@
 
             <!-- Rating -->
             @if (wine.rating != null) {
-              <div class="flex flex-col items-center justify-center pl-2 flex-shrink-0">
-                <span class="text-2xl font-bold text-gold leading-none">{{ wine.rating }}</span>
-                <span class="text-[10px] text-cream-dark mt-0.5">/ 6</span>
+              <div class="flex items-baseline gap-0.5 pl-2 flex-shrink-0">
+                <span class="text-xl font-bold text-gold">{{ wine.rating }}</span>
+                <span class="text-[10px] text-cream-dark">/ 6</span>
               </div>
             }
+
+            <!-- Share button -->
+            <button
+              (click)="openSharePreview(wine); $event.stopPropagation(); $event.preventDefault()"
+              class="flex items-center justify-center w-8 h-8 rounded-full bg-white/5 text-cream-dark
+                     hover:bg-white/10 hover:text-cream transition-colors flex-shrink-0 self-start mt-1"
+              aria-label="Del denne vinen"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M7.217 10.907a2.25 2.25 0 1 0 0 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186 9.566-5.314m-9.566 7.5 9.566 5.314m0 0a2.25 2.25 0 1 0 3.935 2.186 2.25 2.25 0 0 0-3.935-2.186Zm0-12.814a2.25 2.25 0 1 0 3.933-2.185 2.25 2.25 0 0 0-3.933 2.185Z" />
+              </svg>
+            </button>
           </li>
         }
       </ul>
@@ -160,4 +218,11 @@
     }
   }
 
+  } <!-- end viewMode === 'list' -->
+
 </div>
+
+<!-- Share preview modal -->
+@if (sharingWine(); as wine) {
+  <app-share-preview [wine]="wine" (closed)="closeSharePreview()" />
+}

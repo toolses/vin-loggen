@@ -1,0 +1,244 @@
+<div class="animate-fade-in max-w-lg mx-auto px-4 py-6 pb-24">
+
+  <!-- ── User Header ───────────────────────────────────────── -->
+  <div class="flex items-center gap-4 mb-8">
+    @if (auth.avatarUrl()) {
+      <img
+        [src]="auth.avatarUrl()"
+        alt="Profilbilde"
+        class="w-16 h-16 rounded-full object-cover border-2 border-gold/30"
+      />
+    } @else {
+      <div class="w-16 h-16 rounded-full bg-burgundy/30 flex items-center justify-center border-2 border-gold/30">
+        <svg class="w-8 h-8 text-cream-dark" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round"
+            d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
+        </svg>
+      </div>
+    }
+    <div class="flex-1 min-w-0">
+      <h1 class="font-serif text-2xl text-cream font-bold truncate">{{ auth.displayName() ?? 'Vinentusiast' }}</h1>
+      <div class="flex items-center gap-3 text-sm text-cream-dark mt-1">
+        <span>{{ wineService.wineCount() }} viner</span>
+        @if (memberSince()) {
+          <span class="text-cream-dark/40">·</span>
+          <span>Medlem siden {{ memberSince() }}</span>
+        }
+      </div>
+    </div>
+  </div>
+
+  <!-- ── AI Taste Profile ──────────────────────────────────── -->
+  <section class="mb-8">
+    <h2 class="font-serif text-lg text-cream mb-4 flex items-center gap-2">
+      <svg class="w-5 h-5 text-gold" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 0 0-2.455 2.456Z" />
+      </svg>
+      AI Smaksprofil
+    </h2>
+
+    @if (profileService.loading() && !regenerating()) {
+      <!-- Skeleton -->
+      <div class="glass rounded-2xl p-6 space-y-4">
+        <div class="h-7 w-48 bg-white/10 rounded-lg animate-shimmer"></div>
+        <div class="h-4 w-full bg-white/10 rounded animate-shimmer"></div>
+        <div class="h-4 w-3/4 bg-white/10 rounded animate-shimmer"></div>
+        <div class="flex gap-2 mt-4">
+          <div class="h-6 w-20 bg-white/10 rounded-full animate-shimmer"></div>
+          <div class="h-6 w-24 bg-white/10 rounded-full animate-shimmer"></div>
+          <div class="h-6 w-16 bg-white/10 rounded-full animate-shimmer"></div>
+        </div>
+      </div>
+    } @else if (profileService.profile()) {
+      <div class="glass rounded-2xl p-6">
+        <div class="flex items-center gap-2 mb-3">
+          <span class="text-2xl" aria-hidden="true">🍷</span>
+          <h3 class="font-serif text-xl text-gold font-bold">{{ profileService.profile()!.personalityTitle }}</h3>
+        </div>
+        <p class="text-cream-muted text-sm leading-relaxed mb-4">
+          {{ profileService.profile()!.recommendation }}
+        </p>
+        <div class="flex flex-wrap gap-2">
+          @for (descriptor of profileService.profile()!.flavorDescriptors; track descriptor) {
+            <span class="text-xs bg-burgundy/30 text-cream-muted px-3 py-1 rounded-full border border-burgundy/20">
+              {{ descriptor }}
+            </span>
+          }
+        </div>
+      </div>
+    } @else {
+      <div class="glass rounded-2xl p-6 text-center">
+        <div class="text-4xl mb-3" aria-hidden="true">🔮</div>
+        <p class="text-cream-dark text-sm">Legg til flere viner for å generere din AI-smaksprofil</p>
+      </div>
+    }
+  </section>
+
+  <!-- ── Country Distribution ──────────────────────────────── -->
+  @if (countryDistribution().length > 0) {
+    <section class="mb-8">
+      <h2 class="font-serif text-lg text-cream mb-4">Land</h2>
+      <div class="glass rounded-2xl p-5">
+        @for (item of countryDistribution(); track item.country) {
+          <div class="flex items-center gap-3 mb-3 last:mb-0">
+            <span class="text-xs text-cream-muted w-16 text-right truncate">{{ item.country }}</span>
+            <div class="flex-1 h-6 bg-white/5 rounded-full overflow-hidden">
+              <div
+                class="h-full bg-gradient-to-r from-burgundy to-burgundy-light rounded-full animate-bar-fill"
+                [style.width.%]="item.pct"
+              ></div>
+            </div>
+            <span class="text-xs text-gold font-medium w-10">{{ item.pct }}%</span>
+          </div>
+        }
+      </div>
+    </section>
+  }
+
+  <!-- ── Type Distribution ─────────────────────────────────── -->
+  @if (typeDistribution().length > 0) {
+    <section class="mb-8">
+      <h2 class="font-serif text-lg text-cream mb-4">Vintyper</h2>
+      <div class="glass rounded-2xl p-5">
+        @for (item of typeDistribution(); track item.type) {
+          <div class="flex items-center gap-3 mb-3 last:mb-0">
+            <span class="text-xs w-20 text-right">
+              <span class="inline-block px-2 py-0.5 rounded-full text-[10px] border" [class]="getTypeColor(item.type)">
+                {{ item.type }}
+              </span>
+            </span>
+            <div class="flex-1 h-6 bg-white/5 rounded-full overflow-hidden">
+              <div
+                class="h-full bg-gradient-to-r from-gold-dark to-gold rounded-full animate-bar-fill"
+                [style.width.%]="item.pct"
+              ></div>
+            </div>
+            <span class="text-xs text-gold font-medium w-10">{{ item.count }}</span>
+          </div>
+        }
+      </div>
+    </section>
+  }
+
+  <!-- ── Home Address ─────────────────────────────────────── -->
+  <section class="mb-8">
+    <h2 class="font-serif text-lg text-cream mb-4 flex items-center gap-2">
+      <svg class="w-5 h-5 text-gold" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="m2.25 12 8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" />
+      </svg>
+      Hjemmeadresse
+    </h2>
+
+    @if (profileService.homeAddress(); as addr) {
+      @if (!editingHomeAddress()) {
+        <div class="glass rounded-2xl p-5 flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-burgundy/30 flex items-center justify-center flex-shrink-0">
+            <svg class="w-5 h-5 text-gold" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+              <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
+            </svg>
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="text-cream text-sm font-medium truncate">{{ addr.name }}</p>
+            <p class="text-cream-dark text-xs">Brukes som hurtigvalg ved registrering</p>
+          </div>
+          <div class="flex gap-1 flex-shrink-0">
+            <button
+              (click)="editingHomeAddress.set(true)"
+              class="text-cream-dark hover:text-cream transition-colors p-1.5"
+              aria-label="Endre hjemmeadresse"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125" />
+              </svg>
+            </button>
+            <button
+              (click)="removeHomeAddress()"
+              class="text-cream-dark hover:text-red-400 transition-colors p-1.5"
+              aria-label="Fjern hjemmeadresse"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      } @else {
+        <div class="glass rounded-2xl p-5">
+          <app-location-search
+            (locationSelected)="onHomeAddressSelected($event)"
+            [hideTypeSelector]="true"
+          />
+          <button
+            (click)="editingHomeAddress.set(false)"
+            class="mt-3 text-xs text-cream-dark hover:text-cream transition-colors"
+          >
+            Avbryt
+          </button>
+        </div>
+      }
+    } @else {
+      @if (editingHomeAddress()) {
+        <div class="glass rounded-2xl p-5">
+          <app-location-search
+            (locationSelected)="onHomeAddressSelected($event)"
+            [hideTypeSelector]="true"
+          />
+          <button
+            (click)="editingHomeAddress.set(false)"
+            class="mt-3 text-xs text-cream-dark hover:text-cream transition-colors"
+          >
+            Avbryt
+          </button>
+        </div>
+      } @else {
+        <button
+          (click)="editingHomeAddress.set(true)"
+          class="w-full glass rounded-2xl p-5 text-center text-cream-dark text-sm hover:bg-white/[0.08] transition-colors"
+        >
+          <svg class="w-5 h-5 mx-auto mb-2 text-cream-dark/50" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+          </svg>
+          Legg til hjemmeadresse
+        </button>
+      }
+    }
+  </section>
+
+  <!-- ── Actions ───────────────────────────────────────────── -->
+  <div class="space-y-3">
+    <!-- Regenerate -->
+    <button
+      (click)="regenerateInsight()"
+      [disabled]="regenerating() || profileService.loading()"
+      class="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-xl
+             bg-burgundy text-cream font-medium text-sm
+             hover:bg-burgundy-light active:scale-[0.98] transition-all duration-200
+             disabled:opacity-50 disabled:cursor-not-allowed"
+    >
+      @if (regenerating()) {
+        <span class="w-4 h-4 rounded-full border-2 border-cream/30 border-t-cream animate-spin"></span>
+        Genererer…
+      } @else {
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182" />
+        </svg>
+        Regenerer innsikt
+      }
+    </button>
+
+    <!-- Sign Out -->
+    <button
+      (click)="signOut()"
+      class="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-xl
+             bg-white/5 text-cream-dark font-medium text-sm border border-white/10
+             hover:bg-white/10 active:scale-[0.98] transition-all duration-200"
+    >
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9" />
+      </svg>
+      Logg ut
+    </button>
+  </div>
+
+</div>

@@ -247,6 +247,10 @@ export class ScannerComponent implements OnDestroy {
     this.router.navigate(['/']);
   }
 
+  protected navigateToManualEntry(): void {
+    this.router.navigate(['/edit']);
+  }
+
   ngOnDestroy(): void {
     this.stopCamera();
     this.revokePreview('front');

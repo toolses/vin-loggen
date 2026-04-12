@@ -1,6 +1,7 @@
-import { Component, inject } from '@angular/core';
+import { Component, effect, inject } from '@angular/core';
 import { RouterLink, RouterLinkActive } from '@angular/router';
 import { AuthService } from '../../services/auth.service';
+import { AdminService } from '../../services/admin.service';
 
 @Component({
   selector: 'app-navigation',
@@ -10,4 +11,13 @@ import { AuthService } from '../../services/auth.service';
 })
 export class NavigationComponent {
   protected readonly auth = inject(AuthService);
+  protected readonly admin = inject(AdminService);
+
+  constructor() {
+    effect(() => {
+      if (this.auth.isLoggedIn()) {
+        this.admin.checkAdminStatus();
+      }
+    });
+  }
 }

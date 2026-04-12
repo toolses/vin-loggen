@@ -1,0 +1,100 @@
+<div class="p-6 max-w-6xl">
+  <h1 class="text-2xl font-serif text-cream mb-6">Vinregister</h1>
+
+  <!-- Search and filters -->
+  <div class="flex flex-wrap gap-3 mb-4">
+    <div class="flex-1 min-w-[200px]">
+      <input
+        type="text"
+        placeholder="Søk etter vin, produsent, land, region..."
+        [value]="search()"
+        (input)="onSearchInput($any($event.target).value)"
+        class="w-full px-4 py-2.5 bg-cellar-surface border border-white/10 rounded-lg text-cream placeholder-cream/30 focus:outline-none focus:border-gold/50 transition-colors"
+      />
+    </div>
+    <select
+      [value]="typeFilter()"
+      (change)="onTypeChange($any($event.target).value)"
+      class="px-4 py-2.5 bg-cellar-surface border border-white/10 rounded-lg text-cream focus:outline-none focus:border-gold/50 transition-colors"
+    >
+      <option value="">Alle typer</option>
+      @for (t of wineTypes; track t) {
+        <option [value]="t">{{ t }}</option>
+      }
+    </select>
+  </div>
+
+  <!-- Results summary -->
+  <div class="flex items-center justify-between mb-3 text-sm text-cream/40">
+    <span>{{ wineService.totalCount() }} viner totalt</span>
+    <span>Side {{ wineService.page() }} av {{ totalPages() || 1 }}</span>
+  </div>
+
+  <!-- Wine table -->
+  <div class="bg-cellar-surface rounded-xl border border-white/10 overflow-hidden mb-4">
+    @if (wineService.loading()) {
+      <div class="p-8 text-center text-cream/40">Laster...</div>
+    } @else if (wineService.wines().length === 0) {
+      <div class="p-8 text-center text-cream/40">Ingen viner funnet.</div>
+    } @else {
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-left text-cream/40 border-b border-white/10">
+              <th class="px-5 py-3 font-medium">Navn</th>
+              <th class="px-5 py-3 font-medium">Produsent</th>
+              <th class="px-5 py-3 font-medium">Årgang</th>
+              <th class="px-5 py-3 font-medium">Type</th>
+              <th class="px-5 py-3 font-medium">Land</th>
+              <th class="px-5 py-3 font-medium text-right">Logger</th>
+              <th class="px-5 py-3 font-medium text-right">Handling</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (wine of wineService.wines(); track wine.id) {
+              <tr class="border-b border-white/5 hover:bg-white/5 transition-colors">
+                <td class="px-5 py-3 text-cream font-medium max-w-[200px] truncate">{{ wine.name }}</td>
+                <td class="px-5 py-3 text-cream/70 max-w-[150px] truncate">{{ wine.producer }}</td>
+                <td class="px-5 py-3 text-cream/50">{{ wine.vintage ?? '–' }}</td>
+                <td class="px-5 py-3">
+                  <span class="px-2 py-0.5 rounded-full text-xs bg-burgundy/20 text-burgundy border border-burgundy/30">
+                    {{ wine.type }}
+                  </span>
+                </td>
+                <td class="px-5 py-3 text-cream/50">{{ wine.country ?? '–' }}</td>
+                <td class="px-5 py-3 text-right text-cream/50">{{ wine.logCount }}</td>
+                <td class="px-5 py-3 text-right">
+                  <a [routerLink]="['/admin/wines', wine.id]"
+                     class="text-gold hover:text-gold/80 text-xs font-medium transition-colors">
+                    Rediger
+                  </a>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </div>
+
+  <!-- Pagination -->
+  @if (totalPages() > 1) {
+    <div class="flex items-center justify-center gap-3">
+      <button
+        (click)="prevPage()"
+        [disabled]="wineService.page() <= 1"
+        class="px-4 py-2 rounded-lg bg-cellar-surface border border-white/10 text-cream/60 hover:text-cream hover:bg-white/5 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+      >
+        &larr; Forrige
+      </button>
+      <span class="text-sm text-cream/40">{{ wineService.page() }} / {{ totalPages() }}</span>
+      <button
+        (click)="nextPage()"
+        [disabled]="wineService.page() >= totalPages()"
+        class="px-4 py-2 rounded-lg bg-cellar-surface border border-white/10 text-cream/60 hover:text-cream hover:bg-white/5 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+      >
+        Neste &rarr;
+      </button>
+    </div>
+  }
+</div>

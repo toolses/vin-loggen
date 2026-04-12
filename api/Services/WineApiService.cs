@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -63,6 +64,7 @@ public sealed class WineApiService : IWineApiService
     private readonly IntegrationSettings _settings;
     private readonly ILogger<WineApiService> _logger;
     private readonly IMemoryCache _cache;
+    private readonly IApiUsageService _apiUsage;
 
     private static readonly TimeSpan CacheTtl = TimeSpan.FromHours(24);
 
@@ -76,13 +78,15 @@ public sealed class WineApiService : IWineApiService
         IConfiguration           configuration,
         IntegrationSettings      settings,
         ILogger<WineApiService>  logger,
-        IMemoryCache             cache)
+        IMemoryCache             cache,
+        IApiUsageService         apiUsage)
     {
         _httpClientFactory = httpClientFactory;
         _configuration     = configuration;
         _settings          = settings;
         _logger            = logger;
         _cache             = cache;
+        _apiUsage          = apiUsage;
     }
 
     /// <summary>
@@ -137,7 +141,10 @@ public sealed class WineApiService : IWineApiService
                 cfg.AuthHeader,
                 $"{cfg.AuthPrefix}{apiKey}");
 
+            var sw = Stopwatch.StartNew();
             using var response = await client.SendAsync(request, ct);
+            sw.Stop();
+            _ = _apiUsage.LogAsync("wineapi", SearchPath, (int)response.StatusCode, (int)sw.ElapsedMilliseconds, null, ct);
 
             if (!response.IsSuccessStatusCode)
             {

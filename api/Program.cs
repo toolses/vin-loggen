@@ -11,6 +11,8 @@ using VinLoggen.Api.Configuration;
 using VinLoggen.Api.Endpoints;
 using VinLoggen.Api.Services;
 
+Dapper.SqlMapper.AddTypeHandler(new StringArrayTypeHandler());
+
 var builder = WebApplication.CreateBuilder(args);
 
 // ── Integration settings ──────────────────────────────────────────────────────

@@ -1,0 +1,83 @@
+<div class="p-6 max-w-6xl">
+  <h1 class="text-2xl font-serif text-cream mb-6">Dashboard</h1>
+
+  <!-- Quick stats -->
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+    <!-- Total wines card -->
+    <div class="bg-cellar-surface rounded-xl p-5 border border-white/10">
+      <p class="text-cream/50 text-sm mb-1">Totalt viner</p>
+      <p class="text-3xl font-serif text-cream">{{ totalWines() }}</p>
+    </div>
+
+    <!-- Today's usage cards per provider -->
+    @for (usage of usageService.todayUsage(); track usage.provider) {
+      <div class="bg-cellar-surface rounded-xl p-5 border border-white/10">
+        <p class="text-cream/50 text-sm mb-1">{{ providerLabel(usage.provider) }} i dag</p>
+        <p class="text-3xl font-serif text-cream">{{ usage.totalCalls }}</p>
+        <div class="flex gap-4 mt-2 text-xs text-cream/40">
+          <span>{{ usage.avgResponseMs }}ms snitt</span>
+          @if (usage.errorCount > 0) {
+            <span class="text-red-400">{{ usage.errorCount }} feil</span>
+          }
+        </div>
+      </div>
+    }
+
+    @if (usageService.todayUsage().length === 0 && !usageService.loading()) {
+      <div class="bg-cellar-surface rounded-xl p-5 border border-white/10">
+        <p class="text-cream/50 text-sm mb-1">API-bruk i dag</p>
+        <p class="text-3xl font-serif text-cream">0</p>
+        <p class="text-xs text-cream/40 mt-2">Ingen kall registrert</p>
+      </div>
+    }
+  </div>
+
+  <!-- Daily usage table -->
+  <div class="bg-cellar-surface rounded-xl border border-white/10 overflow-hidden">
+    <div class="px-5 py-4 border-b border-white/10 flex items-center justify-between">
+      <h2 class="text-lg font-serif text-cream">Daglig API-bruk (siste 30 dager)</h2>
+      <a routerLink="/admin/wines" class="text-sm text-gold hover:text-gold/80 transition-colors">
+        Se vinregister &rarr;
+      </a>
+    </div>
+
+    @if (dailyGrouped().length > 0) {
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-left text-cream/40 border-b border-white/10">
+              <th class="px-5 py-3 font-medium">Dato</th>
+              <th class="px-5 py-3 font-medium">Leverandør</th>
+              <th class="px-5 py-3 font-medium text-right">Kall</th>
+              <th class="px-5 py-3 font-medium text-right">Snitt ms</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (group of dailyGrouped(); track group.date) {
+              @for (row of group.providers; track row.provider; let first = $first) {
+                <tr class="border-b border-white/5 hover:bg-white/5 transition-colors">
+                  <td class="px-5 py-3 text-cream">
+                    @if (first) {
+                      {{ formatDate(group.date) }}
+                    }
+                  </td>
+                  <td class="px-5 py-3 text-cream/70">{{ providerLabel(row.provider) }}</td>
+                  <td class="px-5 py-3 text-right text-cream">{{ row.totalCalls }}</td>
+                  <td class="px-5 py-3 text-right text-cream/50">{{ row.avgResponseMs }}</td>
+                </tr>
+              }
+            }
+          </tbody>
+        </table>
+      </div>
+    } @else if (!usageService.loading()) {
+      <div class="p-8 text-center text-cream/40">
+        Ingen API-data registrert ennå.
+      </div>
+    } @else {
+      <div class="p-8 text-center text-cream/40">
+        Laster...
+      </div>
+    }
+  </div>
+</div>

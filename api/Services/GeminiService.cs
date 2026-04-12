@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Net.Http.Json;
@@ -129,15 +130,18 @@ public sealed class GeminiService : IGeminiService
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IConfiguration     _configuration;
     private readonly ILogger<GeminiService> _logger;
+    private readonly IApiUsageService _apiUsage;
 
     public GeminiService(
         IHttpClientFactory      httpClientFactory,
         IConfiguration          configuration,
-        ILogger<GeminiService>  logger)
+        ILogger<GeminiService>  logger,
+        IApiUsageService        apiUsage)
     {
         _httpClientFactory = httpClientFactory;
         _configuration     = configuration;
         _logger            = logger;
+        _apiUsage          = apiUsage;
     }
 
     public async Task<GeminiResult<WineAnalysisResponse>> AnalyzeLabelAsync(
@@ -173,17 +177,24 @@ public sealed class GeminiService : IGeminiService
         var client = _httpClientFactory.CreateClient("gemini");
 
         HttpResponseMessage response;
+        var sw = Stopwatch.StartNew();
         try
         {
             response = await client.PostAsJsonAsync($"{GeminiEndpoint}?key={apiKey}", payload, ct);
+            sw.Stop();
+            _ = _apiUsage.LogAsync("gemini", "AnalyzeLabel", (int)response.StatusCode, (int)sw.ElapsedMilliseconds, null, ct);
         }
         catch (TaskCanceledException ex) when (!ct.IsCancellationRequested)
         {
+            sw.Stop();
+            _ = _apiUsage.LogAsync("gemini", "AnalyzeLabel", null, (int)sw.ElapsedMilliseconds, null, ct);
             _logger.LogError(ex, "GeminiService: HTTP request to Gemini timed out");
             return new(null, "Gemini API request timed out");
         }
         catch (Exception ex)
         {
+            sw.Stop();
+            _ = _apiUsage.LogAsync("gemini", "AnalyzeLabel", null, (int)sw.ElapsedMilliseconds, null, ct);
             _logger.LogError(ex, "GeminiService: HTTP request to Gemini failed");
             return new(null, $"HTTP request to Gemini failed: {ex.Message}");
         }
@@ -280,17 +291,24 @@ public sealed class GeminiService : IGeminiService
         var client = _httpClientFactory.CreateClient("gemini");
 
         HttpResponseMessage response;
+        var sw = Stopwatch.StartNew();
         try
         {
             response = await client.PostAsJsonAsync($"{GeminiEndpoint}?key={apiKey}", payload, ct);
+            sw.Stop();
+            _ = _apiUsage.LogAsync("gemini", "AnalyzeLabels", (int)response.StatusCode, (int)sw.ElapsedMilliseconds, null, ct);
         }
         catch (TaskCanceledException ex) when (!ct.IsCancellationRequested)
         {
+            sw.Stop();
+            _ = _apiUsage.LogAsync("gemini", "AnalyzeLabels", null, (int)sw.ElapsedMilliseconds, null, ct);
             _logger.LogError(ex, "GeminiService: HTTP request to Gemini timed out (multi-image)");
             return new(null, "Gemini API request timed out");
         }
         catch (Exception ex)
         {
+            sw.Stop();
+            _ = _apiUsage.LogAsync("gemini", "AnalyzeLabels", null, (int)sw.ElapsedMilliseconds, null, ct);
             _logger.LogError(ex, "GeminiService: HTTP request to Gemini failed (multi-image)");
             return new(null, $"HTTP request to Gemini failed: {ex.Message}");
         }
@@ -396,7 +414,10 @@ public sealed class GeminiService : IGeminiService
         var client = _httpClientFactory.CreateClient("gemini");
         try
         {
+            var sw = Stopwatch.StartNew();
             var response = await client.PostAsJsonAsync($"{GeminiEndpoint}?key={apiKey}", payload, ct);
+            sw.Stop();
+            _ = _apiUsage.LogAsync("gemini", "GetFoodPairings", (int)response.StatusCode, (int)sw.ElapsedMilliseconds, null, ct);
             if (!response.IsSuccessStatusCode) return null;
 
             using var doc = await JsonDocument.ParseAsync(
@@ -500,12 +521,17 @@ public sealed class GeminiService : IGeminiService
         var client = _httpClientFactory.CreateClient("gemini");
 
         HttpResponseMessage response;
+        var sw = Stopwatch.StartNew();
         try
         {
             response = await client.PostAsJsonAsync($"{GeminiEndpoint}?key={apiKey}", payload, ct);
+            sw.Stop();
+            _ = _apiUsage.LogAsync("gemini", "GenerateTasteProfile", (int)response.StatusCode, (int)sw.ElapsedMilliseconds, null, ct);
         }
         catch (Exception ex)
         {
+            sw.Stop();
+            _ = _apiUsage.LogAsync("gemini", "GenerateTasteProfile", null, (int)sw.ElapsedMilliseconds, null, ct);
             _logger.LogError(ex, "GeminiService: HTTP request to Gemini failed (taste profile)");
             return null;
         }

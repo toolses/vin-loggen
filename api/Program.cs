@@ -6,9 +6,12 @@ using Microsoft.Extensions.Http.Resilience;
 using Microsoft.IdentityModel.Tokens;
 using Npgsql;
 using Scalar.AspNetCore;
+using System.Security.Claims;
 using VinLoggen.Api.Configuration;
 using VinLoggen.Api.Endpoints;
 using VinLoggen.Api.Services;
+
+Dapper.SqlMapper.AddTypeHandler(new StringArrayTypeHandler());
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -71,6 +74,7 @@ builder.Services.AddMemoryCache();
 builder.Services.AddScoped<IGeminiService,   GeminiService>();
 builder.Services.AddScoped<IWineApiService,  WineApiService>();
 builder.Services.AddScoped<IProUsageService, ProUsageService>();
+builder.Services.AddScoped<IApiUsageService, ApiUsageService>();
 builder.Services.AddScoped<GeminiService>();
 builder.Services.AddScoped<TasteProfileService>();
 builder.Services.AddScoped<WineApiService>();
@@ -105,7 +109,27 @@ else
     builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         .AddJwtBearer();
 }
-builder.Services.AddAuthorization();
+// ── Admin policy ─────────────────────────────────────────────────────────────
+var adminUserIds = (builder.Configuration["ADMIN_USER_IDS"] ?? "")
+    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+    .Where(s => Guid.TryParse(s, out _))
+    .Select(s => Guid.Parse(s))
+    .ToHashSet();
+
+builder.Services.AddSingleton(new AdminSettings(adminUserIds));
+
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("AdminOnly", policy =>
+        policy.RequireAssertion(ctx =>
+        {
+            var sub = ctx.User.FindFirstValue(ClaimTypes.NameIdentifier)
+                   ?? ctx.User.FindFirstValue("sub");
+            return sub is not null
+                && Guid.TryParse(sub, out var uid)
+                && adminUserIds.Contains(uid);
+        }));
+});
 
 // ── Database ──────────────────────────────────────────────────────────────────
 var connectionString = builder.Configuration["SUPABASE_CONNECTION_STRING"] ?? string.Empty;
@@ -188,6 +212,9 @@ app.MapWineLogsEndpoints();
 app.MapProcessLabelEndpoints();
 app.MapWineAnalyzeEndpoints();
 app.MapTasteProfileEndpoints();
+app.MapAdminAuthEndpoints();
+app.MapAdminWineEndpoints();
+app.MapAdminUsageEndpoints();
 
 app.Run();
 

@@ -1,0 +1,158 @@
+<div class="p-6 max-w-3xl">
+  @if (loading()) {
+    <div class="text-cream/40">Laster vin...</div>
+  } @else {
+    <div class="flex items-center justify-between mb-6">
+      <h1 class="text-2xl font-serif text-cream">Rediger vin</h1>
+      <span class="text-sm text-cream/30">{{ wine()?.logCount }} logger</span>
+    </div>
+
+    <div class="space-y-5">
+      <!-- Name -->
+      <div>
+        <label class="block text-sm text-cream/50 mb-1">Navn</label>
+        <input
+          type="text"
+          [ngModel]="name()"
+          (ngModelChange)="name.set($event)"
+          class="w-full px-4 py-2.5 bg-cellar-surface border border-white/10 rounded-lg text-cream focus:outline-none focus:border-gold/50 transition-colors"
+        />
+      </div>
+
+      <!-- Producer -->
+      <div>
+        <label class="block text-sm text-cream/50 mb-1">Produsent</label>
+        <input
+          type="text"
+          [ngModel]="producer()"
+          (ngModelChange)="producer.set($event)"
+          class="w-full px-4 py-2.5 bg-cellar-surface border border-white/10 rounded-lg text-cream focus:outline-none focus:border-gold/50 transition-colors"
+        />
+      </div>
+
+      <!-- Vintage + Type row -->
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm text-cream/50 mb-1">Årgang</label>
+          <input
+            type="number"
+            [ngModel]="vintage()"
+            (ngModelChange)="vintage.set($event)"
+            placeholder="f.eks. 2021"
+            class="w-full px-4 py-2.5 bg-cellar-surface border border-white/10 rounded-lg text-cream focus:outline-none focus:border-gold/50 transition-colors"
+          />
+        </div>
+        <div>
+          <label class="block text-sm text-cream/50 mb-1">Type</label>
+          <select
+            [ngModel]="type()"
+            (ngModelChange)="type.set($event)"
+            class="w-full px-4 py-2.5 bg-cellar-surface border border-white/10 rounded-lg text-cream focus:outline-none focus:border-gold/50 transition-colors"
+          >
+            @for (t of wineTypes; track t) {
+              <option [value]="t">{{ t }}</option>
+            }
+          </select>
+        </div>
+      </div>
+
+      <!-- Country + Region row -->
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm text-cream/50 mb-1">Land</label>
+          <input
+            type="text"
+            [ngModel]="country()"
+            (ngModelChange)="country.set($event)"
+            class="w-full px-4 py-2.5 bg-cellar-surface border border-white/10 rounded-lg text-cream focus:outline-none focus:border-gold/50 transition-colors"
+          />
+        </div>
+        <div>
+          <label class="block text-sm text-cream/50 mb-1">Region</label>
+          <input
+            type="text"
+            [ngModel]="region()"
+            (ngModelChange)="region.set($event)"
+            class="w-full px-4 py-2.5 bg-cellar-surface border border-white/10 rounded-lg text-cream focus:outline-none focus:border-gold/50 transition-colors"
+          />
+        </div>
+      </div>
+
+      <!-- Grapes -->
+      <div>
+        <label class="block text-sm text-cream/50 mb-1">Druer (kommaseparert)</label>
+        <input
+          type="text"
+          [ngModel]="grapesText()"
+          (ngModelChange)="grapesText.set($event)"
+          placeholder="f.eks. Cabernet Sauvignon, Merlot"
+          class="w-full px-4 py-2.5 bg-cellar-surface border border-white/10 rounded-lg text-cream placeholder-cream/20 focus:outline-none focus:border-gold/50 transition-colors"
+        />
+      </div>
+
+      <!-- Alcohol content -->
+      <div>
+        <label class="block text-sm text-cream/50 mb-1">Alkoholinnhold (%)</label>
+        <input
+          type="number"
+          step="0.1"
+          [ngModel]="alcoholContent()"
+          (ngModelChange)="alcoholContent.set($event)"
+          placeholder="f.eks. 13.5"
+          class="w-full px-4 py-2.5 bg-cellar-surface border border-white/10 rounded-lg text-cream placeholder-cream/20 focus:outline-none focus:border-gold/50 transition-colors"
+        />
+      </div>
+
+      <!-- Food pairings -->
+      <div>
+        <label class="block text-sm text-cream/50 mb-1">Matanbefalinger (kommaseparert)</label>
+        <input
+          type="text"
+          [ngModel]="foodPairingsText()"
+          (ngModelChange)="foodPairingsText.set($event)"
+          placeholder="f.eks. Lam, Ost, Pasta"
+          class="w-full px-4 py-2.5 bg-cellar-surface border border-white/10 rounded-lg text-cream placeholder-cream/20 focus:outline-none focus:border-gold/50 transition-colors"
+        />
+      </div>
+
+      <!-- Description -->
+      <div>
+        <label class="block text-sm text-cream/50 mb-1">Beskrivelse</label>
+        <textarea
+          [ngModel]="description()"
+          (ngModelChange)="description.set($event)"
+          rows="3"
+          class="w-full px-4 py-2.5 bg-cellar-surface border border-white/10 rounded-lg text-cream focus:outline-none focus:border-gold/50 transition-colors resize-none"
+        ></textarea>
+      </div>
+
+      <!-- Technical notes -->
+      <div>
+        <label class="block text-sm text-cream/50 mb-1">Tekniske notater</label>
+        <textarea
+          [ngModel]="technicalNotes()"
+          (ngModelChange)="technicalNotes.set($event)"
+          rows="3"
+          class="w-full px-4 py-2.5 bg-cellar-surface border border-white/10 rounded-lg text-cream focus:outline-none focus:border-gold/50 transition-colors resize-none"
+        ></textarea>
+      </div>
+
+      <!-- Actions -->
+      <div class="flex gap-3 pt-2">
+        <button
+          (click)="save()"
+          [disabled]="saving()"
+          class="px-6 py-2.5 bg-burgundy text-cream rounded-lg hover:bg-burgundy/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+        >
+          {{ saving() ? 'Lagrer...' : 'Lagre endringer' }}
+        </button>
+        <button
+          (click)="cancel()"
+          class="px-6 py-2.5 bg-cellar-surface border border-white/10 text-cream/60 rounded-lg hover:text-cream hover:bg-white/5 transition-colors"
+        >
+          Avbryt
+        </button>
+      </div>
+    </div>
+  }
+</div>

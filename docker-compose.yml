@@ -28,6 +28,7 @@ services:
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       SUPABASE_URL: ${SUPABASE_URL:-}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
+      ADMIN_USER_IDS: ${ADMIN_USER_IDS:-}
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8080/health || exit 1"]
       interval: 20s

@@ -1,55 +1,15 @@
 import { TestBed } from '@angular/core/testing';
+import { provideHttpClient } from '@angular/common/http';
+import {
+  HttpTestingController,
+  provideHttpClientTesting,
+} from '@angular/common/http/testing';
 import { LocationService } from './location.service';
 import { vi } from 'vitest';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-/** Build a fake Search Box suggest response */
-function fakeSuggestions(
-  items: { mapbox_id?: string; name?: string; full_address?: string; place_formatted?: string; poi_category?: string[] }[] = [],
-) {
-  return {
-    suggestions: items.map((item) => ({
-      mapbox_id: item.mapbox_id ?? 'abc123',
-      name: item.name ?? 'Test Place',
-      full_address: item.full_address,
-      place_formatted: item.place_formatted ?? 'Test, Norway',
-      poi_category: item.poi_category,
-    })),
-  };
-}
-
-/** Build a fake Search Box retrieve response */
-function fakeRetrieveResponse(overrides: {
-  name?: string;
-  full_address?: string;
-  coordinates?: [number, number];
-  poi_category?: string[];
-} = {}) {
-  const {
-    name = 'Storgata 15',
-    full_address = 'Storgata 15, 0123 Oslo, Norway',
-    coordinates = [10.75, 59.91],
-    poi_category,
-  } = overrides;
-
-  return {
-    type: 'FeatureCollection',
-    features: [
-      {
-        type: 'Feature',
-        geometry: { type: 'Point', coordinates },
-        properties: {
-          name,
-          full_address,
-          ...(poi_category != null ? { poi_category } : {}),
-        },
-      },
-    ],
-  };
-}
-
-/** Build a fake Geocoding v6 reverse response */
+/** Build a fake Geocoding v6 reverse response (still Mapbox) */
 function fakeReverseResponse(overrides: {
   name?: string;
   full_address?: string;
@@ -77,75 +37,67 @@ function mockFetchJson(data: unknown) {
   } as Response);
 }
 
-// ── Suite: searchPlaces ──────────────────────────────────────────────────────
+// ── Suite: searchPlaces (Google Places via backend proxy) ────────────────────
 
 describe('LocationService – searchPlaces', () => {
   let service: LocationService;
+  let httpMock: HttpTestingController;
 
   beforeEach(() => {
-    TestBed.configureTestingModule({ providers: [LocationService] });
+    TestBed.configureTestingModule({
+      providers: [
+        LocationService,
+        provideHttpClient(),
+        provideHttpClientTesting(),
+      ],
+    });
     service = TestBed.inject(LocationService);
-    (service as any).token = 'test-token';
+    httpMock = TestBed.inject(HttpTestingController);
   });
 
   afterEach(() => {
+    httpMock.verify();
     vi.restoreAllMocks();
   });
 
-  it('calls the Search Box suggest endpoint', async () => {
-    mockFetchJson(fakeSuggestions([{ name: 'Test' }]));
+  it('calls the backend autocomplete endpoint', async () => {
+    const promise = service.searchPlaces('Test');
 
-    await service.searchPlaces('Test');
+    const req = httpMock.expectOne(r => r.url.includes('/locations/autocomplete'));
+    expect(req.request.method).toBe('GET');
+    expect(req.request.params.get('query')).toBe('Test');
+    expect(req.request.params.get('sessionToken')).toBeTruthy();
+    req.flush([{ placeId: 'abc', mainText: 'Test Place', secondaryText: 'Oslo' }]);
 
-    const url = (fetch as any).mock.calls[0][0] as string;
-    expect(url).toContain('search/searchbox/v1/suggest');
-  });
-
-  it('includes poi, address, place, neighborhood, and street types', async () => {
-    mockFetchJson(fakeSuggestions([{ name: 'Test' }]));
-
-    await service.searchPlaces('Test');
-
-    const url = (fetch as any).mock.calls[0][0] as string;
-    expect(url).toContain('types=poi,address,place,neighborhood,street');
-  });
-
-  it('includes proximity parameter when provided', async () => {
-    mockFetchJson(fakeSuggestions([]));
-
-    await service.searchPlaces('Storgata', { lat: 59.91, lng: 10.75 });
-
-    const url = (fetch as any).mock.calls[0][0] as string;
-    expect(url).toContain('proximity=10.75,59.91');
-  });
-
-  it('returns PlaceSuggestion with mapbox_id, name, and address', async () => {
-    mockFetchJson(fakeSuggestions([
-      {
-        mapbox_id: 'poi123',
-        name: 'To Rom og Kjøkken',
-        full_address: 'Carl Johans gate 5, 7010 Trondheim, Norway',
-        poi_category: ['restaurant'],
-      },
-    ]));
-
-    const results = await service.searchPlaces('To Rom');
-
+    const results = await promise;
     expect(results).toHaveLength(1);
-    expect(results[0].mapbox_id).toBe('poi123');
-    expect(results[0].name).toBe('To Rom og Kjøkken');
-    expect(results[0].address).toBe('Carl Johans gate 5, 7010 Trondheim, Norway');
-    expect(results[0].category).toBe('restaurant');
   });
 
-  it('falls back to place_formatted when full_address is missing', async () => {
-    mockFetchJson(fakeSuggestions([
-      { name: 'Oslo', place_formatted: 'Oslo, Norway' },
-    ]));
+  it('includes lat/lng when proximity is provided', async () => {
+    const promise = service.searchPlaces('Storgata', { lat: 59.91, lng: 10.75 });
 
-    const results = await service.searchPlaces('Oslo');
+    const req = httpMock.expectOne(r => r.url.includes('/locations/autocomplete'));
+    expect(req.request.params.get('lat')).toBe('59.91');
+    expect(req.request.params.get('lng')).toBe('10.75');
+    req.flush([]);
 
-    expect(results[0].address).toBe('Oslo, Norway');
+    const results = await promise;
+    expect(results).toEqual([]);
+  });
+
+  it('maps backend response to PlaceSuggestion with place_id, name, address', async () => {
+    const promise = service.searchPlaces('To Rom');
+
+    const req = httpMock.expectOne(r => r.url.includes('/locations/autocomplete'));
+    req.flush([
+      { placeId: 'poi123', mainText: 'To Rom og Kjøkken', secondaryText: 'Trondheim, Norway' },
+    ]);
+
+    const results = await promise;
+    expect(results).toHaveLength(1);
+    expect(results[0].place_id).toBe('poi123');
+    expect(results[0].name).toBe('To Rom og Kjøkken');
+    expect(results[0].address).toBe('Trondheim, Norway');
   });
 
   it('returns empty array for empty query', async () => {
@@ -153,104 +105,116 @@ describe('LocationService – searchPlaces', () => {
     expect(results).toEqual([]);
   });
 
-  it('returns empty array when token is missing', async () => {
-    (service as any).token = '';
-    const results = await service.searchPlaces('test');
-    expect(results).toEqual([]);
-  });
+  it('returns empty array on HTTP error', async () => {
+    const promise = service.searchPlaces('test');
 
-  it('returns empty array on fetch error', async () => {
-    vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new Error('Network error'));
+    const req = httpMock.expectOne(r => r.url.includes('/locations/autocomplete'));
+    req.error(new ProgressEvent('error'));
 
-    const results = await service.searchPlaces('test');
+    const results = await promise;
     expect(results).toEqual([]);
   });
 });
 
-// ── Suite: retrievePlace ─────────────────────────────────────────────────────
+// ── Suite: retrievePlace (Google Places via backend proxy) ───────────────────
 
 describe('LocationService – retrievePlace', () => {
   let service: LocationService;
+  let httpMock: HttpTestingController;
 
   beforeEach(() => {
-    TestBed.configureTestingModule({ providers: [LocationService] });
+    TestBed.configureTestingModule({
+      providers: [
+        LocationService,
+        provideHttpClient(),
+        provideHttpClientTesting(),
+      ],
+    });
     service = TestBed.inject(LocationService);
-    (service as any).token = 'test-token';
+    httpMock = TestBed.inject(HttpTestingController);
   });
 
   afterEach(() => {
+    httpMock.verify();
     vi.restoreAllMocks();
   });
 
-  it('calls the Search Box retrieve endpoint with mapbox_id', async () => {
-    mockFetchJson(fakeRetrieveResponse());
+  it('calls the backend details endpoint with placeId', async () => {
+    const promise = service.retrievePlace('abc123');
 
-    await service.retrievePlace('abc123');
+    const req = httpMock.expectOne(r => r.url.includes('/locations/details'));
+    expect(req.request.method).toBe('GET');
+    expect(req.request.params.get('placeId')).toBe('abc123');
+    expect(req.request.params.get('sessionToken')).toBeTruthy();
+    req.flush({ placeId: 'abc123', name: 'Test', address: 'Oslo', lat: 59.91, lng: 10.75, types: [] });
 
-    const url = (fetch as any).mock.calls[0][0] as string;
-    expect(url).toContain('search/searchbox/v1/retrieve/abc123');
+    const place = await promise;
+    expect(place).not.toBeNull();
   });
 
   it('returns Place with name, address, lat, lng', async () => {
-    mockFetchJson(fakeRetrieveResponse({
+    const promise = service.retrievePlace('poi123');
+
+    const req = httpMock.expectOne(r => r.url.includes('/locations/details'));
+    req.flush({
+      placeId: 'poi123',
       name: 'To Rom og Kjøkken',
-      full_address: 'Carl Johans gate 5, 7010 Trondheim, Norway',
-      coordinates: [10.395, 63.433],
-      poi_category: ['restaurant'],
-    }));
+      address: 'Carl Johans gate 5, 7010 Trondheim, Norway',
+      lat: 63.433,
+      lng: 10.395,
+      types: ['restaurant'],
+    });
 
-    const place = await service.retrievePlace('poi123');
-
-    expect(place).not.toBeNull();
+    const place = await promise;
     expect(place!.name).toBe('To Rom og Kjøkken');
     expect(place!.address).toBe('Carl Johans gate 5, 7010 Trondheim, Norway');
     expect(place!.lat).toBe(63.433);
     expect(place!.lng).toBe(10.395);
-    expect(place!.category).toBe('restaurant');
   });
 
   it('rotates session token after retrieve', async () => {
-    mockFetchJson(fakeRetrieveResponse());
     const oldToken = (service as any).sessionToken;
 
-    await service.retrievePlace('abc123');
+    const promise = service.retrievePlace('abc123');
 
+    const req = httpMock.expectOne(r => r.url.includes('/locations/details'));
+    req.flush({ placeId: 'abc123', name: 'Test', address: null, lat: 59.91, lng: 10.75, types: null });
+
+    await promise;
     expect((service as any).sessionToken).not.toBe(oldToken);
   });
 
-  it('returns null when no features are found', async () => {
-    mockFetchJson({ type: 'FeatureCollection', features: [] });
-    const result = await service.retrievePlace('missing');
-    expect(result).toBeNull();
-  });
-
-  it('returns null when token is missing', async () => {
-    (service as any).token = '';
-    const result = await service.retrievePlace('abc123');
-    expect(result).toBeNull();
-  });
-
-  it('returns null when mapboxId is empty', async () => {
+  it('returns null when placeId is empty', async () => {
     const result = await service.retrievePlace('');
     expect(result).toBeNull();
   });
 
-  it('returns null on fetch error', async () => {
-    vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new Error('Network error'));
-    const result = await service.retrievePlace('abc123');
+  it('returns null on HTTP error', async () => {
+    const promise = service.retrievePlace('abc123');
+
+    const req = httpMock.expectOne(r => r.url.includes('/locations/details'));
+    req.error(new ProgressEvent('error'));
+
+    const result = await promise;
     expect(result).toBeNull();
   });
 });
 
-// ── Suite: reverseGeocode ────────────────────────────────────────────────────
+// ── Suite: reverseGeocode (still Mapbox) ─────────────────────────────────────
 
 describe('LocationService – reverseGeocode', () => {
   let service: LocationService;
 
   beforeEach(() => {
-    TestBed.configureTestingModule({ providers: [LocationService] });
+    TestBed.configureTestingModule({
+      providers: [
+        LocationService,
+        provideHttpClient(),
+        provideHttpClientTesting(),
+      ],
+    });
     service = TestBed.inject(LocationService);
-    (service as any).token = 'test-token';
+    (service as any).mapboxToken = 'test-token';
   });
 
   afterEach(() => {
@@ -289,7 +253,7 @@ describe('LocationService – reverseGeocode', () => {
   });
 
   it('returns null when token is missing', async () => {
-    (service as any).token = '';
+    (service as any).mapboxToken = '';
     const result = await service.reverseGeocode(59.91, 10.75);
     expect(result).toBeNull();
   });

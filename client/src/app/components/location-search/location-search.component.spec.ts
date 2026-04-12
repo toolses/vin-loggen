@@ -80,10 +80,9 @@ describe('LocationSearchComponent', () => {
     (component as any).onTypeChange('bar');
 
     await (component as any).selectPlace({
-      mapbox_id: 'poi456',
+      place_id: 'poi456',
       name: 'Himkok',
       address: 'Storgata 27, Oslo',
-      category: 'bar',
     });
 
     expect(mockService.retrievePlace).toHaveBeenCalledWith('poi456');
@@ -101,7 +100,7 @@ describe('LocationSearchComponent', () => {
     component.locationSelected.subscribe(e => emitted.push(e));
 
     await (component as any).selectPlace({
-      mapbox_id: 'missing',
+      place_id: 'missing',
       name: 'Unknown',
       address: '',
     });
@@ -119,6 +118,45 @@ describe('LocationSearchComponent', () => {
 
     expect((component as any).locationType()).toBe('annet');
     expect(emitted).toEqual(['annet']);
+  });
+
+  it('auto-fills home address when "hjemme" chip is clicked and home address is registered', () => {
+    (component as any).homeAddress = signal({ name: 'Hjemmeveien 1', lat: 59.91, lng: 10.75 });
+
+    const emitted: LocationSelection[] = [];
+    component.locationSelected.subscribe(e => emitted.push(e));
+
+    (component as any).onTypeChange('hjemme');
+
+    expect(emitted).toHaveLength(1);
+    expect(emitted[0].type).toBe('hjemme');
+    expect(emitted[0].name).toBe('Hjemmeveien 1');
+    expect(emitted[0].lat).toBe(59.91);
+    expect(emitted[0].lng).toBe(10.75);
+  });
+
+  it('only sets type when "hjemme" chip is clicked without a registered home address', () => {
+    const emitted: LocationSelection[] = [];
+    component.locationSelected.subscribe(e => emitted.push(e));
+    const types: string[] = [];
+    component.typeChanged.subscribe(t => types.push(t));
+
+    (component as any).onTypeChange('hjemme');
+
+    expect(emitted).toHaveLength(0);
+    expect(types).toEqual(['hjemme']);
+    expect((component as any).locationType()).toBe('hjemme');
+  });
+
+  it('pre-fills query from initialQuery input when ngOnInit runs', () => {
+    (component as any).initialQuery = signal('Himkok Bar');
+    (component as any).ngOnInit();
+    expect((component as any).query()).toBe('Himkok Bar');
+  });
+
+  it('leaves query empty when initialQuery is null', () => {
+    (component as any).ngOnInit();
+    expect((component as any).query()).toBe('');
   });
 
   // ── useHomeAddress ──────────────────────────────────────────────────────
@@ -168,7 +206,7 @@ describe('LocationSearchComponent', () => {
   });
 
   it('clears results when home address is used', () => {
-    (component as any).results.set([{ mapbox_id: 'x', name: 'Old result', address: '' }]);
+    (component as any).results.set([{ place_id: 'x', name: 'Old result', address: '' }]);
     (component as any).homeAddress = signal({
       name: 'Test',
       lat: 0,

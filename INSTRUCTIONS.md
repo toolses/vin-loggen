@@ -149,7 +149,8 @@ The admin section (`/admin`) is protected by an env-var allowlist of Supabase us
 | `GEMINI_API_KEY` | Yes | Google AI Gemini API key |
 | `WINE_API_KEY` | Yes | WineAPI key for Vinmonopolet data |
 | `ADMIN_USER_IDS` | No | Comma-separated Supabase user UUIDs for admin access |
-| `MAPBOX_TOKEN` | No | Mapbox token for location features |
+| `MAPBOX_TOKEN` | No | Mapbox token for map display and reverse geocoding |
+| `GOOGLE_PLACES_API_KEY` | No | Google Places API key for location autocomplete |
 | `PORT` | Render only | Injected by Render; overrides Kestrel listen port |
 | `CORS_ALLOWED_ORIGINS` | No | Comma-separated extra origins (beyond `*.vercel.app` and `localhost`) |
 

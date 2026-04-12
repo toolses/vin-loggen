@@ -46,6 +46,7 @@ export class WineEditorComponent implements OnInit {
   protected readonly locationLng = signal<number | null>(null);
   protected readonly locationType = signal<string | null>(null);
   protected readonly locationSet = signal(false);
+  protected readonly locationInitialQuery = signal<string | null>(null);
   protected readonly homeAddress = this.profileService.homeAddress;
 
   protected readonly imageUrl = signal<string | null>(null);
@@ -121,6 +122,7 @@ export class WineEditorComponent implements OnInit {
   protected readonly editScope = signal<'wine' | 'tasting' | null>(null);
 
   ngOnInit(): void {
+    this.profileService.loadHomeAddress();
     const id = this.route.snapshot.paramMap.get('id');
     const logId = this.route.snapshot.queryParamMap.get('logId');
     const mode = this.route.snapshot.queryParamMap.get('mode');
@@ -465,14 +467,21 @@ export class WineEditorComponent implements OnInit {
     this.locationLng.set(loc.lng);
     this.locationType.set(loc.type);
     this.locationSet.set(true);
+    this.locationInitialQuery.set(null);
   }
 
   protected clearLocation(): void {
-    this.locationName.set(null);
-    this.locationLat.set(null);
-    this.locationLng.set(null);
-    // Keep locationType so the location-search pre-selects the previous type
+    this.locationInitialQuery.set(this.locationName());
+    // Keep name/lat/lng — they're used to re-persist if user only changes type
     this.locationSet.set(false);
+  }
+
+  protected onLocationTypeChanged(type: string): void {
+    this.locationType.set(type);
+    // If old coordinates are still in memory, re-confirm the location with the new type
+    if (this.locationName()) {
+      this.locationSet.set(true);
+    }
   }
 
   // ── Report incorrect info ──────────────────────────────────────────────

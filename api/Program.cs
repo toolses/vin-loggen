@@ -66,6 +66,19 @@ builder.Services.AddHttpClient("wineApi", (sp, client) =>
         opts.CircuitBreaker.SamplingDuration = TimeSpan.FromSeconds(30);
     });
 
+// Google Places: proxied search for location autocomplete.
+builder.Services.AddHttpClient("googlePlaces", client =>
+    {
+        client.BaseAddress = new Uri("https://places.googleapis.com");
+        client.Timeout     = TimeSpan.FromSeconds(10);
+    })
+    .AddStandardResilienceHandler(opts =>
+    {
+        opts.Retry.MaxRetryAttempts          = 2;
+        opts.TotalRequestTimeout.Timeout     = TimeSpan.FromSeconds(12);
+        opts.CircuitBreaker.SamplingDuration  = TimeSpan.FromSeconds(30);
+    });
+
 // Generic named client (kept for backwards compat with GeminiService factory usage)
 builder.Services.AddHttpClient();
 
@@ -81,6 +94,7 @@ builder.Services.AddScoped<WineApiService>();
 builder.Services.AddScoped<ProUsageService>();
 builder.Services.AddScoped<WineOrchestratorService>();
 builder.Services.AddScoped<WineMatchingService>();
+builder.Services.AddScoped<IGooglePlacesService, GooglePlacesService>();
 // EnrichmentService retained for backwards compat (stub only)
 builder.Services.AddScoped<EnrichmentService>();
 
@@ -218,6 +232,7 @@ app.MapAdminWineEndpoints();
 app.MapAdminUsageEndpoints();
 app.MapAdminResetEndpoints();
 app.MapAdminCorrectionEndpoints();
+app.MapLocationEndpoints();
 
 app.Run();
 

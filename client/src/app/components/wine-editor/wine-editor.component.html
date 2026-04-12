@@ -451,9 +451,10 @@
         } @else {
           <app-location-search
             [initialType]="locationType()"
+            [initialQuery]="locationInitialQuery()"
             [homeAddress]="homeAddress()"
             (locationSelected)="onLocationSelected($event)"
-            (typeChanged)="locationType.set($event)"
+            (typeChanged)="onLocationTypeChanged($event)"
           />
         }
       </div>

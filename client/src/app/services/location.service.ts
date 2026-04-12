@@ -1,11 +1,12 @@
-import { Injectable, signal } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { inject, Injectable, signal } from '@angular/core';
+import { firstValueFrom } from 'rxjs';
 import { environment } from '../../environments/environment';
 
 export interface PlaceSuggestion {
-  mapbox_id: string;
+  place_id: string;
   name: string;
   address: string;
-  category?: string;
 }
 
 export interface Place {
@@ -13,12 +14,29 @@ export interface Place {
   address: string;
   lat: number;
   lng: number;
-  category?: string;
+}
+
+/** Backend DTO for autocomplete results */
+interface AutocompleteSuggestionDto {
+  placeId: string;
+  mainText: string;
+  secondaryText: string;
+}
+
+/** Backend DTO for place details */
+interface PlaceDetailsDto {
+  placeId: string;
+  name: string;
+  address: string | null;
+  lat: number;
+  lng: number;
+  types: string[] | null;
 }
 
 @Injectable({ providedIn: 'root' })
 export class LocationService {
-  private readonly token = environment.mapboxToken;
+  private readonly http = inject(HttpClient);
+  private readonly mapboxToken = environment.mapboxToken;
   private sessionToken = crypto.randomUUID();
 
   readonly permissionState = signal<'prompt' | 'granted' | 'denied'>('prompt');
@@ -62,13 +80,14 @@ export class LocationService {
     });
   }
 
+  /** Reverse geocode via Mapbox (kept for "current position" quick action). */
   async reverseGeocode(lat: number, lng: number): Promise<{ name: string; address: string } | null> {
-    if (!this.token) return null;
+    if (!this.mapboxToken) return null;
 
     try {
       const url = `https://api.mapbox.com/search/geocode/v6/reverse`
         + `?longitude=${lng}&latitude=${lat}`
-        + `&access_token=${this.token}&types=address&limit=1&language=no`;
+        + `&access_token=${this.mapboxToken}&types=address&limit=1&language=no`;
 
       const res = await fetch(url);
       const data = await res.json();
@@ -85,57 +104,56 @@ export class LocationService {
     }
   }
 
+  /** Search places via Google Places Autocomplete (proxied through backend). */
   async searchPlaces(query: string, proximity?: { lat: number; lng: number }): Promise<PlaceSuggestion[]> {
-    if (!this.token || !query.trim()) return [];
+    if (!query.trim()) return [];
 
     try {
-      let url = `https://api.mapbox.com/search/searchbox/v1/suggest`
-        + `?q=${encodeURIComponent(query)}`
-        + `&access_token=${this.token}&session_token=${this.sessionToken}`
-        + `&limit=5&language=no&types=poi,address,place,neighborhood,street`;
-
+      const params: Record<string, string> = {
+        query,
+        sessionToken: this.sessionToken,
+      };
       if (proximity) {
-        url += `&proximity=${proximity.lng},${proximity.lat}`;
+        params['lat'] = proximity.lat.toString();
+        params['lng'] = proximity.lng.toString();
       }
 
-      const res = await fetch(url);
-      const data = await res.json();
+      const results = await firstValueFrom(
+        this.http.get<AutocompleteSuggestionDto[]>(
+          `${environment.apiBaseUrl}/locations/autocomplete`, { params }),
+      );
 
-      return (data.suggestions ?? []).map((s: Record<string, unknown>) => ({
-        mapbox_id: (s['mapbox_id'] as string) ?? '',
-        name: (s['name'] as string) ?? '',
-        address: (s['full_address'] as string) ?? (s['place_formatted'] as string) ?? '',
-        category: ((s['poi_category'] as string[]) ?? [])[0] ?? undefined,
+      return (results ?? []).map((s) => ({
+        place_id: s.placeId,
+        name: s.mainText,
+        address: s.secondaryText,
       }));
     } catch {
       return [];
     }
   }
 
-  async retrievePlace(mapboxId: string): Promise<Place | null> {
-    if (!this.token || !mapboxId) return null;
+  /** Retrieve full place details via Google Places (proxied through backend). */
+  async retrievePlace(placeId: string): Promise<Place | null> {
+    if (!placeId) return null;
 
     try {
-      const url = `https://api.mapbox.com/search/searchbox/v1/retrieve/${mapboxId}`
-        + `?access_token=${this.token}&session_token=${this.sessionToken}`;
+      const result = await firstValueFrom(
+        this.http.get<PlaceDetailsDto>(
+          `${environment.apiBaseUrl}/locations/details`,
+          { params: { placeId, sessionToken: this.sessionToken } }),
+      );
 
-      const res = await fetch(url);
-      const data = await res.json();
-      const feature = data.features?.[0];
-      if (!feature) return null;
-
-      const props = feature.properties ?? {};
-      const coords = feature.geometry?.coordinates ?? [0, 0];
-
-      // Rotate session token after a complete suggest → retrieve cycle
+      // Rotate session token after a complete autocomplete → details cycle
       this.sessionToken = crypto.randomUUID();
 
+      if (!result) return null;
+
       return {
-        name: props.name ?? '',
-        address: props.full_address ?? '',
-        lat: coords[1],
-        lng: coords[0],
-        category: (props.poi_category ?? [])[0] ?? undefined,
+        name: result.name,
+        address: result.address ?? '',
+        lat: result.lat,
+        lng: result.lng,
       };
     } catch {
       return null;

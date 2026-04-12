@@ -35,6 +35,9 @@ export class LocationSearchComponent implements OnInit, OnDestroy {
   /** Pre-select a location type (e.g. when re-editing a saved location) */
   readonly initialType = input<string | null>(null);
 
+  /** Pre-fill the search input (e.g. when re-editing an already-set location) */
+  readonly initialQuery = input<string | null>(null);
+
   readonly locationSelected = output<LocationSelection>();
   readonly typeChanged = output<string>();
 
@@ -58,6 +61,8 @@ export class LocationSearchComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     const type = this.initialType();
     if (type) this.locationType.set(type);
+    const q = this.initialQuery();
+    if (q) this.query.set(q);
   }
 
   protected onQueryChange(value: string): void {
@@ -87,7 +92,7 @@ export class LocationSearchComponent implements OnInit, OnDestroy {
     this.results.set([]);
     this.searching.set(true);
     try {
-      const place = await this.locationService.retrievePlace(suggestion.mapbox_id);
+      const place = await this.locationService.retrievePlace(suggestion.place_id);
       if (!place) return;
       this.locationSelected.emit({
         name: place.name,
@@ -139,6 +144,10 @@ export class LocationSearchComponent implements OnInit, OnDestroy {
   protected onTypeChange(type: string): void {
     this.locationType.set(type);
     this.typeChanged.emit(type);
+    // If the user picks "Hjemme" and a home address is registered, auto-fill it.
+    if (type === 'hjemme' && this.homeAddress()) {
+      this.useHomeAddress();
+    }
   }
 
   ngOnDestroy(): void {

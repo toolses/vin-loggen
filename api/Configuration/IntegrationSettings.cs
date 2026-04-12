@@ -25,6 +25,15 @@ public sealed class IntegrationSettings
     public int DailyProLimit { get; init; } = 10;
 
     public WineApiSettings WineApi { get; init; } = new();
+
+    /// <summary>
+    /// Hard ceiling on the total number of requests sent to the Google Places API.
+    /// Once this count (measured against <c>api_usage_logs</c>) is reached ALL
+    /// Google Places calls are refused and empty results are returned.
+    /// Set to 0 to disable the cap (unlimited).  Default: 10 000.
+    /// Override via the <c>Integration__GooglePlacesMaxRequests</c> environment variable.
+    /// </summary>
+    public int GooglePlacesMaxRequests { get; init; } = 10_000;
 }
 
 /// <summary>Connection details for the wineapi.io REST API.</summary>

@@ -36,7 +36,9 @@ public sealed class WineApiService : IWineApiService
         string[]? FoodPairings,
         string?   TechnicalNotes,
         double?   AlcoholContent,
-        string[]? Grapes
+        string[]? Grapes,
+        string?   SuggestedName     = null,
+        string?   SuggestedProducer = null
     );
 
     // Internal deserialization types (mirrors expected wineapi.io response)
@@ -178,7 +180,9 @@ public sealed class WineApiService : IWineApiService
                 FoodPairings:  foodPairings?.Length > 0 ? foodPairings : null,
                 TechnicalNotes: hit.TechnicalNotes,
                 AlcoholContent: hit.AlcoholContent,
-                Grapes:        hit.Grapes
+                Grapes:        hit.Grapes,
+                SuggestedName:     hit.Name,
+                SuggestedProducer: hit.Producer
             );
 
             _cache.Set(cacheKey, (WineEnrichment?)enrichment, CacheTtl);

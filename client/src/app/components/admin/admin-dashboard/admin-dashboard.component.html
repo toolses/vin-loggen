@@ -9,6 +9,12 @@
       <p class="text-3xl font-serif text-cream">{{ totalWines() }}</p>
     </div>
 
+    <!-- Corrections card -->
+    <a routerLink="/admin/corrections" class="bg-cellar-surface rounded-xl p-5 border border-white/10 hover:border-gold/30 transition-colors block">
+      <p class="text-cream/50 text-sm mb-1">Korreksjoner</p>
+      <p class="text-3xl font-serif text-cream">{{ totalCorrections() }}</p>
+    </a>
+
     <!-- Today's usage cards per provider -->
     @for (usage of usageService.todayUsage(); track usage.provider) {
       <div class="bg-cellar-surface rounded-xl p-5 border border-white/10">
@@ -79,5 +85,46 @@
         Laster...
       </div>
     }
+  </div>
+
+  <!-- Reset data (alpha/beta only) -->
+  <div class="mt-8 bg-cellar-surface rounded-xl border border-red-500/20 overflow-hidden">
+    <div class="px-5 py-4 border-b border-red-500/20">
+      <h2 class="text-lg font-serif text-red-400">Farlig sone</h2>
+      <p class="text-sm text-cream/40 mt-1">Funksjoner for testing i alpha/beta. Fjernes før produksjon.</p>
+    </div>
+    <div class="p-5">
+      @if (!showResetConfirm()) {
+        <button
+          (click)="showResetConfirm.set(true)"
+          class="px-4 py-2 rounded-lg bg-red-500/10 text-red-400 border border-red-500/30 hover:bg-red-500/20 transition-colors text-sm">
+          Slett all testdata
+        </button>
+      } @else {
+        <div class="space-y-3">
+          <p class="text-cream text-sm">
+            Er du sikker? Dette sletter <strong>alle viner</strong>, <strong>alle loggføringer</strong> og <strong>alle opplastede bilder</strong>. Handlingen kan ikke angres.
+          </p>
+          <div class="flex gap-3">
+            <button
+              (click)="resetData()"
+              [disabled]="resetting()"
+              class="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 transition-colors text-sm">
+              @if (resetting()) {
+                Sletter...
+              } @else {
+                Ja, slett alt
+              }
+            </button>
+            <button
+              (click)="showResetConfirm.set(false)"
+              [disabled]="resetting()"
+              class="px-4 py-2 rounded-lg bg-white/5 text-cream/60 hover:bg-white/10 disabled:opacity-50 transition-colors text-sm">
+              Avbryt
+            </button>
+          </div>
+        </div>
+      }
+    </div>
   </div>
 </div>

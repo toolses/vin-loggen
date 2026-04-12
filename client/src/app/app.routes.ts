@@ -79,6 +79,20 @@ export const routes: Routes = [
             m => m.AdminWineEditorComponent,
           ),
       },
+      {
+        path: 'corrections',
+        loadComponent: () =>
+          import('./components/admin/admin-corrections/admin-correction-list.component').then(
+            m => m.AdminCorrectionListComponent,
+          ),
+      },
+      {
+        path: 'corrections/:id',
+        loadComponent: () =>
+          import('./components/admin/admin-corrections/admin-correction-detail.component').then(
+            m => m.AdminCorrectionDetailComponent,
+          ),
+      },
     ],
   },
   { path: '**', redirectTo: '' },

@@ -66,4 +66,4 @@ public static class AdminUsageEndpoints
 }
 
 public record ProviderUsageToday(string Provider, int TotalCalls, int AvgResponseMs, int ErrorCount);
-public record DailyUsageRow(DateOnly Date, string Provider, int TotalCalls, int AvgResponseMs);
+public record DailyUsageRow(DateTime Date, string Provider, int TotalCalls, int AvgResponseMs);

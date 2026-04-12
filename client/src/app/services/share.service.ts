@@ -5,13 +5,43 @@ import type { Wine } from './wine.service';
 export class ShareService {
 
   async generateShareImage(element: HTMLElement): Promise<Blob> {
+    // Convert cross-origin images to inline data URLs so html-to-image can render them
+    await this.inlineExternalImages(element);
+
     const { toPng } = await import('html-to-image');
     const dataUrl = await toPng(element, {
       pixelRatio: 2,
       backgroundColor: '#121212',
+      cacheBust: true,
     });
     const res = await fetch(dataUrl);
     return res.blob();
+  }
+
+  private async inlineExternalImages(root: HTMLElement): Promise<void> {
+    const images = root.querySelectorAll<HTMLImageElement>('img[src]');
+    await Promise.all(
+      Array.from(images).map(async (img) => {
+        const src = img.src;
+        if (!src || src.startsWith('data:')) return;
+        try {
+          const resp = await fetch(src);
+          const blob = await resp.blob();
+          img.src = await this.blobToDataUrl(blob);
+        } catch {
+          // If fetch fails, leave the original src (image will be missing in export)
+        }
+      }),
+    );
+  }
+
+  private blobToDataUrl(blob: Blob): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
   }
 
   async shareWine(wine: Wine, imageBlob: Blob): Promise<void> {

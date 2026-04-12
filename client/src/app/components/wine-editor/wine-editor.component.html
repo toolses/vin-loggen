@@ -13,398 +13,629 @@
       </svg>
     </button>
     <h1 class="font-serif text-2xl text-cream font-semibold">
-      {{ editMode() ? 'Rediger vin' : 'Legg til vin' }}
+      {{ editScope() === 'wine' ? 'Rediger vin' : editScope() === 'tasting' ? 'Rediger smakslogg' : editMode() ? 'Rediger vin' : searchStep() ? 'Finn vin' : 'Legg til vin' }}
     </h1>
   </div>
 
-  <!-- ── Already-tasted banner ──────────────────────────────── -->
-  @if (alreadyTasted()) {
-    <div class="mb-5 rounded-2xl border border-gold/30 bg-gold/10 px-5 py-4 flex gap-4 items-start">
-      <span class="text-2xl leading-none select-none" aria-hidden="true">🍷</span>
-      <div class="flex-1 min-w-0">
-        <p class="text-sm font-semibold text-gold leading-snug">
-          Velkommen tilbake til denne vinen!
-        </p>
-        <p class="text-xs text-cream-dark mt-0.5 leading-relaxed">
-          Du har smakt denne vinen før
-          @if (previousTastedAt()) {
-            <span> – sist {{ previousTastedAt() | date:'d. MMMM yyyy' }}</span>
-          }
-          @if (previousRating()) {
-            <span> med karakter {{ previousRating() }}/6</span>
-          }.
-          Vil du logge en ny smaksopplevelse?
-        </p>
-      </div>
-    </div>
-  }
+  <!-- ══════════════════════════════════════════════════════════
+       SEARCH STEP (manual entry without scan result)
+       ══════════════════════════════════════════════════════════ -->
+  @if (searchStep()) {
+    <div class="glass rounded-2xl p-5 space-y-5">
+      <p class="text-sm text-cream-dark leading-relaxed">
+        Søk etter en vin som allerede finnes i katalogen, eller opprett en helt ny.
+      </p>
 
-  <!-- ── Pro quota reached banner ──────────────────────────── -->
-  @if (proLimitReached()) {
-    <div class="mb-5 rounded-2xl border border-white/10 bg-white/5 px-5 py-4 flex gap-4 items-start">
-      <svg class="w-6 h-6 text-cream-dark flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round"
-          d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
-      </svg>
-      <div class="flex-1 min-w-0">
-        <p class="text-sm font-semibold text-cream leading-snug">
-          Dagens Pro-kvote er nådd
-        </p>
-        <p class="text-xs text-cream-dark mt-0.5 leading-relaxed">
-          Matparing og smaksnotater er utilgjengelig i dag. Oppgrader for full tilgang.
-        </p>
-      </div>
-    </div>
-  }
-
-  <!-- ── Image Preview ─────────────────────────────────────── -->
-  @if (imageUrl()) {
-    <div class="mb-6 rounded-2xl overflow-hidden">
-      <img
-        [src]="imageUrl()"
-        alt="Skannet etikett"
-        class="w-full h-48 object-cover"
-      />
-    </div>
-  }
-
-  <!-- ── Form ──────────────────────────────────────────────── -->
-  <div class="glass rounded-2xl p-5 space-y-5">
-
-    <!-- Name -->
-    <div>
-      <label for="wine-name" class="block text-xs uppercase tracking-wider text-cream-dark mb-1.5 font-medium">
-        Navn *
-      </label>
-      <input
-        id="wine-name"
-        type="text"
-        [ngModel]="name()"
-        (ngModelChange)="name.set($event)"
-        placeholder="f.eks. Barolo Riserva"
-        class="w-full min-h-12 px-4 rounded-xl bg-white/5 text-cream placeholder-cream-dark/40
-               border border-white/10 focus:border-burgundy-light focus:ring-1 focus:ring-burgundy-light
-               transition-colors outline-none"
-      />
-    </div>
-
-    <!-- Producer -->
-    <div>
-      <label for="wine-producer" class="block text-xs uppercase tracking-wider text-cream-dark mb-1.5 font-medium">
-        Produsent *
-      </label>
-      <input
-        id="wine-producer"
-        type="text"
-        [ngModel]="producer()"
-        (ngModelChange)="producer.set($event)"
-        placeholder="f.eks. Marchesi di Barolo"
-        class="w-full min-h-12 px-4 rounded-xl bg-white/5 text-cream placeholder-cream-dark/40
-               border border-white/10 focus:border-burgundy-light focus:ring-1 focus:ring-burgundy-light
-               transition-colors outline-none"
-      />
-    </div>
-
-    <!-- Vintage + Type (side by side) -->
-    <div class="grid grid-cols-2 gap-4">
+      <!-- Search input -->
       <div>
-        <label for="wine-vintage" class="block text-xs uppercase tracking-wider text-cream-dark mb-1.5 font-medium">
-          Årgang
-        </label>
         <input
-          id="wine-vintage"
-          type="number"
-          [ngModel]="vintage()"
-          (ngModelChange)="vintage.set($event)"
-          placeholder="2020"
-          min="1900"
-          max="2030"
-          class="w-full min-h-12 px-4 rounded-xl bg-white/5 text-cream placeholder-cream-dark/40
-                 border border-white/10 focus:border-burgundy-light focus:ring-1 focus:ring-burgundy-light
-                 transition-colors outline-none"
-        />
-      </div>
-      <div>
-        <label for="wine-type" class="block text-xs uppercase tracking-wider text-cream-dark mb-1.5 font-medium">
-          Type
-        </label>
-        <select
-          id="wine-type"
-          [ngModel]="type()"
-          (ngModelChange)="type.set($event)"
-          class="w-full min-h-12 px-4 rounded-xl bg-white/5 text-cream
-                 border border-white/10 focus:border-burgundy-light focus:ring-1 focus:ring-burgundy-light
-                 transition-colors outline-none appearance-none"
-        >
-          @for (t of wineTypes; track t) {
-            <option [value]="t" class="bg-cellar-surface text-cream">{{ t }}</option>
-          }
-        </select>
-      </div>
-    </div>
-
-    <!-- Country + Region (side by side) -->
-    <div class="grid grid-cols-2 gap-4">
-      <div>
-        <label for="wine-country" class="block text-xs uppercase tracking-wider text-cream-dark mb-1.5 font-medium">
-          Land
-        </label>
-        <input
-          id="wine-country"
           type="text"
-          [ngModel]="country()"
-          (ngModelChange)="country.set($event)"
-          placeholder="f.eks. Italia"
+          [ngModel]="searchQuery()"
+          (ngModelChange)="onSearchInput($event)"
+          placeholder="Søk etter vin eller produsent..."
           class="w-full min-h-12 px-4 rounded-xl bg-white/5 text-cream placeholder-cream-dark/40
                  border border-white/10 focus:border-burgundy-light focus:ring-1 focus:ring-burgundy-light
                  transition-colors outline-none"
         />
       </div>
-      <div>
-        <label for="wine-region" class="block text-xs uppercase tracking-wider text-cream-dark mb-1.5 font-medium">
-          Region
-        </label>
-        <input
-          id="wine-region"
-          type="text"
-          [ngModel]="region()"
-          (ngModelChange)="region.set($event)"
-          placeholder="f.eks. Piemonte"
-          class="w-full min-h-12 px-4 rounded-xl bg-white/5 text-cream placeholder-cream-dark/40
-                 border border-white/10 focus:border-burgundy-light focus:ring-1 focus:ring-burgundy-light
-                 transition-colors outline-none"
-        />
-      </div>
-    </div>
 
-    <!-- Grape Variety + Alcohol (side by side) -->
-    <div class="grid grid-cols-2 gap-4">
-      <div>
-        <label for="wine-grape" class="block text-xs uppercase tracking-wider text-cream-dark mb-1.5 font-medium">
-          Drue
-        </label>
-        <input
-          id="wine-grape"
-          type="text"
-          [ngModel]="grapeVariety()"
-          (ngModelChange)="grapeVariety.set($event)"
-          placeholder="f.eks. Nebbiolo"
-          class="w-full min-h-12 px-4 rounded-xl bg-white/5 text-cream placeholder-cream-dark/40
-                 border border-white/10 focus:border-burgundy-light focus:ring-1 focus:ring-burgundy-light
-                 transition-colors outline-none"
-        />
-      </div>
-      <div>
-        <label for="wine-alcohol" class="block text-xs uppercase tracking-wider text-cream-dark mb-1.5 font-medium">
-          Alkohol
-        </label>
-        <input
-          id="wine-alcohol"
-          type="text"
-          [ngModel]="alcoholContent()"
-          (ngModelChange)="alcoholContent.set($event)"
-          placeholder="f.eks. 14%"
-          class="w-full min-h-12 px-4 rounded-xl bg-white/5 text-cream placeholder-cream-dark/40
-                 border border-white/10 focus:border-burgundy-light focus:ring-1 focus:ring-burgundy-light
-                 transition-colors outline-none"
-        />
-      </div>
-    </div>
+      <!-- Loading -->
+      @if (searching()) {
+        <div class="flex items-center justify-center py-4">
+          <span class="w-5 h-5 rounded-full border-2 border-cream/30 border-t-cream animate-spin"></span>
+        </div>
+      }
 
-    <!-- Rating -->
-    <div>
-      <label class="block text-xs uppercase tracking-wider text-cream-dark mb-2 font-medium">
-        Vurdering
-      </label>
-      <app-star-rating [(rating)]="rating" />
-    </div>
-
-    <!-- Tasting date -->
-    <div>
-      <label for="wine-tasted" class="block text-xs uppercase tracking-wider text-cream-dark mb-1.5 font-medium">
-        Smaksdato
-      </label>
-      <input
-        id="wine-tasted"
-        type="date"
-        [ngModel]="tastedAt()"
-        (ngModelChange)="tastedAt.set($event)"
-        class="w-full min-h-12 px-4 rounded-xl bg-white/5 text-cream
-               border border-white/10 focus:border-burgundy-light focus:ring-1 focus:ring-burgundy-light
-               transition-colors outline-none"
-      />
-    </div>
-
-    <!-- Notes -->
-    <div>
-      <label for="wine-notes" class="block text-xs uppercase tracking-wider text-cream-dark mb-1.5 font-medium">
-        Notater
-      </label>
-      <textarea
-        id="wine-notes"
-        [ngModel]="notes()"
-        (ngModelChange)="notes.set($event)"
-        rows="3"
-        placeholder="Smaksnotater, lukt, anledning..."
-        class="w-full px-4 py-3 rounded-xl bg-white/5 text-cream placeholder-cream-dark/40
-               border border-white/10 focus:border-burgundy-light focus:ring-1 focus:ring-burgundy-light
-               transition-colors outline-none resize-none"
-      ></textarea>
-    </div>
-
-    <!-- ── Pro enrichment: Description ──────────────────────── -->
-    @if (description()) {
-      <div>
-        <label class="block text-xs uppercase tracking-wider text-cream-dark mb-1.5 font-medium flex items-center gap-1.5">
-          <svg class="w-3.5 h-3.5 text-gold" fill="currentColor" viewBox="0 0 20 20">
-            <path fill-rule="evenodd" d="M10 1a.75.75 0 0 1 .75.75v1.5a.75.75 0 0 1-1.5 0v-1.5A.75.75 0 0 1 10 1ZM5.05 3.05a.75.75 0 0 1 1.06 0l1.062 1.06A.75.75 0 1 1 6.11 5.173L5.05 4.11a.75.75 0 0 1 0-1.06Zm9.9 0a.75.75 0 0 1 0 1.06l-1.06 1.062a.75.75 0 0 1-1.062-1.061l1.061-1.06a.75.75 0 0 1 1.06 0ZM3 8a.75.75 0 0 1 .75-.75h1.5a.75.75 0 0 1 0 1.5h-1.5A.75.75 0 0 1 3 8Zm11 0a.75.75 0 0 1 .75-.75h1.5a.75.75 0 0 1 0 1.5h-1.5A.75.75 0 0 1 14 8Z" clip-rule="evenodd"/>
-          </svg>
-          Vinbeskrivelse
-        </label>
-        <p class="text-sm text-cream/80 leading-relaxed px-4 py-3 rounded-xl bg-white/5 border border-white/10">
-          {{ description() }}
-        </p>
-      </div>
-    }
-
-    <!-- ── Pro enrichment: Food pairings ────────────────────── -->
-    @if (foodPairings()?.length || proLimitReached()) {
-      <div>
-        <label class="block text-xs uppercase tracking-wider text-cream-dark mb-1.5 font-medium flex items-center gap-1.5">
-          <svg class="w-3.5 h-3.5 text-gold" fill="currentColor" viewBox="0 0 20 20">
-            <path fill-rule="evenodd" d="M10 1a.75.75 0 0 1 .75.75v1.5a.75.75 0 0 1-1.5 0v-1.5A.75.75 0 0 1 10 1ZM5.05 3.05a.75.75 0 0 1 1.06 0l1.062 1.06A.75.75 0 1 1 6.11 5.173L5.05 4.11a.75.75 0 0 1 0-1.06Zm9.9 0a.75.75 0 0 1 0 1.06l-1.06 1.062a.75.75 0 0 1-1.062-1.061l1.061-1.06a.75.75 0 0 1 1.06 0ZM3 8a.75.75 0 0 1 .75-.75h1.5a.75.75 0 0 1 0 1.5h-1.5A.75.75 0 0 1 3 8Zm11 0a.75.75 0 0 1 .75-.75h1.5a.75.75 0 0 1 0 1.5h-1.5A.75.75 0 0 1 14 8Z" clip-rule="evenodd"/>
-          </svg>
-          Matparing
-        </label>
-        <div class="relative rounded-xl overflow-hidden">
-          @if (foodPairings()?.length) {
-            <div class="flex flex-wrap gap-2 px-4 py-3 bg-white/5 border border-white/10 rounded-xl">
-              @for (pairing of foodPairings(); track pairing) {
-                <span class="px-3 py-1 rounded-full text-xs font-medium bg-burgundy/20 text-cream border border-burgundy/30">
-                  {{ pairing }}
-                </span>
-              }
-            </div>
-          } @else {
-            <!-- Locked placeholder when quota reached but no data -->
-            <div class="px-4 py-3 bg-white/5 border border-white/10 rounded-xl blur-sm select-none" aria-hidden="true">
-              <div class="flex flex-wrap gap-2">
-                <span class="px-3 py-1 rounded-full text-xs bg-burgundy/20 border border-burgundy/30 text-transparent">Biff og grønnsaker</span>
-                <span class="px-3 py-1 rounded-full text-xs bg-burgundy/20 border border-burgundy/30 text-transparent">Modnet ost</span>
-                <span class="px-3 py-1 rounded-full text-xs bg-burgundy/20 border border-burgundy/30 text-transparent">Lammekjøtt</span>
-              </div>
-            </div>
+      <!-- Results -->
+      @if (searchResults().length) {
+        <div class="space-y-2">
+          @for (wine of searchResults(); track wine.id) {
+            <button
+              type="button"
+              (click)="selectSearchResult(wine)"
+              class="w-full text-left px-4 py-3 rounded-xl bg-white/5 border border-white/10
+                     hover:bg-white/10 hover:border-burgundy-light/30 transition-colors"
+            >
+              <p class="text-sm font-medium text-cream">{{ wine.producer }} — {{ wine.name }}</p>
+              <p class="text-xs text-cream-dark mt-0.5">
+                @if (wine.vintage) { {{ wine.vintage }} · }
+                {{ wine.type }}
+                @if (wine.country) { · {{ wine.country }} }
+                @if (wine.region) { , {{ wine.region }} }
+              </p>
+            </button>
           }
-          @if (proLimitReached() && !foodPairings()?.length) {
-            <div class="absolute inset-0 flex items-center justify-center">
-              <svg class="w-5 h-5 text-cream-dark" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round"
-                  d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
-              </svg>
-            </div>
-          }
+        </div>
+      } @else if (searchQuery().length >= 2 && !searching()) {
+        <p class="text-sm text-cream-dark text-center py-4">Ingen treff</p>
+      }
+
+      <!-- Skip / create new -->
+      <button
+        type="button"
+        (click)="skipSearch()"
+        class="w-full py-3.5 rounded-2xl glass text-cream font-medium
+               transition-all duration-200 active:scale-[0.98] hover:bg-white/10"
+      >
+        Opprett ny vin
+      </button>
+    </div>
+  } @else {
+    <!-- ══════════════════════════════════════════════════════════
+         WINE FORM (shown after search step or with scan result)
+         ══════════════════════════════════════════════════════════ -->
+
+    <!-- ── Already-tasted banner ──────────────────────────────── -->
+    @if (alreadyTasted()) {
+      <div class="mb-5 rounded-2xl border border-gold/30 bg-gold/10 px-5 py-4 flex gap-4 items-start">
+        <span class="text-2xl leading-none select-none" aria-hidden="true">🍷</span>
+        <div class="flex-1 min-w-0">
+          <p class="text-sm font-semibold text-gold leading-snug">
+            Velkommen tilbake til denne vinen!
+          </p>
+          <p class="text-xs text-cream-dark mt-0.5 leading-relaxed">
+            Du har smakt denne vinen før
+            @if (previousTastedAt()) {
+              <span> – sist {{ previousTastedAt() | date:'d. MMMM yyyy' }}</span>
+            }
+            @if (previousRating()) {
+              <span> med karakter {{ previousRating() }}/6</span>
+            }.
+            Vil du logge en ny smaksopplevelse?
+          </p>
         </div>
       </div>
     }
 
-    <!-- ── Pro enrichment: Technical notes ──────────────────── -->
-    @if (technicalNotes() || proLimitReached()) {
-      <div>
-        <label class="block text-xs uppercase tracking-wider text-cream-dark mb-1.5 font-medium flex items-center gap-1.5">
-          <svg class="w-3.5 h-3.5 text-gold" fill="currentColor" viewBox="0 0 20 20">
-            <path fill-rule="evenodd" d="M10 1a.75.75 0 0 1 .75.75v1.5a.75.75 0 0 1-1.5 0v-1.5A.75.75 0 0 1 10 1ZM5.05 3.05a.75.75 0 0 1 1.06 0l1.062 1.06A.75.75 0 1 1 6.11 5.173L5.05 4.11a.75.75 0 0 1 0-1.06Zm9.9 0a.75.75 0 0 1 0 1.06l-1.06 1.062a.75.75 0 0 1-1.062-1.061l1.061-1.06a.75.75 0 0 1 1.06 0ZM3 8a.75.75 0 0 1 .75-.75h1.5a.75.75 0 0 1 0 1.5h-1.5A.75.75 0 0 1 3 8Zm11 0a.75.75 0 0 1 .75-.75h1.5a.75.75 0 0 1 0 1.5h-1.5A.75.75 0 0 1 14 8Z" clip-rule="evenodd"/>
-          </svg>
-          Tekniske detaljer
-        </label>
-        <div class="relative rounded-xl overflow-hidden">
-          @if (technicalNotes()) {
-            <p class="text-sm text-cream/80 leading-relaxed px-4 py-3 bg-white/5 border border-white/10 rounded-xl">
-              {{ technicalNotes() }}
-            </p>
-          } @else {
-            <p class="text-sm text-transparent leading-relaxed px-4 py-3 bg-white/5 border border-white/10 rounded-xl blur-sm select-none" aria-hidden="true">
-              Intens rubinrød farge med lilla reflekser. Tette tanniner med god syre og en lang, krydret avslutning.
-            </p>
-          }
-          @if (proLimitReached() && !technicalNotes()) {
-            <div class="absolute inset-0 flex items-center justify-center">
-              <svg class="w-5 h-5 text-cream-dark" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round"
-                  d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
-              </svg>
-            </div>
-          }
-        </div>
-      </div>
-    }
-
-    <!-- Location -->
-    <div>
-      <label class="block text-xs uppercase tracking-wider text-cream-dark mb-1.5 font-medium">
-        Sted
-      </label>
-      @if (locationSet()) {
-        <div class="flex items-center gap-3 px-4 py-3 rounded-xl bg-white/5 border border-white/10">
-          <svg class="w-5 h-5 text-burgundy-light flex-shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
-            <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
+    <!-- ── Catalogue name suggestion banner ───────────────────── -->
+    @if (showSuggestion()) {
+      <div class="mb-5 rounded-2xl border border-gold/30 bg-gold/10 px-5 py-4">
+        <div class="flex items-start gap-3">
+          <svg class="w-5 h-5 text-gold flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 18v-5.25m0 0a6.01 6.01 0 0 0 1.5-.189m-1.5.189a6.01 6.01 0 0 1-1.5-.189m3.75 7.478a12.06 12.06 0 0 1-4.5 0m3.75 2.383a14.406 14.406 0 0 1-3 0M14.25 18v-.192c0-.983.658-1.823 1.508-2.316a7.5 7.5 0 1 0-7.517 0c.85.493 1.509 1.333 1.509 2.316V18" />
           </svg>
           <div class="flex-1 min-w-0">
-            <p class="text-sm text-cream truncate">{{ locationName() }}</p>
-            @if (locationType()) {
-              <p class="text-[10px] text-cream-dark capitalize">{{ locationType() }}</p>
-            }
+            <p class="text-sm font-semibold text-gold leading-snug">
+              Forslag fra vinkatalog
+            </p>
+            <p class="text-xs text-cream-dark mt-1 leading-relaxed">
+              @if (suggestedProducer()) {
+                <span class="font-medium text-cream">{{ suggestedProducer() }}</span>
+              }
+              @if (suggestedProducer() && suggestedName()) { — }
+              @if (suggestedName()) {
+                <span class="font-medium text-cream">{{ suggestedName() }}</span>
+              }
+            </p>
+            <div class="flex gap-2 mt-3">
+              <button
+                type="button"
+                (click)="acceptSuggestion()"
+                class="px-4 py-1.5 rounded-full text-xs font-medium bg-gold/20 text-gold border border-gold/30
+                       hover:bg-gold/30 transition-colors"
+              >
+                Bruk forslag
+              </button>
+              <button
+                type="button"
+                (click)="dismissSuggestion()"
+                class="px-4 py-1.5 rounded-full text-xs font-medium text-cream-dark
+                       hover:text-cream transition-colors"
+              >
+                Behold original
+              </button>
+            </div>
           </div>
-          <button
-            type="button"
-            (click)="clearLocation()"
-            class="text-cream-dark hover:text-cream transition-colors flex-shrink-0"
-            aria-label="Endre sted"
-          >
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125" />
-            </svg>
-          </button>
         </div>
-      } @else {
-        <app-location-search
-          [initialType]="locationType()"
-          (locationSelected)="onLocationSelected($event)"
-          (typeChanged)="locationType.set($event)"
-        />
-      }
-    </div>
-
-    <!-- Error -->
-    @if (wineService.error()) {
-      <div class="rounded-xl px-4 py-3 text-sm text-red-400 bg-red-500/10 border border-red-500/20" role="alert">
-        {{ wineService.error() }}
       </div>
     }
 
-    <!-- Save button -->
-    <button
-      (click)="save()"
-      [disabled]="saving() || !name() || !producer()"
-      class="w-full py-4 rounded-2xl bg-burgundy text-cream text-lg font-semibold
-             shadow-lg shadow-burgundy/25 border border-gold/20
-             transition-all duration-200 active:scale-[0.98] hover:bg-burgundy-light
-             disabled:opacity-40 disabled:cursor-not-allowed"
-    >
-      @if (saving()) {
-        <span class="flex items-center justify-center gap-2">
-          <span class="w-5 h-5 rounded-full border-2 border-cream/30 border-t-cream animate-spin"></span>
-          Lagrer...
-        </span>
-      } @else {
-        <span class="flex items-center justify-center gap-2">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-          </svg>
-          {{ editMode() ? 'Oppdater vin' : 'Lagre vin' }}
-        </span>
+    <!-- ── Pro quota reached banner ──────────────────────────── -->
+    @if (proLimitReached()) {
+      <div class="mb-5 rounded-2xl border border-white/10 bg-white/5 px-5 py-4 flex gap-4 items-start">
+        <svg class="w-6 h-6 text-cream-dark flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round"
+            d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
+        </svg>
+        <div class="flex-1 min-w-0">
+          <p class="text-sm font-semibold text-cream leading-snug">
+            Dagens Pro-kvote er nådd
+          </p>
+          <p class="text-xs text-cream-dark mt-0.5 leading-relaxed">
+            Matparing og smaksnotater er utilgjengelig i dag. Oppgrader for full tilgang.
+          </p>
+        </div>
+      </div>
+    }
+
+    <!-- ── Image Preview ─────────────────────────────────────── -->
+    @if (imageUrl()) {
+      <div class="mb-6 rounded-2xl overflow-hidden">
+        <img
+          [src]="imageUrl()"
+          alt="Skannet etikett"
+          class="w-full h-48 object-cover"
+        />
+      </div>
+    }
+
+    <!-- ── Form ──────────────────────────────────────────────── -->
+    <div class="glass rounded-2xl p-5 space-y-5">
+
+      <!-- ═══ WINE FIELDS (hidden when editScope is 'tasting') ═══ -->
+      @if (editScope() !== 'tasting') {
+
+      <!-- Name -->
+      <div>
+        <label for="wine-name" class="block text-xs uppercase tracking-wider text-cream-dark mb-1.5 font-medium">
+          Navn *
+          @if (editedFields().has('name')) {
+            <span class="ml-1 text-gold text-[10px] normal-case tracking-normal font-normal">(endret)</span>
+          }
+        </label>
+        <input
+          id="wine-name"
+          type="text"
+          [ngModel]="name()"
+          (ngModelChange)="name.set($event)"
+          placeholder="f.eks. Barolo Riserva"
+          class="w-full min-h-12 px-4 rounded-xl bg-white/5 text-cream placeholder-cream-dark/40
+                 focus:border-burgundy-light focus:ring-1 focus:ring-burgundy-light
+                 transition-colors outline-none"
+          [class.border-gold/40]="editedFields().has('name')"
+          [class.border-white/10]="!editedFields().has('name')"
+          [class.border]="true"
+        />
+      </div>
+
+      <!-- Producer -->
+      <div>
+        <label for="wine-producer" class="block text-xs uppercase tracking-wider text-cream-dark mb-1.5 font-medium">
+          Produsent *
+          @if (editedFields().has('producer')) {
+            <span class="ml-1 text-gold text-[10px] normal-case tracking-normal font-normal">(endret)</span>
+          }
+        </label>
+        <input
+          id="wine-producer"
+          type="text"
+          [ngModel]="producer()"
+          (ngModelChange)="producer.set($event)"
+          placeholder="f.eks. Marchesi di Barolo"
+          class="w-full min-h-12 px-4 rounded-xl bg-white/5 text-cream placeholder-cream-dark/40
+                 focus:border-burgundy-light focus:ring-1 focus:ring-burgundy-light
+                 transition-colors outline-none"
+          [class.border-gold/40]="editedFields().has('producer')"
+          [class.border-white/10]="!editedFields().has('producer')"
+          [class.border]="true"
+        />
+      </div>
+
+      <!-- Vintage + Type (side by side) -->
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label for="wine-vintage" class="block text-xs uppercase tracking-wider text-cream-dark mb-1.5 font-medium">
+            Årgang
+            @if (editedFields().has('vintage')) {
+              <span class="ml-1 text-gold text-[10px] normal-case tracking-normal font-normal">(endret)</span>
+            }
+          </label>
+          <input
+            id="wine-vintage"
+            type="number"
+            [ngModel]="vintage()"
+            (ngModelChange)="vintage.set($event)"
+            placeholder="2020"
+            min="1900"
+            max="2030"
+            class="w-full min-h-12 px-4 rounded-xl bg-white/5 text-cream placeholder-cream-dark/40
+                   focus:border-burgundy-light focus:ring-1 focus:ring-burgundy-light
+                   transition-colors outline-none"
+            [class.border-gold/40]="editedFields().has('vintage')"
+            [class.border-white/10]="!editedFields().has('vintage')"
+            [class.border]="true"
+          />
+        </div>
+        <div>
+          <label for="wine-type" class="block text-xs uppercase tracking-wider text-cream-dark mb-1.5 font-medium">
+            Type
+            @if (editedFields().has('type')) {
+              <span class="ml-1 text-gold text-[10px] normal-case tracking-normal font-normal">(endret)</span>
+            }
+          </label>
+          <select
+            id="wine-type"
+            [ngModel]="type()"
+            (ngModelChange)="type.set($event)"
+            class="w-full min-h-12 px-4 rounded-xl bg-white/5 text-cream
+                   focus:border-burgundy-light focus:ring-1 focus:ring-burgundy-light
+                   transition-colors outline-none appearance-none"
+            [class.border-gold/40]="editedFields().has('type')"
+            [class.border-white/10]="!editedFields().has('type')"
+            [class.border]="true"
+          >
+            @for (t of wineTypes; track t) {
+              <option [value]="t" class="bg-cellar-surface text-cream">{{ t }}</option>
+            }
+          </select>
+        </div>
+      </div>
+
+      <!-- Country + Region (side by side) -->
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label for="wine-country" class="block text-xs uppercase tracking-wider text-cream-dark mb-1.5 font-medium">
+            Land
+            @if (editedFields().has('country')) {
+              <span class="ml-1 text-gold text-[10px] normal-case tracking-normal font-normal">(endret)</span>
+            }
+          </label>
+          <input
+            id="wine-country"
+            type="text"
+            [ngModel]="country()"
+            (ngModelChange)="country.set($event)"
+            placeholder="f.eks. Italia"
+            class="w-full min-h-12 px-4 rounded-xl bg-white/5 text-cream placeholder-cream-dark/40
+                   focus:border-burgundy-light focus:ring-1 focus:ring-burgundy-light
+                   transition-colors outline-none"
+            [class.border-gold/40]="editedFields().has('country')"
+            [class.border-white/10]="!editedFields().has('country')"
+            [class.border]="true"
+          />
+        </div>
+        <div>
+          <label for="wine-region" class="block text-xs uppercase tracking-wider text-cream-dark mb-1.5 font-medium">
+            Region
+            @if (editedFields().has('region')) {
+              <span class="ml-1 text-gold text-[10px] normal-case tracking-normal font-normal">(endret)</span>
+            }
+          </label>
+          <input
+            id="wine-region"
+            type="text"
+            [ngModel]="region()"
+            (ngModelChange)="region.set($event)"
+            placeholder="f.eks. Piemonte"
+            class="w-full min-h-12 px-4 rounded-xl bg-white/5 text-cream placeholder-cream-dark/40
+                   focus:border-burgundy-light focus:ring-1 focus:ring-burgundy-light
+                   transition-colors outline-none"
+            [class.border-gold/40]="editedFields().has('region')"
+            [class.border-white/10]="!editedFields().has('region')"
+            [class.border]="true"
+          />
+        </div>
+      </div>
+
+      <!-- Grape Variety + Alcohol (side by side) -->
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label for="wine-grape" class="block text-xs uppercase tracking-wider text-cream-dark mb-1.5 font-medium">
+            Drue
+            @if (editedFields().has('grapeVariety')) {
+              <span class="ml-1 text-gold text-[10px] normal-case tracking-normal font-normal">(endret)</span>
+            }
+          </label>
+          <input
+            id="wine-grape"
+            type="text"
+            [ngModel]="grapeVariety()"
+            (ngModelChange)="grapeVariety.set($event)"
+            placeholder="f.eks. Nebbiolo"
+            class="w-full min-h-12 px-4 rounded-xl bg-white/5 text-cream placeholder-cream-dark/40
+                   focus:border-burgundy-light focus:ring-1 focus:ring-burgundy-light
+                   transition-colors outline-none"
+            [class.border-gold/40]="editedFields().has('grapeVariety')"
+            [class.border-white/10]="!editedFields().has('grapeVariety')"
+            [class.border]="true"
+          />
+        </div>
+        <div>
+          <label for="wine-alcohol" class="block text-xs uppercase tracking-wider text-cream-dark mb-1.5 font-medium">
+            Alkohol
+            @if (editedFields().has('alcoholContent')) {
+              <span class="ml-1 text-gold text-[10px] normal-case tracking-normal font-normal">(endret)</span>
+            }
+          </label>
+          <input
+            id="wine-alcohol"
+            type="text"
+            [ngModel]="alcoholContent()"
+            (ngModelChange)="alcoholContent.set($event)"
+            placeholder="f.eks. 14%"
+            class="w-full min-h-12 px-4 rounded-xl bg-white/5 text-cream placeholder-cream-dark/40
+                   focus:border-burgundy-light focus:ring-1 focus:ring-burgundy-light
+                   transition-colors outline-none"
+            [class.border-gold/40]="editedFields().has('alcoholContent')"
+            [class.border-white/10]="!editedFields().has('alcoholContent')"
+            [class.border]="true"
+          />
+        </div>
+      </div>
+
+      } <!-- end wine fields -->
+
+      <!-- ═══ TASTING FIELDS (hidden when editScope is 'wine') ═══ -->
+      @if (editScope() !== 'wine') {
+
+      <!-- Rating -->
+      <div>
+        <label class="block text-xs uppercase tracking-wider text-cream-dark mb-2 font-medium">
+          Vurdering
+        </label>
+        <app-star-rating [(rating)]="rating" />
+      </div>
+
+      <!-- Tasting date -->
+      <div>
+        <label for="wine-tasted" class="block text-xs uppercase tracking-wider text-cream-dark mb-1.5 font-medium">
+          Smaksdato
+        </label>
+        <input
+          id="wine-tasted"
+          type="date"
+          lang="nb"
+          [ngModel]="tastedAt()"
+          (ngModelChange)="tastedAt.set($event)"
+          class="w-full min-w-0 max-w-full min-h-12 px-4 rounded-xl bg-white/5 text-cream
+                 border border-white/10 focus:border-burgundy-light focus:ring-1 focus:ring-burgundy-light
+                 transition-colors outline-none box-border"
+        />
+      </div>
+
+      <!-- Notes -->
+      <div>
+        <label for="wine-notes" class="block text-xs uppercase tracking-wider text-cream-dark mb-1.5 font-medium">
+          Notater
+        </label>
+        <textarea
+          id="wine-notes"
+          [ngModel]="notes()"
+          (ngModelChange)="notes.set($event)"
+          rows="3"
+          placeholder="Smaksnotater, lukt, anledning..."
+          class="w-full px-4 py-3 rounded-xl bg-white/5 text-cream placeholder-cream-dark/40
+                 border border-white/10 focus:border-burgundy-light focus:ring-1 focus:ring-burgundy-light
+                 transition-colors outline-none resize-none"
+        ></textarea>
+      </div>
+
+      <!-- Location (tasting field) -->
+      <div>
+        <label class="block text-xs uppercase tracking-wider text-cream-dark mb-1.5 font-medium">
+          Sted
+        </label>
+        @if (locationSet()) {
+          <div class="flex items-center gap-3 px-4 py-3 rounded-xl bg-white/5 border border-white/10">
+            <svg class="w-5 h-5 text-burgundy-light flex-shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+              <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
+            </svg>
+            <div class="flex-1 min-w-0">
+              <p class="text-sm text-cream truncate">{{ locationName() }}</p>
+              @if (locationType()) {
+                <p class="text-[10px] text-cream-dark capitalize">{{ locationType() }}</p>
+              }
+            </div>
+            <button
+              type="button"
+              (click)="clearLocation()"
+              class="text-cream-dark hover:text-cream transition-colors flex-shrink-0"
+              aria-label="Endre sted"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125" />
+              </svg>
+            </button>
+          </div>
+        } @else {
+          <app-location-search
+            [initialType]="locationType()"
+            [initialQuery]="locationInitialQuery()"
+            [homeAddress]="homeAddress()"
+            (locationSelected)="onLocationSelected($event)"
+            (typeChanged)="onLocationTypeChanged($event)"
+          />
+        }
+      </div>
+
+      } <!-- end tasting fields -->
+
+      <!-- ═══ PRO ENRICHMENT (wine data, read-only display — hidden when tasting-only) ═══ -->
+      @if (editScope() !== 'tasting') {
+
+      <!-- ── Pro enrichment: Description ──────────────────────── -->
+      @if (description()) {
+        <div>
+          <label class="block text-xs uppercase tracking-wider text-cream-dark mb-1.5 font-medium flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5 text-gold" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M10 1a.75.75 0 0 1 .75.75v1.5a.75.75 0 0 1-1.5 0v-1.5A.75.75 0 0 1 10 1ZM5.05 3.05a.75.75 0 0 1 1.06 0l1.062 1.06A.75.75 0 1 1 6.11 5.173L5.05 4.11a.75.75 0 0 1 0-1.06Zm9.9 0a.75.75 0 0 1 0 1.06l-1.06 1.062a.75.75 0 0 1-1.062-1.061l1.061-1.06a.75.75 0 0 1 1.06 0ZM3 8a.75.75 0 0 1 .75-.75h1.5a.75.75 0 0 1 0 1.5h-1.5A.75.75 0 0 1 3 8Zm11 0a.75.75 0 0 1 .75-.75h1.5a.75.75 0 0 1 0 1.5h-1.5A.75.75 0 0 1 14 8Z" clip-rule="evenodd"/>
+            </svg>
+            Vinbeskrivelse
+          </label>
+          <p class="text-sm text-cream/80 leading-relaxed px-4 py-3 rounded-xl bg-white/5 border border-white/10">
+            {{ description() }}
+          </p>
+        </div>
       }
-    </button>
-  </div>
+
+      <!-- ── Pro enrichment: Food pairings ────────────────────── -->
+      @if (foodPairings()?.length || proLimitReached()) {
+        <div>
+          <label class="block text-xs uppercase tracking-wider text-cream-dark mb-1.5 font-medium flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5 text-gold" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M10 1a.75.75 0 0 1 .75.75v1.5a.75.75 0 0 1-1.5 0v-1.5A.75.75 0 0 1 10 1ZM5.05 3.05a.75.75 0 0 1 1.06 0l1.062 1.06A.75.75 0 1 1 6.11 5.173L5.05 4.11a.75.75 0 0 1 0-1.06Zm9.9 0a.75.75 0 0 1 0 1.06l-1.06 1.062a.75.75 0 0 1-1.062-1.061l1.061-1.06a.75.75 0 0 1 1.06 0ZM3 8a.75.75 0 0 1 .75-.75h1.5a.75.75 0 0 1 0 1.5h-1.5A.75.75 0 0 1 3 8Zm11 0a.75.75 0 0 1 .75-.75h1.5a.75.75 0 0 1 0 1.5h-1.5A.75.75 0 0 1 14 8Z" clip-rule="evenodd"/>
+            </svg>
+            Matparing
+          </label>
+          <div class="relative rounded-xl overflow-hidden">
+            @if (foodPairings()?.length) {
+              <div class="flex flex-wrap gap-2 px-4 py-3 bg-white/5 border border-white/10 rounded-xl">
+                @for (pairing of foodPairings(); track pairing) {
+                  <span class="px-3 py-1 rounded-full text-xs font-medium bg-burgundy/20 text-cream border border-burgundy/30">
+                    {{ pairing }}
+                  </span>
+                }
+              </div>
+            } @else {
+              <!-- Locked placeholder when quota reached but no data -->
+              <div class="px-4 py-3 bg-white/5 border border-white/10 rounded-xl blur-sm select-none" aria-hidden="true">
+                <div class="flex flex-wrap gap-2">
+                  <span class="px-3 py-1 rounded-full text-xs bg-burgundy/20 border border-burgundy/30 text-transparent">Biff og grønnsaker</span>
+                  <span class="px-3 py-1 rounded-full text-xs bg-burgundy/20 border border-burgundy/30 text-transparent">Modnet ost</span>
+                  <span class="px-3 py-1 rounded-full text-xs bg-burgundy/20 border border-burgundy/30 text-transparent">Lammekjøtt</span>
+                </div>
+              </div>
+            }
+            @if (proLimitReached() && !foodPairings()?.length) {
+              <div class="absolute inset-0 flex items-center justify-center">
+                <svg class="w-5 h-5 text-cream-dark" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round"
+                    d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
+                </svg>
+              </div>
+            }
+          </div>
+        </div>
+      }
+
+      <!-- ── Pro enrichment: Technical notes ──────────────────── -->
+      @if (technicalNotes() || proLimitReached()) {
+        <div>
+          <label class="block text-xs uppercase tracking-wider text-cream-dark mb-1.5 font-medium flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5 text-gold" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M10 1a.75.75 0 0 1 .75.75v1.5a.75.75 0 0 1-1.5 0v-1.5A.75.75 0 0 1 10 1ZM5.05 3.05a.75.75 0 0 1 1.06 0l1.062 1.06A.75.75 0 1 1 6.11 5.173L5.05 4.11a.75.75 0 0 1 0-1.06Zm9.9 0a.75.75 0 0 1 0 1.06l-1.06 1.062a.75.75 0 0 1-1.062-1.061l1.061-1.06a.75.75 0 0 1 1.06 0ZM3 8a.75.75 0 0 1 .75-.75h1.5a.75.75 0 0 1 0 1.5h-1.5A.75.75 0 0 1 3 8Zm11 0a.75.75 0 0 1 .75-.75h1.5a.75.75 0 0 1 0 1.5h-1.5A.75.75 0 0 1 14 8Z" clip-rule="evenodd"/>
+            </svg>
+            Tekniske detaljer
+          </label>
+          <div class="relative rounded-xl overflow-hidden">
+            @if (technicalNotes()) {
+              <p class="text-sm text-cream/80 leading-relaxed px-4 py-3 bg-white/5 border border-white/10 rounded-xl">
+                {{ technicalNotes() }}
+              </p>
+            } @else {
+              <p class="text-sm text-transparent leading-relaxed px-4 py-3 bg-white/5 border border-white/10 rounded-xl blur-sm select-none" aria-hidden="true">
+                Intens rubinrød farge med lilla reflekser. Tette tanniner med god syre og en lang, krydret avslutning.
+              </p>
+            }
+            @if (proLimitReached() && !technicalNotes()) {
+              <div class="absolute inset-0 flex items-center justify-center">
+                <svg class="w-5 h-5 text-cream-dark" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round"
+                    d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
+                </svg>
+              </div>
+            }
+          </div>
+        </div>
+      }
+
+      } <!-- end pro enrichment / wine scope -->
+
+      <!-- Error -->
+      @if (wineService.error()) {
+        <div class="rounded-xl px-4 py-3 text-sm text-red-400 bg-red-500/10 border border-red-500/20" role="alert">
+          {{ wineService.error() }}
+        </div>
+      }
+
+      <!-- Save button -->
+      <button
+        (click)="save()"
+        [disabled]="saving() || !name() || !producer()"
+        class="w-full py-4 rounded-2xl bg-burgundy text-cream text-lg font-semibold
+               shadow-lg shadow-burgundy/25 border border-gold/20
+               transition-all duration-200 active:scale-[0.98] hover:bg-burgundy-light
+               disabled:opacity-40 disabled:cursor-not-allowed"
+      >
+        @if (saving()) {
+          <span class="flex items-center justify-center gap-2">
+            <span class="w-5 h-5 rounded-full border-2 border-cream/30 border-t-cream animate-spin"></span>
+            Lagrer...
+          </span>
+        } @else {
+          <span class="flex items-center justify-center gap-2">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+            </svg>
+            {{ editScope() === 'tasting' ? 'Oppdater smakslogg' : editMode() ? 'Oppdater vin' : 'Lagre vin' }}
+          </span>
+        }
+      </button>
+
+      <!-- Report incorrect info button (shown in create mode when linked to existing wine) -->
+      @if (!editMode() && existingWineId) {
+        <button
+          type="button"
+          (click)="showReportModal.set(true)"
+          class="w-full py-3 rounded-xl text-cream-dark text-sm hover:text-cream transition-colors flex items-center justify-center gap-2"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3 3v1.5M3 21v-6m0 0 2.77-.693a9 9 0 0 1 6.208.682l.108.054a9 9 0 0 0 6.086.71l3.114-.732a48.524 48.524 0 0 1-.005-10.499l-3.11.732a9 9 0 0 1-6.085-.711l-.108-.054a9 9 0 0 0-6.208-.682L3 4.5M3 15V4.5" />
+          </svg>
+          Rapporter feil informasjon
+        </button>
+      }
+    </div>
+
+    <!-- ── Report modal ─────────────────────────────────────────── -->
+    @if (showReportModal()) {
+      <div class="fixed inset-0 z-50 flex items-end justify-center bg-black/60" (click)="showReportModal.set(false)">
+        <div class="w-full max-w-lg bg-cellar-surface rounded-t-2xl p-5 space-y-4 animate-slide-up" (click)="$event.stopPropagation()">
+          <h3 class="text-lg font-serif text-cream">Rapporter feil</h3>
+          <p class="text-sm text-cream-dark">Beskriv hva som er feil med vindataen (navn, produsent, type, osv.).</p>
+          <textarea
+            [ngModel]="reportComment()"
+            (ngModelChange)="reportComment.set($event)"
+            rows="3"
+            placeholder="F.eks. 'Feil produsent, skal være Antinori ikke Frescobaldi'"
+            class="w-full px-4 py-3 rounded-xl bg-white/5 text-cream placeholder-cream-dark/40
+                   border border-white/10 focus:border-burgundy-light focus:ring-1 focus:ring-burgundy-light
+                   transition-colors outline-none resize-none"
+          ></textarea>
+          <div class="flex gap-3">
+            <button
+              (click)="submitReport()"
+              [disabled]="reportSubmitting() || !reportComment().trim()"
+              class="flex-1 py-3 rounded-xl bg-burgundy text-cream font-medium
+                     disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+            >
+              @if (reportSubmitting()) {
+                Sender...
+              } @else {
+                Send rapport
+              }
+            </button>
+            <button
+              (click)="showReportModal.set(false)"
+              class="px-6 py-3 rounded-xl glass text-cream-dark hover:text-cream transition-colors"
+            >
+              Avbryt
+            </button>
+          </div>
+        </div>
+      </div>
+    }
+  }
 
 </div>

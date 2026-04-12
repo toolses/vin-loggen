@@ -1,8 +1,10 @@
 using System.Security.Claims;
+using System.Text.Json;
 using Dapper;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Npgsql;
 using VinLoggen.Api.Models;
+using VinLoggen.Api.Services;
 
 namespace VinLoggen.Api.Endpoints;
 
@@ -17,6 +19,18 @@ public static class WineEndpoints
         group.MapGet("/", GetAllWines)
             .WithName("GetWines")
             .WithSummary("List all logged wines for the authenticated user (latest log per wine), newest first");
+
+        group.MapGet("/search", SearchWines)
+            .WithName("SearchWines")
+            .WithSummary("Search the global wine catalogue by name or producer");
+
+        group.MapPost("/save", SaveWine)
+            .WithName("SaveWine")
+            .WithSummary("Smart save: matches or creates wine, inserts log, logs corrections");
+
+        group.MapPost("/{id:guid}/report", ReportWineInfo)
+            .WithName("ReportWineInfo")
+            .WithSummary("Report incorrect information on a wine catalogue entry");
 
         return app;
     }
@@ -74,6 +88,173 @@ public static class WineEndpoints
             logger.LogError(ex, "Database error in GetWines");
             return TypedResults.Problem(
                 detail: "Database unavailable. Check SUPABASE_CONNECTION_STRING.",
+                statusCode: StatusCodes.Status503ServiceUnavailable);
+        }
+    }
+
+    private static async Task<Ok<IEnumerable<WineSearchResult>>> SearchWines(
+        string? q,
+        int?    limit,
+        NpgsqlDataSource dataSource,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(q) || q.Trim().Length < 2)
+        {
+            return TypedResults.Ok(Enumerable.Empty<WineSearchResult>());
+        }
+
+        var search = q.Trim();
+        var max = Math.Clamp(limit ?? 10, 1, 20);
+
+        await using var conn = await dataSource.OpenConnectionAsync(ct);
+
+        var results = await conn.QueryAsync<WineSearchResult>(
+            """
+            SELECT w.id              AS Id,
+                   w.name            AS Name,
+                   w.producer        AS Producer,
+                   w.vintage         AS Vintage,
+                   w.type            AS Type,
+                   w.country         AS Country,
+                   w.region          AS Region,
+                   w.grapes          AS Grapes,
+                   w.alcohol_content AS AlcoholContent
+            FROM wines w
+            WHERE w.name     ILIKE '%' || @Search || '%'
+               OR w.producer ILIKE '%' || @Search || '%'
+            ORDER BY
+                CASE WHEN LOWER(w.name) = LOWER(@Search) OR LOWER(w.producer) = LOWER(@Search)
+                     THEN 0 ELSE 1 END,
+                w.name
+            LIMIT @Limit
+            """,
+            new { Search = search, Limit = max });
+
+        return TypedResults.Ok(results);
+    }
+
+    private static async Task<Results<Ok<WineSaveResponse>, ProblemHttpResult>> SaveWine(
+        WineSaveRequest      request,
+        ClaimsPrincipal      user,
+        WineMatchingService  matchingService,
+        ILogger<Program>     logger,
+        CancellationToken    ct)
+    {
+        var userIdClaim = user.FindFirstValue(ClaimTypes.NameIdentifier)
+                       ?? user.FindFirstValue("sub");
+
+        if (userIdClaim is null || !Guid.TryParse(userIdClaim, out var userId))
+        {
+            return TypedResults.Problem(
+                detail: "Could not resolve user identity from token.",
+                statusCode: StatusCodes.Status401Unauthorized);
+        }
+
+        if (string.IsNullOrWhiteSpace(request.Name) || string.IsNullOrWhiteSpace(request.Producer))
+        {
+            return TypedResults.Problem(
+                detail: "Navn og produsent er påkrevd.",
+                statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        try
+        {
+            var result = await matchingService.SaveAsync(userId, request, ct);
+            return TypedResults.Ok(result);
+        }
+        catch (NpgsqlException ex)
+        {
+            logger.LogError(ex, "Database error in SaveWine for user {UserId}", userId);
+            return TypedResults.Problem(
+                detail: "Database unavailable.",
+                statusCode: StatusCodes.Status503ServiceUnavailable);
+        }
+    }
+
+    private static async Task<Results<NoContent, ProblemHttpResult>> ReportWineInfo(
+        Guid                 id,
+        WineReportRequest    request,
+        ClaimsPrincipal      user,
+        NpgsqlDataSource     dataSource,
+        ILogger<Program>     logger,
+        CancellationToken    ct)
+    {
+        var userIdClaim = user.FindFirstValue(ClaimTypes.NameIdentifier)
+                       ?? user.FindFirstValue("sub");
+
+        if (userIdClaim is null || !Guid.TryParse(userIdClaim, out var userId))
+        {
+            return TypedResults.Problem(
+                detail: "Could not resolve user identity from token.",
+                statusCode: StatusCodes.Status401Unauthorized);
+        }
+
+        if (string.IsNullOrWhiteSpace(request.Comment))
+        {
+            return TypedResults.Problem(
+                detail: "Kommentar er påkrevd.",
+                statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        try
+        {
+            await using var conn = await dataSource.OpenConnectionAsync(ct);
+
+            // Fetch current wine data as original_data snapshot
+            var wine = await conn.QuerySingleOrDefaultAsync<WineRecord>(
+                """
+                SELECT id AS Id, name AS Name, producer AS Producer, vintage AS Vintage,
+                       type AS Type, country AS Country, region AS Region,
+                       grapes AS Grapes, alcohol_content AS AlcoholContent,
+                       external_source_id AS ExternalSourceId, created_at AS CreatedAt
+                FROM wines WHERE id = @Id
+                """,
+                new { Id = id });
+
+            if (wine is null)
+            {
+                return TypedResults.Problem(
+                    detail: "Fant ikke vinen.",
+                    statusCode: StatusCodes.Status404NotFound);
+            }
+
+            var originalData = JsonSerializer.Serialize(new
+            {
+                name = wine.Name,
+                producer = wine.Producer,
+                vintage = wine.Vintage,
+                type = wine.Type,
+                country = wine.Country,
+                region = wine.Region,
+            });
+
+            var correctedData = JsonSerializer.Serialize(new
+            {
+                comment = request.Comment,
+                fieldName = request.FieldName,
+            });
+
+            await conn.ExecuteAsync(
+                """
+                INSERT INTO data_corrections (user_id, wine_id, source, original_data, corrected_data, comment)
+                VALUES (@UserId, @WineId, 'manual', @OriginalData::jsonb, @CorrectedData::jsonb, @Comment)
+                """,
+                new
+                {
+                    UserId       = userId,
+                    WineId       = id,
+                    OriginalData = originalData,
+                    CorrectedData = correctedData,
+                    request.Comment,
+                });
+
+            return TypedResults.NoContent();
+        }
+        catch (NpgsqlException ex)
+        {
+            logger.LogError(ex, "Database error in ReportWineInfo for wine {WineId}", id);
+            return TypedResults.Problem(
+                detail: "Database unavailable.",
                 statusCode: StatusCodes.Status503ServiceUnavailable);
         }
     }

@@ -8,7 +8,7 @@ import {
   signal,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { LocationService, Place } from '../../services/location.service';
+import { LocationService, PlaceSuggestion } from '../../services/location.service';
 
 export interface LocationSelection {
   name: string;
@@ -35,11 +35,14 @@ export class LocationSearchComponent implements OnInit, OnDestroy {
   /** Pre-select a location type (e.g. when re-editing a saved location) */
   readonly initialType = input<string | null>(null);
 
+  /** Pre-fill the search input (e.g. when re-editing an already-set location) */
+  readonly initialQuery = input<string | null>(null);
+
   readonly locationSelected = output<LocationSelection>();
   readonly typeChanged = output<string>();
 
   protected readonly query = signal('');
-  protected readonly results = signal<Place[]>([]);
+  protected readonly results = signal<PlaceSuggestion[]>([]);
   protected readonly searching = signal(false);
   protected readonly locating = signal(false);
   protected readonly locationType = signal('restaurant');
@@ -47,7 +50,7 @@ export class LocationSearchComponent implements OnInit, OnDestroy {
 
   protected readonly locationTypes = [
     { value: 'restaurant', label: 'Restaurant', icon: '🍷' },
-    { value: 'butikk', label: 'Butikk', icon: '🛒' },
+    { value: 'bar', label: 'Bar', icon: '🍸' },
     { value: 'hjemme', label: 'Hjemme', icon: '🏠' },
     { value: 'annet', label: 'Annet', icon: '📍' },
   ];
@@ -58,6 +61,8 @@ export class LocationSearchComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     const type = this.initialType();
     if (type) this.locationType.set(type);
+    const q = this.initialQuery();
+    if (q) this.query.set(q);
   }
 
   protected onQueryChange(value: string): void {
@@ -82,15 +87,22 @@ export class LocationSearchComponent implements OnInit, OnDestroy {
     }
   }
 
-  protected selectPlace(place: Place): void {
-    this.query.set(place.name);
+  protected async selectPlace(suggestion: PlaceSuggestion): Promise<void> {
+    this.query.set(suggestion.name);
     this.results.set([]);
-    this.locationSelected.emit({
-      name: place.name,
-      lat: place.lat,
-      lng: place.lng,
-      type: this.locationType(),
-    });
+    this.searching.set(true);
+    try {
+      const place = await this.locationService.retrievePlace(suggestion.place_id);
+      if (!place) return;
+      this.locationSelected.emit({
+        name: place.name,
+        lat: place.lat,
+        lng: place.lng,
+        type: this.locationType(),
+      });
+    } finally {
+      this.searching.set(false);
+    }
   }
 
   protected async useCurrentLocation(): Promise<void> {
@@ -132,6 +144,10 @@ export class LocationSearchComponent implements OnInit, OnDestroy {
   protected onTypeChange(type: string): void {
     this.locationType.set(type);
     this.typeChanged.emit(type);
+    // If the user picks "Hjemme" and a home address is registered, auto-fill it.
+    if (type === 'hjemme' && this.homeAddress()) {
+      this.useHomeAddress();
+    }
   }
 
   ngOnDestroy(): void {

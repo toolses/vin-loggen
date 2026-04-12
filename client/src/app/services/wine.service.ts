@@ -99,11 +99,72 @@ export interface WineAnalysisResult {
   description: string | null;
   technicalNotes: string | null;
   externalSourceId: string | null;
+  // Name suggestions from catalogue match
+  suggestedName: string | null;
+  suggestedProducer: string | null;
   // Quota metadata (always returned for UI)
   proLimitReached: boolean;
   proScansToday: number;
   dailyProLimit: number;
   isPro: boolean;
+}
+
+/** Lightweight wine record returned by the search endpoint */
+export interface WineSearchResult {
+  id: string;
+  name: string;
+  producer: string;
+  vintage: number | null;
+  type: string;
+  country: string | null;
+  region: string | null;
+  grapes: string[] | null;
+  alcoholContent: number | null;
+}
+
+/** Payload for POST /api/wines/save (smart matching + correction tracking) */
+export interface WineSavePayload {
+  name: string;
+  producer: string;
+  vintage: number | null;
+  type: string;
+  country: string | null;
+  region: string | null;
+  grapes: string[] | null;
+  alcoholContent: number | null;
+  externalSourceId: string | null;
+  foodPairings: string[] | null;
+  description: string | null;
+  technicalNotes: string | null;
+  originalData: {
+    name: string | null;
+    producer: string | null;
+    vintage: number | null;
+    type: string | null;
+    country: string | null;
+    region: string | null;
+    grapes: string[] | null;
+    alcoholContent: number | null;
+    source: string;
+  } | null;
+  existingWineId: string | null;
+  rating: number | null;
+  notes: string | null;
+  imageUrl: string | null;
+  thumbnailUrl: string | null;
+  tastedAt: string | null;
+  locationName: string | null;
+  locationLat: number | null;
+  locationLng: number | null;
+  locationType: string | null;
+}
+
+/** Response from POST /api/wines/save */
+export interface WineSaveResult {
+  wineId: string;
+  logId: string;
+  correctionLogged: boolean;
+  newWineCreated: boolean;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -190,7 +251,65 @@ export class WineService {
     return data as WineLog;
   }
 
-  // ── Write ───────────────────────────────────────────────────────────────────
+  // ── Search ──────────────────────────────────────────────────────────────────
+
+  /** Searches the global wine catalogue by name or producer. */
+  async searchWines(query: string): Promise<WineSearchResult[]> {
+    try {
+      const res = await firstValueFrom(
+        this.http.get<WineSearchResult[]>('/api/wines/search', {
+          params: { q: query },
+        }),
+      );
+      return res ?? [];
+    } catch {
+      return [];
+    }
+  }
+
+  // ── Smart Save (via backend endpoint) ──────────────────────────────────────
+
+  /**
+   * Saves via POST /api/wines/save with smart matching + correction tracking.
+   * Replaces the client-side addWine() for create flows.
+   */
+  async saveWine(payload: WineSavePayload): Promise<WineSaveResult | null> {
+    this._processing.set(true);
+    this._error.set(null);
+    try {
+      const result = await firstValueFrom(
+        this.http.post<WineSaveResult>(`${environment.apiBaseUrl}/wines/save`, payload),
+      );
+      await this.loadWines();
+      return result;
+    } catch (err: unknown) {
+      const httpErr = err as { error?: { detail?: string }; status?: number };
+      const detail = httpErr?.error?.detail
+        ?? (err instanceof Error ? err.message : 'Kunne ikke lagre vinen');
+      this._error.set(detail);
+      this.notifications.error(detail);
+      return null;
+    } finally {
+      this._processing.set(false);
+    }
+  }
+
+  /** Reports incorrect information on a wine catalogue entry. */
+  async reportWine(wineId: string, comment: string, fieldName?: string): Promise<boolean> {
+    try {
+      await firstValueFrom(
+        this.http.post(`${environment.apiBaseUrl}/wines/${wineId}/report`, {
+          comment,
+          fieldName: fieldName ?? null,
+        }),
+      );
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  // ── Write (legacy – retained for edit mode) ───────────────────────────────
 
   /**
    * Saves a new tasting entry.

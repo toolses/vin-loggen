@@ -29,10 +29,11 @@
         <div class="relative w-full" style="padding-bottom: 130%;">
           <div
             class="absolute inset-0 origin-top-left"
-            style="width: 400px; height: 520px; transform: scale(0.7);"
-            #shareCard
+            style="transform: scale(0.7);"
           >
-            <app-wine-share-card [wine]="wine()" />
+            <div #shareCard style="width: 400px; height: 520px;">
+              <app-wine-share-card [wine]="wine()" />
+            </div>
           </div>
         </div>
       </div>

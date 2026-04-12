@@ -1,6 +1,8 @@
 <div class="h-dvh overflow-hidden overscroll-y-none bg-cellar-bg flex flex-col">
-  <div class="flex-1 overflow-y-auto overscroll-y-none" style="padding-bottom: calc(4rem + env(safe-area-inset-bottom))">
+  <div class="flex-1 overflow-y-auto overscroll-y-none">
     <router-outlet />
+    <!-- Spacer so fixed bottom nav never covers page content (more reliable than padding-bottom on the scroll container, which Safari ignores) -->
+    <div class="shrink-0" aria-hidden="true" style="height: calc(4rem + env(safe-area-inset-bottom))"></div>
   </div>
 </div>
 <app-navigation />

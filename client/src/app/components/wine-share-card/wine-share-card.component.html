@@ -5,7 +5,7 @@
 >
   <!-- Header -->
   <div class="px-6 pt-5 pb-3 flex items-center justify-between">
-    <span class="text-gold text-xs font-semibold tracking-wider uppercase">VinLoggen</span>
+    <span class="text-gold text-xs font-semibold tracking-wider uppercase">Vinjournalen</span>
     <span class="text-cream-dark/40 text-[10px]">🍷</span>
   </div>
 
@@ -51,23 +51,11 @@
       }
     </div>
 
-    <!-- Technical details (grapes, alcohol, food pairings) -->
-    @if (wine().grapes?.length || wine().alcohol_content != null || wine().food_pairings?.length) {
-      <div class="mt-2.5 flex flex-wrap gap-x-2.5 gap-y-1 items-center">
-        @if (wine().grapes?.length) {
-          <span class="text-[10px] text-cream-dark/70 truncate max-w-[200px]">
-            {{ wine().grapes!.slice(0, 3).join(' · ') }}
-          </span>
-        }
-        @if (wine().alcohol_content != null) {
-          <span class="text-[10px] text-cream-dark/50">{{ wine().alcohol_content }}%</span>
-        }
-        @if (wine().food_pairings?.length) {
-          <span class="text-[10px] text-cream-dark/50 italic truncate max-w-[160px]">
-            {{ wine().food_pairings!.slice(0, 2).join(', ') }}
-          </span>
-        }
-      </div>
+    <!-- Tekniske detaljer (same field as wine-detail view) -->
+    @if (wine().technical_notes) {
+      <p class="mt-2.5 text-[10px] text-cream-dark/60 leading-snug line-clamp-3">
+        {{ wine().technical_notes }}
+      </p>
     }
 
     <!-- Rating -->
@@ -91,7 +79,7 @@
         {{ wine().location_name }}
       </span>
     } @else {
-      <span class="text-cream-dark/30 text-[10px]">vinloggen.no</span>
+      <span class="text-cream-dark/30 text-[10px]">vinjournalen.no</span>
     }
     <span class="text-cream-dark/30 text-[10px]">{{ wine().created_at | slice:0:10 }}</span>
   </div>

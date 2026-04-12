@@ -1,4 +1,4 @@
-<div class="fixed inset-0 bg-black z-40 flex flex-col">
+<div class="fixed inset-0 bg-black z-[60] flex flex-col">
 
   <!-- ── Hidden canvas & file input ────────────────────────── -->
   <canvas #canvasEl class="hidden"></canvas>
@@ -125,17 +125,27 @@
 
       } @else {
         <!-- Not capturing: Idle / Review state -->
-        <div class="flex-1 flex flex-col items-center justify-center h-full bg-cellar-bg px-6 text-center">
+        <div class="flex-1 flex flex-col items-center justify-center h-full bg-cellar-bg px-6 text-center" style="padding-bottom: env(safe-area-inset-bottom)">
 
           @if (cameraError()) {
             <div class="text-5xl mb-4" aria-hidden="true">📷</div>
             <p class="text-cream mb-2 font-serif text-lg">Kamera utilgjengelig</p>
             <p class="text-cream-dark text-sm mb-6">{{ cameraError() }}</p>
           } @else if (step() === 'idle') {
-            <!-- Initial state: nothing captured -->
-            <div class="text-6xl mb-6" aria-hidden="true">📸</div>
-            <p class="text-cream font-serif text-xl mb-2">Klar til å skanne</p>
-            <p class="text-cream-dark text-sm mb-8">Ta bilde av forsiden og eventuelt baksiden av flasken</p>
+            @if (auth.isLoggedIn() && profileService.proScansRemaining() === 0) {
+              <!-- Out of AI scans -->
+              <div class="text-5xl mb-4" aria-hidden="true">🚫</div>
+              <p class="text-cream font-serif text-xl mb-2">Ingen skanninger igjen</p>
+              <p class="text-cream-dark text-sm mb-8">
+                Du har brukt opp dine {{ profileService.dailyProLimit() }} daglige
+                AI-skanninger. Kvoten nullstilles ved midnatt.
+              </p>
+            } @else {
+              <!-- Normal scan prompt -->
+              <div class="text-6xl mb-6" aria-hidden="true">📸</div>
+              <p class="text-cream font-serif text-xl mb-2">Klar til å skanne</p>
+              <p class="text-cream-dark text-sm mb-8">Ta bilde av forsiden og eventuelt baksiden av flasken</p>
+            }
           } @else {
             <!-- Review state: front captured, optionally back too -->
             <div class="flex gap-4 mb-6">
@@ -184,20 +194,31 @@
           <!-- Action buttons -->
           <div class="flex flex-col gap-3 w-full max-w-xs">
             @if (step() === 'idle') {
-              <button
-                (click)="startCamera()"
-                class="w-full py-3.5 rounded-2xl bg-burgundy text-cream font-semibold
-                       transition-all duration-200 active:scale-[0.98] hover:bg-burgundy-light"
-              >
-                Åpne kamera
-              </button>
-              <button
-                (click)="triggerFileInput('front')"
-                class="w-full py-3.5 rounded-2xl glass text-cream font-medium
-                       transition-all duration-200 active:scale-[0.98] hover:bg-white/10"
-              >
-                Velg fra galleri
-              </button>
+              @if (auth.isLoggedIn() && profileService.proScansRemaining() === 0) {
+                <!-- Quota depleted: offer manual entry instead -->
+                <button
+                  (click)="navigateToManualEntry()"
+                  class="w-full py-3.5 rounded-2xl bg-burgundy text-cream font-semibold
+                         transition-all duration-200 active:scale-[0.98] hover:bg-burgundy-light"
+                >
+                  Registrer manuelt
+                </button>
+              } @else {
+                <button
+                  (click)="startCamera()"
+                  class="w-full py-3.5 rounded-2xl bg-burgundy text-cream font-semibold
+                         transition-all duration-200 active:scale-[0.98] hover:bg-burgundy-light"
+                >
+                  Åpne kamera
+                </button>
+                <button
+                  (click)="triggerFileInput('front')"
+                  class="w-full py-3.5 rounded-2xl glass text-cream font-medium
+                         transition-all duration-200 active:scale-[0.98] hover:bg-white/10"
+                >
+                  Velg fra galleri
+                </button>
+              }
             }
 
             @if (step() === 'back' && !cameraActive()) {
@@ -241,7 +262,7 @@
 
     <!-- ── Capture controls (camera active) ────────────────────── -->
     @if (cameraActive()) {
-      <div class="flex items-center justify-center gap-8 py-6 bg-black/80" style="padding-bottom: calc(1.5rem + var(--sab))">
+      <div class="flex items-center justify-center gap-8 py-6 bg-black/80" style="padding-bottom: calc(1.5rem + env(safe-area-inset-bottom))">
         <!-- Gallery button -->
         <button
           (click)="triggerFileInput(step() === 'front' ? 'front' : 'back')"

@@ -5,7 +5,7 @@
 >
   <!-- Header -->
   <div class="px-6 pt-5 pb-3 flex items-center justify-between">
-    <span class="text-gold text-xs font-semibold tracking-wider uppercase">VinLoggen</span>
+    <span class="text-gold text-xs font-semibold tracking-wider uppercase">VinSomm</span>
     <span class="text-cream-dark/40 text-[10px]">🍷</span>
   </div>
 
@@ -51,6 +51,13 @@
       }
     </div>
 
+    <!-- Tekniske detaljer (same field as wine-detail view) -->
+    @if (wine().technical_notes) {
+      <p class="mt-2.5 text-[10px] text-cream-dark/60 leading-snug line-clamp-3">
+        {{ wine().technical_notes }}
+      </p>
+    }
+
     <!-- Rating -->
     @if (wine().rating != null) {
       <div class="mt-auto pt-3 flex items-center gap-2">
@@ -72,7 +79,7 @@
         {{ wine().location_name }}
       </span>
     } @else {
-      <span class="text-cream-dark/30 text-[10px]">vinloggen.no</span>
+      <span class="text-cream-dark/30 text-[10px]">vinsomm.no</span>
     }
     <span class="text-cream-dark/30 text-[10px]">{{ wine().created_at | slice:0:10 }}</span>
   </div>

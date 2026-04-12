@@ -66,11 +66,13 @@ export class ProfileComponent implements OnInit {
     this.wineService.loadWines();
     this.profileService.loadProfile();
     this.profileService.loadHomeAddress();
+    this.profileService.loadProQuota();
   }
 
   protected async regenerateInsight(): Promise<void> {
     this.regenerating.set(true);
     await this.profileService.regenerateProfile();
+    await this.profileService.loadProQuota();
     this.regenerating.set(false);
   }
 

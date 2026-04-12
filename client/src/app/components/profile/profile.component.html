@@ -205,12 +205,41 @@
     }
   </section>
 
+  <!-- ── AI Quota ─────────────────────────────────────────── -->
+  <section class="mb-8">
+    <h2 class="font-serif text-lg text-cream mb-4 flex items-center gap-2">
+      <svg class="w-5 h-5 text-gold" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
+      </svg>
+      AI-kvote
+    </h2>
+    <div class="glass rounded-2xl p-5">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-sm text-cream">Forespørsler igjen i dag</span>
+        <span class="font-bold" [class.text-gold]="profileService.proScansRemaining() > 0" [class.text-red-400]="profileService.proScansRemaining() === 0">
+          {{ profileService.proScansRemaining() }}/{{ profileService.dailyProLimit() }}
+        </span>
+      </div>
+      <div class="h-1.5 bg-white/10 rounded-full overflow-hidden">
+        <div
+          class="h-full rounded-full transition-all duration-500"
+          [class.bg-gold]="profileService.proScansRemaining() > 0"
+          [class.bg-red-500]="profileService.proScansRemaining() === 0"
+          [style.width.%]="(profileService.proScansRemaining() / profileService.dailyProLimit()) * 100"
+        ></div>
+      </div>
+      <p class="text-xs text-cream-dark mt-2">
+        Brukes ved etikettskanninger og regenerering av smaksprofil. Nullstilles ved midnatt.
+      </p>
+    </div>
+  </section>
+
   <!-- ── Actions ───────────────────────────────────────────── -->
   <div class="space-y-3">
     <!-- Regenerate -->
     <button
       (click)="regenerateInsight()"
-      [disabled]="regenerating() || profileService.loading()"
+      [disabled]="regenerating() || profileService.loading() || profileService.proScansRemaining() === 0"
       class="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-xl
              bg-burgundy text-cream font-medium text-sm
              hover:bg-burgundy-light active:scale-[0.98] transition-all duration-200

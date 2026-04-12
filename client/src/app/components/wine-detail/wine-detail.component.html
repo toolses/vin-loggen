@@ -323,7 +323,8 @@
 @if (wine(); as w) {
   @if (showDeleteConfirm()) {
     <div
-      class="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in"
+      class="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in"
+      style="padding-bottom: calc(1rem + 4rem + env(safe-area-inset-bottom))"
       (click)="showDeleteConfirm.set(false)"
     >
       <div

@@ -2,6 +2,7 @@ import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { AdminUsageService, type DailyUsageRow } from '../../../services/admin-usage.service';
 import { AdminWineService } from '../../../services/admin-wine.service';
+import { AdminCorrectionService } from '../../../services/admin-correction.service';
 import { NotificationService } from '../../../services/notification.service';
 
 @Component({
@@ -13,9 +14,11 @@ import { NotificationService } from '../../../services/notification.service';
 export class AdminDashboardComponent implements OnInit {
   protected readonly usageService = inject(AdminUsageService);
   protected readonly wineService = inject(AdminWineService);
+  protected readonly correctionService = inject(AdminCorrectionService);
   private readonly notificationService = inject(NotificationService);
 
   protected readonly totalWines = signal(0);
+  protected readonly totalCorrections = signal(0);
   protected readonly resetting = signal(false);
   protected readonly showResetConfirm = signal(false);
 
@@ -35,8 +38,10 @@ export class AdminDashboardComponent implements OnInit {
       this.usageService.loadTodayUsage(),
       this.usageService.loadDailyUsage(30),
       this.wineService.loadWines({ page: 1, pageSize: 1 }),
+      this.correctionService.loadCorrections({ page: 1, pageSize: 1 }),
     ]);
     this.totalWines.set(this.wineService.totalCount());
+    this.totalCorrections.set(this.correctionService.totalCount());
   }
 
   formatDate(dateStr: string): string {

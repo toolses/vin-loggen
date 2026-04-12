@@ -185,35 +185,26 @@
       <!-- ═══ WINE FIELDS (hidden when editScope is 'tasting') ═══ -->
       @if (editScope() !== 'tasting') {
 
-      <!-- Catalogue wine info banner -->
-      @if (catalogueWine()) {
-        <div class="rounded-xl px-4 py-3 bg-white/5 border border-white/10 flex items-start gap-3">
-          <svg class="w-5 h-5 text-gold flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 0 1-1.043 3.296 3.745 3.745 0 0 1-3.296 1.043A3.745 3.745 0 0 1 12 21c-1.268 0-2.39-.63-3.068-1.593a3.746 3.746 0 0 1-3.296-1.043 3.745 3.745 0 0 1-1.043-3.296A3.745 3.745 0 0 1 3 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 0 1 1.043-3.296 3.746 3.746 0 0 1 3.296-1.043A3.746 3.746 0 0 1 12 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 0 1 3.296 1.043 3.745 3.745 0 0 1 1.043 3.296A3.745 3.745 0 0 1 21 12Z" />
-          </svg>
-          <p class="text-xs text-cream-dark leading-relaxed">
-            Vin hentet fra katalogen – fyll inn din smaksopplevelse nedenfor.
-          </p>
-        </div>
-      }
-
       <!-- Name -->
       <div>
         <label for="wine-name" class="block text-xs uppercase tracking-wider text-cream-dark mb-1.5 font-medium">
           Navn *
+          @if (editedFields().has('name')) {
+            <span class="ml-1 text-gold text-[10px] normal-case tracking-normal font-normal">(endret)</span>
+          }
         </label>
         <input
           id="wine-name"
           type="text"
           [ngModel]="name()"
           (ngModelChange)="name.set($event)"
-          [readonly]="catalogueWine()"
           placeholder="f.eks. Barolo Riserva"
           class="w-full min-h-12 px-4 rounded-xl bg-white/5 text-cream placeholder-cream-dark/40
-                 border border-white/10 focus:border-burgundy-light focus:ring-1 focus:ring-burgundy-light
+                 focus:border-burgundy-light focus:ring-1 focus:ring-burgundy-light
                  transition-colors outline-none"
-          [class.opacity-60]="catalogueWine()"
-          [class.cursor-not-allowed]="catalogueWine()"
+          [class.border-gold/40]="editedFields().has('name')"
+          [class.border-white/10]="!editedFields().has('name')"
+          [class.border]="true"
         />
       </div>
 
@@ -221,19 +212,22 @@
       <div>
         <label for="wine-producer" class="block text-xs uppercase tracking-wider text-cream-dark mb-1.5 font-medium">
           Produsent *
+          @if (editedFields().has('producer')) {
+            <span class="ml-1 text-gold text-[10px] normal-case tracking-normal font-normal">(endret)</span>
+          }
         </label>
         <input
           id="wine-producer"
           type="text"
           [ngModel]="producer()"
           (ngModelChange)="producer.set($event)"
-          [readonly]="catalogueWine()"
           placeholder="f.eks. Marchesi di Barolo"
           class="w-full min-h-12 px-4 rounded-xl bg-white/5 text-cream placeholder-cream-dark/40
-                 border border-white/10 focus:border-burgundy-light focus:ring-1 focus:ring-burgundy-light
+                 focus:border-burgundy-light focus:ring-1 focus:ring-burgundy-light
                  transition-colors outline-none"
-          [class.opacity-60]="catalogueWine()"
-          [class.cursor-not-allowed]="catalogueWine()"
+          [class.border-gold/40]="editedFields().has('producer')"
+          [class.border-white/10]="!editedFields().has('producer')"
+          [class.border]="true"
         />
       </div>
 
@@ -242,37 +236,43 @@
         <div>
           <label for="wine-vintage" class="block text-xs uppercase tracking-wider text-cream-dark mb-1.5 font-medium">
             Årgang
+            @if (editedFields().has('vintage')) {
+              <span class="ml-1 text-gold text-[10px] normal-case tracking-normal font-normal">(endret)</span>
+            }
           </label>
           <input
             id="wine-vintage"
             type="number"
             [ngModel]="vintage()"
             (ngModelChange)="vintage.set($event)"
-            [readonly]="catalogueWine()"
             placeholder="2020"
             min="1900"
             max="2030"
             class="w-full min-h-12 px-4 rounded-xl bg-white/5 text-cream placeholder-cream-dark/40
-                   border border-white/10 focus:border-burgundy-light focus:ring-1 focus:ring-burgundy-light
+                   focus:border-burgundy-light focus:ring-1 focus:ring-burgundy-light
                    transition-colors outline-none"
-            [class.opacity-60]="catalogueWine()"
-            [class.cursor-not-allowed]="catalogueWine()"
+            [class.border-gold/40]="editedFields().has('vintage')"
+            [class.border-white/10]="!editedFields().has('vintage')"
+            [class.border]="true"
           />
         </div>
         <div>
           <label for="wine-type" class="block text-xs uppercase tracking-wider text-cream-dark mb-1.5 font-medium">
             Type
+            @if (editedFields().has('type')) {
+              <span class="ml-1 text-gold text-[10px] normal-case tracking-normal font-normal">(endret)</span>
+            }
           </label>
           <select
             id="wine-type"
             [ngModel]="type()"
             (ngModelChange)="type.set($event)"
-            [disabled]="catalogueWine()"
             class="w-full min-h-12 px-4 rounded-xl bg-white/5 text-cream
-                   border border-white/10 focus:border-burgundy-light focus:ring-1 focus:ring-burgundy-light
+                   focus:border-burgundy-light focus:ring-1 focus:ring-burgundy-light
                    transition-colors outline-none appearance-none"
-            [class.opacity-60]="catalogueWine()"
-            [class.cursor-not-allowed]="catalogueWine()"
+            [class.border-gold/40]="editedFields().has('type')"
+            [class.border-white/10]="!editedFields().has('type')"
+            [class.border]="true"
           >
             @for (t of wineTypes; track t) {
               <option [value]="t" class="bg-cellar-surface text-cream">{{ t }}</option>
@@ -286,37 +286,43 @@
         <div>
           <label for="wine-country" class="block text-xs uppercase tracking-wider text-cream-dark mb-1.5 font-medium">
             Land
+            @if (editedFields().has('country')) {
+              <span class="ml-1 text-gold text-[10px] normal-case tracking-normal font-normal">(endret)</span>
+            }
           </label>
           <input
             id="wine-country"
             type="text"
             [ngModel]="country()"
             (ngModelChange)="country.set($event)"
-            [readonly]="catalogueWine()"
             placeholder="f.eks. Italia"
             class="w-full min-h-12 px-4 rounded-xl bg-white/5 text-cream placeholder-cream-dark/40
-                   border border-white/10 focus:border-burgundy-light focus:ring-1 focus:ring-burgundy-light
+                   focus:border-burgundy-light focus:ring-1 focus:ring-burgundy-light
                    transition-colors outline-none"
-            [class.opacity-60]="catalogueWine()"
-            [class.cursor-not-allowed]="catalogueWine()"
+            [class.border-gold/40]="editedFields().has('country')"
+            [class.border-white/10]="!editedFields().has('country')"
+            [class.border]="true"
           />
         </div>
         <div>
           <label for="wine-region" class="block text-xs uppercase tracking-wider text-cream-dark mb-1.5 font-medium">
             Region
+            @if (editedFields().has('region')) {
+              <span class="ml-1 text-gold text-[10px] normal-case tracking-normal font-normal">(endret)</span>
+            }
           </label>
           <input
             id="wine-region"
             type="text"
             [ngModel]="region()"
             (ngModelChange)="region.set($event)"
-            [readonly]="catalogueWine()"
             placeholder="f.eks. Piemonte"
             class="w-full min-h-12 px-4 rounded-xl bg-white/5 text-cream placeholder-cream-dark/40
-                   border border-white/10 focus:border-burgundy-light focus:ring-1 focus:ring-burgundy-light
+                   focus:border-burgundy-light focus:ring-1 focus:ring-burgundy-light
                    transition-colors outline-none"
-            [class.opacity-60]="catalogueWine()"
-            [class.cursor-not-allowed]="catalogueWine()"
+            [class.border-gold/40]="editedFields().has('region')"
+            [class.border-white/10]="!editedFields().has('region')"
+            [class.border]="true"
           />
         </div>
       </div>
@@ -326,37 +332,43 @@
         <div>
           <label for="wine-grape" class="block text-xs uppercase tracking-wider text-cream-dark mb-1.5 font-medium">
             Drue
+            @if (editedFields().has('grapeVariety')) {
+              <span class="ml-1 text-gold text-[10px] normal-case tracking-normal font-normal">(endret)</span>
+            }
           </label>
           <input
             id="wine-grape"
             type="text"
             [ngModel]="grapeVariety()"
             (ngModelChange)="grapeVariety.set($event)"
-            [readonly]="catalogueWine()"
             placeholder="f.eks. Nebbiolo"
             class="w-full min-h-12 px-4 rounded-xl bg-white/5 text-cream placeholder-cream-dark/40
-                   border border-white/10 focus:border-burgundy-light focus:ring-1 focus:ring-burgundy-light
+                   focus:border-burgundy-light focus:ring-1 focus:ring-burgundy-light
                    transition-colors outline-none"
-            [class.opacity-60]="catalogueWine()"
-            [class.cursor-not-allowed]="catalogueWine()"
+            [class.border-gold/40]="editedFields().has('grapeVariety')"
+            [class.border-white/10]="!editedFields().has('grapeVariety')"
+            [class.border]="true"
           />
         </div>
         <div>
           <label for="wine-alcohol" class="block text-xs uppercase tracking-wider text-cream-dark mb-1.5 font-medium">
             Alkohol
+            @if (editedFields().has('alcoholContent')) {
+              <span class="ml-1 text-gold text-[10px] normal-case tracking-normal font-normal">(endret)</span>
+            }
           </label>
           <input
             id="wine-alcohol"
             type="text"
             [ngModel]="alcoholContent()"
             (ngModelChange)="alcoholContent.set($event)"
-            [readonly]="catalogueWine()"
             placeholder="f.eks. 14%"
             class="w-full min-h-12 px-4 rounded-xl bg-white/5 text-cream placeholder-cream-dark/40
-                   border border-white/10 focus:border-burgundy-light focus:ring-1 focus:ring-burgundy-light
+                   focus:border-burgundy-light focus:ring-1 focus:ring-burgundy-light
                    transition-colors outline-none"
-            [class.opacity-60]="catalogueWine()"
-            [class.cursor-not-allowed]="catalogueWine()"
+            [class.border-gold/40]="editedFields().has('alcoholContent')"
+            [class.border-white/10]="!editedFields().has('alcoholContent')"
+            [class.border]="true"
           />
         </div>
       </div>
@@ -569,7 +581,60 @@
           </span>
         }
       </button>
+
+      <!-- Report incorrect info button (shown in create mode when linked to existing wine) -->
+      @if (!editMode() && existingWineId) {
+        <button
+          type="button"
+          (click)="showReportModal.set(true)"
+          class="w-full py-3 rounded-xl text-cream-dark text-sm hover:text-cream transition-colors flex items-center justify-center gap-2"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3 3v1.5M3 21v-6m0 0 2.77-.693a9 9 0 0 1 6.208.682l.108.054a9 9 0 0 0 6.086.71l3.114-.732a48.524 48.524 0 0 1-.005-10.499l-3.11.732a9 9 0 0 1-6.085-.711l-.108-.054a9 9 0 0 0-6.208-.682L3 4.5M3 15V4.5" />
+          </svg>
+          Rapporter feil informasjon
+        </button>
+      }
     </div>
+
+    <!-- ── Report modal ─────────────────────────────────────────── -->
+    @if (showReportModal()) {
+      <div class="fixed inset-0 z-50 flex items-end justify-center bg-black/60" (click)="showReportModal.set(false)">
+        <div class="w-full max-w-lg bg-cellar-surface rounded-t-2xl p-5 space-y-4 animate-slide-up" (click)="$event.stopPropagation()">
+          <h3 class="text-lg font-serif text-cream">Rapporter feil</h3>
+          <p class="text-sm text-cream-dark">Beskriv hva som er feil med vindataen (navn, produsent, type, osv.).</p>
+          <textarea
+            [ngModel]="reportComment()"
+            (ngModelChange)="reportComment.set($event)"
+            rows="3"
+            placeholder="F.eks. 'Feil produsent, skal være Antinori ikke Frescobaldi'"
+            class="w-full px-4 py-3 rounded-xl bg-white/5 text-cream placeholder-cream-dark/40
+                   border border-white/10 focus:border-burgundy-light focus:ring-1 focus:ring-burgundy-light
+                   transition-colors outline-none resize-none"
+          ></textarea>
+          <div class="flex gap-3">
+            <button
+              (click)="submitReport()"
+              [disabled]="reportSubmitting() || !reportComment().trim()"
+              class="flex-1 py-3 rounded-xl bg-burgundy text-cream font-medium
+                     disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+            >
+              @if (reportSubmitting()) {
+                Sender...
+              } @else {
+                Send rapport
+              }
+            </button>
+            <button
+              (click)="showReportModal.set(false)"
+              class="px-6 py-3 rounded-xl glass text-cream-dark hover:text-cream transition-colors"
+            >
+              Avbryt
+            </button>
+          </div>
+        </div>
+      </div>
+    }
   }
 
 </div>

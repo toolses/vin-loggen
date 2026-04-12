@@ -1,9 +1,9 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { DatePipe } from '@angular/common';
 import { WineService, NewWine, WineLog } from '../../services/wine.service';
-import type { WineSearchResult } from '../../services/wine.service';
+import type { WineSearchResult, WineSavePayload } from '../../services/wine.service';
 import { ProfileService } from '../../services/profile.service';
 import { LocationService } from '../../services/location.service';
 import { NotificationService } from '../../services/notification.service';
@@ -61,7 +61,7 @@ export class WineEditorComponent implements OnInit {
   protected readonly alreadyTasted = signal(false);
   protected readonly previousRating = signal<number | null>(null);
   protected readonly previousTastedAt = signal<string | null>(null);
-  private existingWineId: string | null = null;
+  protected existingWineId: string | null = null;
   /** Parsed grapes array for master-data upsert */
   private grapes: string[] | null = null;
   private alcoholNum: number | null = null;
@@ -84,8 +84,38 @@ export class WineEditorComponent implements OnInit {
   protected readonly searching      = signal(false);
   private searchTimeout: ReturnType<typeof setTimeout> | null = null;
 
-  // Catalogue wine selected (wine fields should be read-only)
-  protected readonly catalogueWine  = signal(false);
+  // Original AI data snapshot for correction tracking (create mode only)
+  private originalData: WineSavePayload['originalData'] = null;
+  private originalSource: string | null = null;
+
+  // Tracks which fields the user has edited vs the AI/API original
+  protected readonly editedFields = computed<Set<string>>(() => {
+    const od = this.originalData;
+    if (!od || this.editMode()) return new Set();
+    const fields = new Set<string>();
+    const ci = (a?: string | null, b?: string | null) =>
+      (a ?? '').trim().toLowerCase() !== (b ?? '').trim().toLowerCase();
+    if (ci(od.name, this.name())) fields.add('name');
+    if (ci(od.producer, this.producer())) fields.add('producer');
+    if (od.vintage !== this.vintage()) fields.add('vintage');
+    if (ci(od.type, this.type())) fields.add('type');
+    if (ci(od.country, this.country())) fields.add('country');
+    if (ci(od.region, this.region())) fields.add('region');
+    // Compare grape variety text
+    const origGrapes = (od.grapes ?? []).join(', ').trim().toLowerCase();
+    const currGrapes = this.grapeVariety().trim().toLowerCase();
+    if (origGrapes !== currGrapes) fields.add('grapeVariety');
+    // Compare alcohol
+    const origAlc = od.alcoholContent != null ? `${od.alcoholContent}%` : '';
+    const currAlc = this.alcoholContent().trim();
+    if (origAlc.toLowerCase() !== currAlc.toLowerCase()) fields.add('alcoholContent');
+    return fields;
+  });
+
+  // Report incorrect info UI
+  protected readonly showReportModal = signal(false);
+  protected readonly reportComment = signal('');
+  protected readonly reportSubmitting = signal(false);
 
   // Edit scope: 'wine' = wine fields only, 'tasting' = tasting fields only, null = all
   protected readonly editScope = signal<'wine' | 'tasting' | null>(null);
@@ -135,8 +165,20 @@ export class WineEditorComponent implements OnInit {
         }
         if (scan.existingWineId) {
           this.existingWineId = scan.existingWineId;
-          this.catalogueWine.set(true);
         }
+
+        // Snapshot original AI data for correction tracking
+        this.originalData = {
+          name: scan.wineName ?? null,
+          producer: scan.producer ?? null,
+          vintage: scan.vintage ?? null,
+          type: scan.type ?? null,
+          country: scan.country ?? null,
+          region: scan.region ?? null,
+          grapes: scan.grapes ?? null,
+          alcoholContent: scan.alcoholContent ?? null,
+          source: scan.externalSourceId ? 'wineapi' : 'gemini',
+        };
 
         // Pro enrichment
         this.proLimitReached.set(scan.proLimitReached ?? false);
@@ -311,11 +353,37 @@ export class WineEditorComponent implements OnInit {
     if (this.editMode()) {
       success = await this.wineService.updateWine(this.editLogId, this.editWineId, wine);
     } else {
-      // Pass existingWineId to skip the wines upsert when re-drinking
-      success = await this.wineService.addWine(
-        wine,
-        this.existingWineId ?? undefined
-      );
+      // Create mode: use backend smart save endpoint
+      const payload: WineSavePayload = {
+        name:             wine.name,
+        producer:         wine.producer,
+        vintage:          wine.vintage,
+        type:             wine.type,
+        country:          wine.country,
+        region:           wine.region,
+        grapes:           parsedGrapes,
+        alcoholContent:   parsedAlcohol !== null && !isNaN(parsedAlcohol) ? parsedAlcohol : null,
+        externalSourceId: null,
+        foodPairings:     this.foodPairings(),
+        description:      this.description(),
+        technicalNotes:   this.technicalNotes(),
+        originalData:     this.originalData,
+        existingWineId:   this.existingWineId,
+        rating:           wine.rating,
+        notes:            wine.notes,
+        imageUrl:         wine.image_url,
+        thumbnailUrl:     wine.thumbnail_url,
+        tastedAt:         wine.tasted_at,
+        locationName:     wine.location_name,
+        locationLat:      wine.location_lat,
+        locationLng:      wine.location_lng,
+        locationType:     wine.location_type,
+      };
+      const result = await this.wineService.saveWine(payload);
+      success = result !== null;
+      if (result) {
+        this.existingWineId = result.wineId;
+      }
     }
 
     if (success) {
@@ -384,7 +452,6 @@ export class WineEditorComponent implements OnInit {
     this.grapes = wine.grapes ?? null;
     this.alcoholNum = wine.alcoholContent ?? null;
     this.existingWineId = wine.id;
-    this.catalogueWine.set(true);
     this.searchStep.set(false);
   }
 
@@ -406,5 +473,22 @@ export class WineEditorComponent implements OnInit {
     this.locationLng.set(null);
     // Keep locationType so the location-search pre-selects the previous type
     this.locationSet.set(false);
+  }
+
+  // ── Report incorrect info ──────────────────────────────────────────────
+
+  protected async submitReport(): Promise<void> {
+    const comment = this.reportComment().trim();
+    if (!comment || !this.existingWineId) return;
+    this.reportSubmitting.set(true);
+    const ok = await this.wineService.reportWine(this.existingWineId, comment);
+    this.reportSubmitting.set(false);
+    if (ok) {
+      this.notifications.success('Takk for tilbakemeldingen!');
+      this.showReportModal.set(false);
+      this.reportComment.set('');
+    } else {
+      this.notifications.error('Kunne ikke sende rapporten. Prøv igjen.');
+    }
   }
 }

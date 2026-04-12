@@ -9,6 +9,12 @@
       <p class="text-3xl font-serif text-cream">{{ totalWines() }}</p>
     </div>
 
+    <!-- Corrections card -->
+    <a routerLink="/admin/corrections" class="bg-cellar-surface rounded-xl p-5 border border-white/10 hover:border-gold/30 transition-colors block">
+      <p class="text-cream/50 text-sm mb-1">Korreksjoner</p>
+      <p class="text-3xl font-serif text-cream">{{ totalCorrections() }}</p>
+    </a>
+
     <!-- Today's usage cards per provider -->
     @for (usage of usageService.todayUsage(); track usage.provider) {
       <div class="bg-cellar-surface rounded-xl p-5 border border-white/10">

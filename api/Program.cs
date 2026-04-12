@@ -80,6 +80,7 @@ builder.Services.AddScoped<TasteProfileService>();
 builder.Services.AddScoped<WineApiService>();
 builder.Services.AddScoped<ProUsageService>();
 builder.Services.AddScoped<WineOrchestratorService>();
+builder.Services.AddScoped<WineMatchingService>();
 // EnrichmentService retained for backwards compat (stub only)
 builder.Services.AddScoped<EnrichmentService>();
 
@@ -216,6 +217,7 @@ app.MapAdminAuthEndpoints();
 app.MapAdminWineEndpoints();
 app.MapAdminUsageEndpoints();
 app.MapAdminResetEndpoints();
+app.MapAdminCorrectionEndpoints();
 
 app.Run();
 

@@ -51,3 +51,33 @@ public record PaginatedResult<T>(
     int Page,
     int PageSize
 );
+
+// ── Data Corrections admin models ────────────────────────────────────────────
+
+public record AdminCorrectionListItem(
+    Guid      Id,
+    Guid      UserId,
+    string?   UserEmail,
+    Guid?     WineId,
+    string?   WineName,
+    string?   WineProducer,
+    string    Source,
+    string?   Comment,
+    DateTime  CreatedAt,
+    int       FieldCount
+);
+
+public sealed class AdminCorrectionDetail
+{
+    public Guid      Id            { get; set; }
+    public Guid      UserId        { get; set; }
+    public string?   UserEmail     { get; set; }
+    public Guid?     WineId        { get; set; }
+    public string?   WineName      { get; set; }
+    public string?   WineProducer  { get; set; }
+    public string    Source        { get; set; } = "";
+    public string    OriginalData  { get; set; } = "{}";
+    public string    CorrectedData { get; set; } = "{}";
+    public string?   Comment       { get; set; }
+    public DateTime  CreatedAt     { get; set; }
+}

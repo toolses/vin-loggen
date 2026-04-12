@@ -29,14 +29,11 @@ public static class AdminResetEndpoints
 
             var deletedWineLogs = await conn.ExecuteAsync("DELETE FROM wine_logs;");
             var deletedWines = await conn.ExecuteAsync("DELETE FROM wines;");
-            var deletedStorageObjects = await conn.ExecuteAsync(
-                "DELETE FROM storage.objects WHERE bucket_id = 'wine-labels';");
 
             return TypedResults.Ok<object>(new
             {
                 deletedWineLogs,
                 deletedWines,
-                deletedStorageObjects
             });
         }
         catch (Exception ex)

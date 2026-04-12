@@ -215,6 +215,7 @@ app.MapTasteProfileEndpoints();
 app.MapAdminAuthEndpoints();
 app.MapAdminWineEndpoints();
 app.MapAdminUsageEndpoints();
+app.MapAdminResetEndpoints();
 
 app.Run();
 

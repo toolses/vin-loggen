@@ -1,98 +1,65 @@
-# 🍷 VinLoggen 2026
+# VinLoggen
 
-En moderne, AI-drevet PWA for registrering og vurdering av vin. Bygget for hurtighet, nøyaktighet og minimal driftskostnad.
+En moderne, AI-drevet PWA for registrering og vurdering av vin. Ta bilde av etiketten, la AI analysere den, og bygg din personlige vinlogg.
 
-## 🚀 Teknologi-stabel
+> **Status:** Alpha — under aktiv utvikling.
 
-| Lag | Teknologi | Beskrivelse |
-| :--- | :--- | :--- |
-| **Frontend** | Angular 21 | Signals-basert, Zoneless, Tailwind CSS 4 |
-| **Backend** | .NET 10 | Azure Functions (Isolated Worker) |
-| **Hosting** | Azure Static Web Apps | Gratis hosting for web og API |
-| **Database** | Supabase (Postgres) | Database, Autentisering og Blob Storage |
-| **AI Vision** | Gemini 2.0 Flash | Ekstrahering av data fra vinetiketter |
-| **Integrasjon** | Vinmonopolet API | Berikelse av produktdata og priser |
+## Teknologi
 
-## 🏗️ Prosjektstruktur
+| Lag | Teknologi |
+| :--- | :--- |
+| **Frontend** | Angular 21 (Zoneless, Signals), Tailwind CSS 4, PWA |
+| **Backend** | .NET 10 Minimal API (Kestrel) |
+| **Database** | Supabase (Postgres) med Row Level Security |
+| **Auth** | Supabase Auth (Google + Apple OAuth) |
+| **AI** | Gemini 2.0 Flash — etikett-analyse med multi-bilde-støtte |
+| **Vindata** | WineAPI (Vinmonopolet) — berikelse og priser |
+| **Lagring** | Supabase Storage — bilder av vinetiketter |
+| **Hosting** | Vercel (frontend) · Render (API) |
 
-- `/client`: Angular-applikasjonen. En lettvekt PWA optimalisert for mobilbruk.
-- `/api`: .NET Azure Functions. Håndterer logikk, AI-oppslag og integrasjoner.
-- `/infra`: Bicep/Terraform-filer for oppsett av Azure-ressurser.
+## Prosjektstruktur
 
-## ✨ Kjernefunksjonalitet
+- `/client` — Angular-applikasjonen. En lettvekt PWA optimalisert for mobilbruk.
+- `/api` — .NET 10 Minimal API. Håndterer logikk, AI-analyse og integrasjoner.
+- `/supabase` — Supabase CLI-konfigurasjon og migrasjoner.
 
-- **Quick-Log:** Ta bilde av etiketten -> AI analyserer -> Data fylles ut automatisk.
-- **Smart Enrichment:** Matcher automatisk mot Vinmonopolets vareutvalg for nøyaktig info.
-- **Personlig Smaksprofil:** Logg notater, terningkast og lokasjon.
+## Kjernefunksjonalitet
+
+- **Quick-Log:** Ta bilde av etiketten → AI analyserer → data fylles ut automatisk.
+- **Smart Enrichment:** Matcher automatisk mot Vinmonopolets vareutvalg for nøyaktig info, priser og matanbefalinger.
+- **Personlig Smaksprofil:** Logg notater, terningkast, lokasjon og bilder for hver smaking.
+- **Deling:** Generer delekort for viner du vil anbefale.
+- **Admin-panel:** Dashboard med API-statistikk, vinregister med søk og redigering.
 - **Offline Support:** Fungerer som en app på mobilen via PWA-funksjonalitet.
 
-## 🛠️ Kom i gang (Lokal utvikling)
+## Kom i gang (lokal utvikling)
 
 ### Forutsetninger
-- Node.js (nyeste versjon)
-- .NET 10 SDK
-- Azure Static Web Apps CLI (`npm install -g @azure/static-web-apps-cli`)
-- Supabase CLI
 
-### Oppsett
-1. Klone repoet: `git clone https://github.com/ditt-brukernavn/vinloggen.git`
-2. Installer avhengigheter i `/client`: `npm install`
-3. Opprett `.env` filer i både `/client` og `/api` basert på `.env.example`.
-4. Start utviklingsmiljøet:
-   ```bash
-   swa start http://localhost:4200 --api-location ./api
-   ```
+- Docker Desktop
+- `.env`-fil i repo-roten (se `.env.example` og `api/.env.example`)
+
+### Start
+
+```bash
+docker compose up --build
+```
+
+- Frontend: http://localhost:4200
+- API: http://localhost:5000
+- API-dokumentasjon (Scalar): http://localhost:5000/scalar/v1
 
 ### Miljøvariabler
 
-**`/client/src/environments/environment.ts`**
-```typescript
-export const environment = {
-  production: false,
-  supabaseUrl: 'https://din-prosjekt-ref.supabase.co',
-  supabaseAnonKey: 'din-anon-nokkel',
-  apiBaseUrl: '/api',
-};
-```
+Se `INSTRUCTIONS.md` for komplett oversikt over alle miljøvariabler.
 
-**`/api/local.settings.json`**
-```json
-{
-  "Values": {
-    "SUPABASE_CONNECTION_STRING": "postgresql://postgres:[PASSWORD]@db.[REF].supabase.co:5432/postgres",
-    "GEMINI_API_KEY": "din-gemini-api-nokkel"
-  }
-}
-```
+## Deploy
 
-## 🗄️ Database-skjema (Supabase SQL)
+- **Frontend** deployes automatisk til Vercel fra `main`-branchen.
+- **API** deployes automatisk til Render fra `main`-branchen.
+- **Database** hostes på Supabase. Migrasjoner kjøres automatisk via DbUp ved oppstart av API-et.
 
-```sql
-CREATE TABLE wines (
-  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name        TEXT NOT NULL,
-  producer    TEXT NOT NULL DEFAULT '',
-  vintage     INTEGER,
-  type        TEXT NOT NULL DEFAULT 'Rødvin',
-  country     TEXT,
-  region      TEXT,
-  rating      NUMERIC(2,1),
-  notes       TEXT,
-  image_url   TEXT,
-  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
+## Dokumentasjon
 
--- Row Level Security
-ALTER TABLE wines ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Public read" ON wines FOR SELECT USING (true);
-CREATE POLICY "Auth insert" ON wines FOR INSERT WITH CHECK (auth.role() = 'authenticated');
-
--- Storage bucket for wine label images
-INSERT INTO storage.buckets (id, name, public) VALUES ('wine-labels', 'wine-labels', true);
-```
-
-## 📦 Deploy
-
-Azure Static Web Apps henter automatisk kode fra GitHub og bygger:
-- **Frontend:** `client/` → `dist/vin-loggen/browser/`
-- **API:** `api/` → Azure Functions
+- `INSTRUCTIONS.md` — Fullstendig prosjektguide (konvensjoner, struktur, oppsett)
+- `CHANGELOG.md` — Endringslogg

@@ -62,6 +62,12 @@ export interface AdminWineSearchParams {
   pageSize?: number;
 }
 
+export interface ResetDataResult {
+  deletedWineLogs: number;
+  deletedWines: number;
+  deletedStorageObjects: number;
+}
+
 @Injectable({ providedIn: 'root' })
 export class AdminWineService {
   private readonly http = inject(HttpClient);
@@ -122,6 +128,16 @@ export class AdminWineService {
     try {
       return await firstValueFrom(
         this.http.put<AdminWineDetail>(`${environment.apiBaseUrl}/admin/wines/${id}`, data),
+      );
+    } catch {
+      return null;
+    }
+  }
+
+  async resetAllData(): Promise<ResetDataResult | null> {
+    try {
+      return await firstValueFrom(
+        this.http.delete<ResetDataResult>(`${environment.apiBaseUrl}/admin/reset`),
       );
     } catch {
       return null;

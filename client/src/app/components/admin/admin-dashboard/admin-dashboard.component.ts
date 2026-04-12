@@ -2,6 +2,7 @@ import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { AdminUsageService, type DailyUsageRow } from '../../../services/admin-usage.service';
 import { AdminWineService } from '../../../services/admin-wine.service';
+import { NotificationService } from '../../../services/notification.service';
 
 @Component({
   selector: 'app-admin-dashboard',
@@ -12,8 +13,11 @@ import { AdminWineService } from '../../../services/admin-wine.service';
 export class AdminDashboardComponent implements OnInit {
   protected readonly usageService = inject(AdminUsageService);
   protected readonly wineService = inject(AdminWineService);
+  private readonly notificationService = inject(NotificationService);
 
   protected readonly totalWines = signal(0);
+  protected readonly resetting = signal(false);
+  protected readonly showResetConfirm = signal(false);
 
   protected readonly dailyGrouped = computed(() => {
     const rows = this.usageService.dailyUsage();
@@ -48,5 +52,22 @@ export class AdminDashboardComponent implements OnInit {
       wineapi: 'WineAPI',
     };
     return labels[provider] ?? provider;
+  }
+
+  async resetData(): Promise<void> {
+    this.resetting.set(true);
+    const result = await this.wineService.resetAllData();
+    this.resetting.set(false);
+    this.showResetConfirm.set(false);
+    if (result) {
+      this.notificationService.show(`Slettet ${result.deletedWines} viner, ${result.deletedWineLogs} loggføringer og ${result.deletedStorageObjects} bilder.`, 'success');
+      this.totalWines.set(0);
+      await Promise.all([
+        this.usageService.loadTodayUsage(),
+        this.usageService.loadDailyUsage(30),
+      ]);
+    } else {
+      this.notificationService.show('Kunne ikke slette data. Prøv igjen.', 'error');
+    }
   }
 }

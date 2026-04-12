@@ -1,8 +1,9 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
-import { DatePipe, SlicePipe } from '@angular/common';
+import { DatePipe } from '@angular/common';
 import { WineService, NewWine, WineLog } from '../../services/wine.service';
+import type { WineSearchResult } from '../../services/wine.service';
 import { ProfileService } from '../../services/profile.service';
 import { LocationService } from '../../services/location.service';
 import { NotificationService } from '../../services/notification.service';
@@ -15,7 +16,7 @@ import {
 @Component({
   selector: 'app-wine-editor',
   standalone: true,
-  imports: [FormsModule, DatePipe, SlicePipe, StarRatingComponent, LocationSearchComponent],
+  imports: [FormsModule, DatePipe, StarRatingComponent, LocationSearchComponent],
   templateUrl: './wine-editor.component.html',
 })
 export class WineEditorComponent implements OnInit {
@@ -70,6 +71,18 @@ export class WineEditorComponent implements OnInit {
   protected readonly description      = signal<string | null>(null);
   protected readonly technicalNotes   = signal<string | null>(null);
 
+  // Catalogue name suggestion
+  protected readonly suggestedName      = signal<string | null>(null);
+  protected readonly suggestedProducer  = signal<string | null>(null);
+  protected readonly showSuggestion     = signal(false);
+
+  // Wine search step (manual entry without scan result)
+  protected readonly searchStep     = signal(false);
+  protected readonly searchQuery    = signal('');
+  protected readonly searchResults  = signal<WineSearchResult[]>([]);
+  protected readonly searching      = signal(false);
+  private searchTimeout: ReturnType<typeof setTimeout> | null = null;
+
   ngOnInit(): void {
     const id = this.route.snapshot.paramMap.get('id');
     const logId = this.route.snapshot.queryParamMap.get('logId');
@@ -119,6 +132,17 @@ export class WineEditorComponent implements OnInit {
         this.description.set(scan.description ?? null);
         this.technicalNotes.set(scan.technicalNotes ?? null);
 
+        // Catalogue name suggestion
+        const sn = scan.suggestedName?.trim();
+        const sp = scan.suggestedProducer?.trim();
+        const namesDiffer  = sn && sn.toLowerCase() !== (scan.wineName ?? '').trim().toLowerCase();
+        const prodsDiffer  = sp && sp.toLowerCase() !== (scan.producer ?? '').trim().toLowerCase();
+        if (namesDiffer || prodsDiffer) {
+          this.suggestedName.set(sn ?? null);
+          this.suggestedProducer.set(sp ?? null);
+          this.showSuggestion.set(true);
+        }
+
         // Sync quota state to ProfileService (avoids an extra DB round-trip)
         this.profileService.syncQuotaFromScan(
           scan.proScansToday ?? 0,
@@ -130,6 +154,9 @@ export class WineEditorComponent implements OnInit {
         if (scan.proLimitReached && navigator.vibrate) {
           navigator.vibrate([100, 80, 100, 80, 300]);
         }
+      } else {
+        // No scan result → show wine search step for manual entry
+        this.searchStep.set(true);
       }
 
       // Pre-fill location from scan GPS
@@ -298,6 +325,54 @@ export class WineEditorComponent implements OnInit {
     } else {
       this.router.navigate(['/']);
     }
+  }
+
+  // ── Catalogue name suggestion ─────────────────────────────────────────────
+
+  protected acceptSuggestion(): void {
+    const sn = this.suggestedName();
+    const sp = this.suggestedProducer();
+    if (sn) this.name.set(sn);
+    if (sp) this.producer.set(sp);
+    this.showSuggestion.set(false);
+  }
+
+  protected dismissSuggestion(): void {
+    this.showSuggestion.set(false);
+  }
+
+  // ── Wine search (manual entry) ────────────────────────────────────────────
+
+  protected onSearchInput(query: string): void {
+    this.searchQuery.set(query);
+    if (this.searchTimeout) clearTimeout(this.searchTimeout);
+    if (query.trim().length < 2) {
+      this.searchResults.set([]);
+      return;
+    }
+    this.searchTimeout = setTimeout(() => this.runSearch(query.trim()), 300);
+  }
+
+  private async runSearch(query: string): Promise<void> {
+    this.searching.set(true);
+    const results = await this.wineService.searchWines(query);
+    this.searchResults.set(results);
+    this.searching.set(false);
+  }
+
+  protected selectSearchResult(wine: WineSearchResult): void {
+    this.name.set(wine.name);
+    this.producer.set(wine.producer);
+    this.vintage.set(wine.vintage);
+    this.type.set(wine.type);
+    if (wine.country) this.country.set(wine.country);
+    if (wine.region)  this.region.set(wine.region);
+    this.existingWineId = wine.id;
+    this.searchStep.set(false);
+  }
+
+  protected skipSearch(): void {
+    this.searchStep.set(false);
   }
 
   protected onLocationSelected(loc: LocationSelection): void {

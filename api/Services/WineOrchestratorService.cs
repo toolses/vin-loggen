@@ -128,8 +128,8 @@ public sealed class WineOrchestratorService
                 analysis.Vintage,
                 ct);
 
-            // Fallback: ask Gemini for food pairings if wineapi.io had none
-            if (enrichment?.FoodPairings is not { Length: > 0 })
+            // Fallback: ask Gemini for enrichment if wineapi.io had gaps
+            if (enrichment?.FoodPairings is not { Length: > 0 } || string.IsNullOrWhiteSpace(enrichment?.Description))
             {
                 var geminiFoodResult = await _gemini.GetFoodPairingsAsync(
                     analysis.WineName, analysis.Producer,
@@ -137,16 +137,17 @@ public sealed class WineOrchestratorService
 
                 if (geminiFoodResult is not null)
                 {
-                    // Merge Gemini pairings into (potentially null) enrichment
+                    // Merge Gemini results into (potentially null) enrichment
                     enrichment = enrichment is not null
                         ? enrichment with
                         {
-                            FoodPairings   = geminiFoodResult.FoodPairings,
+                            FoodPairings   = enrichment.FoodPairings is { Length: > 0 } ? enrichment.FoodPairings : geminiFoodResult.FoodPairings,
                             TechnicalNotes = enrichment.TechnicalNotes ?? geminiFoodResult.TechnicalNotes,
+                            Description    = enrichment.Description ?? geminiFoodResult.Description,
                         }
                         : new WineApiService.WineEnrichment(
                             ExternalId:    null,
-                            Description:   null,
+                            Description:   geminiFoodResult.Description,
                             FoodPairings:  geminiFoodResult.FoodPairings,
                             TechnicalNotes: geminiFoodResult.TechnicalNotes,
                             AlcoholContent: null,
@@ -188,6 +189,9 @@ public sealed class WineOrchestratorService
                               ?? (dedup is not null
                                   ? await GetExistingExternalIdAsync(dedup.WineId, ct)
                                   : null),
+            // Name suggestions from catalogue match
+            SuggestedName     = enrichment?.SuggestedName,
+            SuggestedProducer = enrichment?.SuggestedProducer,
             // Quota
             ProLimitReached = proLimitReached,
             ProScansToday   = proStatus?.ScansToday   ?? 0,

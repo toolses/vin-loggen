@@ -28,6 +28,9 @@ public record WineAnalysisResponse(
     string?   Description     = null,   // from wineapi.io
     string?   TechnicalNotes  = null,   // from wineapi.io
     string?   ExternalSourceId = null,  // wineapi.io catalogue ID
+    // ── Name suggestions – from wineapi.io catalogue match ──────────────────
+    string?   SuggestedName     = null,
+    string?   SuggestedProducer = null,
     // ── Quota metadata – always returned for UI ───────────────────────────────
     bool      ProLimitReached = false,
     int       ProScansToday   = 0,
@@ -367,20 +370,22 @@ public sealed class GeminiService : IGeminiService
 
     private const string FoodPairingPromptTemplate =
         """
-        Du er en sommelier-ekspert. Basert på vinen nedenfor, generer matanbefalinger og tekniske smaksnotater.
+        Du er en sommelier-ekspert. Basert på vinen nedenfor, generer en kort vinbeskrivelse, matanbefalinger og tekniske smaksnotater.
         Returner KUN rå JSON (uten markdown-formatering).
         JSON-struktur:
         {{
+          "description": string,
           "foodPairings": string[],
           "technicalNotes": string
         }}
+        - description: 1-2 setninger som beskriver vinens karakter og stil på norsk
         - foodPairings: 3-5 konkrete matanbefalinger på norsk (f.eks. "Lammekoteletter", "Modnet parmesan")
         - technicalNotes: 1-2 setninger med tekniske smaksnotater på norsk (tanniner, syre, finish)
 
         Vin: {0} {1}, {2}, {3} {4}
         """;
 
-    public record FoodPairingResult(string[] FoodPairings, string? TechnicalNotes);
+    public record FoodPairingResult(string[]? FoodPairings, string? TechnicalNotes, string? Description);
 
     /// <summary>
     /// Pro-tier call: ask Gemini for food pairings and technical tasting notes

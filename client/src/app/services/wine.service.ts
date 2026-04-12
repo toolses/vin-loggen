@@ -99,11 +99,25 @@ export interface WineAnalysisResult {
   description: string | null;
   technicalNotes: string | null;
   externalSourceId: string | null;
+  // Name suggestions from catalogue match
+  suggestedName: string | null;
+  suggestedProducer: string | null;
   // Quota metadata (always returned for UI)
   proLimitReached: boolean;
   proScansToday: number;
   dailyProLimit: number;
   isPro: boolean;
+}
+
+/** Lightweight wine record returned by the search endpoint */
+export interface WineSearchResult {
+  id: string;
+  name: string;
+  producer: string;
+  vintage: number | null;
+  type: string;
+  country: string | null;
+  region: string | null;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -188,6 +202,22 @@ export class WineService {
       .single();
     if (error || !data) return null;
     return data as WineLog;
+  }
+
+  // ── Search ──────────────────────────────────────────────────────────────────
+
+  /** Searches the global wine catalogue by name or producer. */
+  async searchWines(query: string): Promise<WineSearchResult[]> {
+    try {
+      const res = await firstValueFrom(
+        this.http.get<WineSearchResult[]>('/api/wines/search', {
+          params: { q: query },
+        }),
+      );
+      return res ?? [];
+    } catch {
+      return [];
+    }
   }
 
   // ── Write ───────────────────────────────────────────────────────────────────

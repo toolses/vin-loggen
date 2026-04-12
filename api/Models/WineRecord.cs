@@ -17,3 +17,14 @@ public record WineRecord(
     string?   ExternalSourceId, // mapped from external_source_id
     DateTime  CreatedAt         // mapped from created_at
 );
+
+/// <summary>Lightweight projection used by the user-facing wine search endpoint.</summary>
+public record WineSearchResult(
+    Guid    Id,
+    string  Name,
+    string  Producer,
+    int?    Vintage,
+    string  Type,
+    string? Country,
+    string? Region
+);

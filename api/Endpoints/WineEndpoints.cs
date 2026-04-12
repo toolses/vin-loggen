@@ -18,6 +18,10 @@ public static class WineEndpoints
             .WithName("GetWines")
             .WithSummary("List all logged wines for the authenticated user (latest log per wine), newest first");
 
+        group.MapGet("/search", SearchWines)
+            .WithName("SearchWines")
+            .WithSummary("Search the global wine catalogue by name or producer");
+
         return app;
     }
 
@@ -76,5 +80,44 @@ public static class WineEndpoints
                 detail: "Database unavailable. Check SUPABASE_CONNECTION_STRING.",
                 statusCode: StatusCodes.Status503ServiceUnavailable);
         }
+    }
+
+    private static async Task<Ok<IEnumerable<WineSearchResult>>> SearchWines(
+        string? q,
+        int?    limit,
+        NpgsqlDataSource dataSource,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(q) || q.Trim().Length < 2)
+        {
+            return TypedResults.Ok(Enumerable.Empty<WineSearchResult>());
+        }
+
+        var search = q.Trim();
+        var max = Math.Clamp(limit ?? 10, 1, 20);
+
+        await using var conn = await dataSource.OpenConnectionAsync(ct);
+
+        var results = await conn.QueryAsync<WineSearchResult>(
+            """
+            SELECT w.id       AS Id,
+                   w.name     AS Name,
+                   w.producer AS Producer,
+                   w.vintage  AS Vintage,
+                   w.type     AS Type,
+                   w.country  AS Country,
+                   w.region   AS Region
+            FROM wines w
+            WHERE w.name     ILIKE '%' || @Search || '%'
+               OR w.producer ILIKE '%' || @Search || '%'
+            ORDER BY
+                CASE WHEN LOWER(w.name) = LOWER(@Search) OR LOWER(w.producer) = LOWER(@Search)
+                     THEN 0 ELSE 1 END,
+                w.name
+            LIMIT @Limit
+            """,
+            new { Search = search, Limit = max });
+
+        return TypedResults.Ok(results);
     }
 }

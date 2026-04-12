@@ -123,6 +123,18 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
+/* ── iOS Safari: Prevent auto-zoom on input focus ────────────
+   iOS zooms in when a focused element's computed font-size is
+   below 16 px. CSS written outside any @layer wins over Tailwind
+   utility classes (e.g. text-sm = 14 px) per cascade-layer rules.
+   max(1rem, 1em) enforces ≥ 16 px while still inheriting any
+   larger size set on a parent element.                          */
+input,
+select,
+textarea {
+  font-size: max(1rem, 1em);
+}
+
 /* ── Scrollbar Styling ─────────────────────────────────────── */
 ::-webkit-scrollbar {
   width: 4px;

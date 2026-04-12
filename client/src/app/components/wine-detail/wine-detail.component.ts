@@ -19,6 +19,7 @@ export class WineDetailComponent implements OnInit {
   protected readonly logs = signal<WineLog[]>([]);
   protected readonly loading = signal(true);
   protected readonly showDeleteConfirm = signal(false);
+  protected readonly deleteLogId = signal<string | null>(null);
   protected readonly deleting = signal(false);
   protected readonly showSharePreview = signal(false);
 
@@ -57,19 +58,41 @@ export class WineDetailComponent implements OnInit {
     this.loading.set(false);
   }
 
+  /** Open delete dialog for a specific tasting log. */
+  protected confirmDeleteLog(logId: string): void {
+    this.deleteLogId.set(logId);
+    this.showDeleteConfirm.set(true);
+  }
+
   protected async confirmDelete(): Promise<void> {
     const wine = this.wine();
     if (!wine) return;
 
     this.deleting.set(true);
-    // Delete the specific log, not the master wine record
-    const success = await this.wineService.deleteWine(wine.log_id);
+    const logId = this.deleteLogId() ?? wine.log_id;
+    const success = await this.wineService.deleteWine(logId);
     if (success) {
       if (navigator.vibrate) navigator.vibrate(100);
-      this.router.navigate(['/cellar']);
+      // If we deleted a specific log, refresh; otherwise navigate away
+      if (this.deleteLogId()) {
+        // Refresh logs list
+        const updatedLogs = this.logs().filter(l => l.id !== logId);
+        this.logs.set(updatedLogs);
+        if (updatedLogs.length === 0) {
+          // No logs left → wine is gone
+          this.router.navigate(['/cellar']);
+        } else {
+          // Refresh the wine data (rating etc. may have changed)
+          const refreshed = await this.wineService.fetchWine(wine.id);
+          if (refreshed) this.wine.set(refreshed);
+        }
+      } else {
+        this.router.navigate(['/cellar']);
+      }
     }
     this.deleting.set(false);
     this.showDeleteConfirm.set(false);
+    this.deleteLogId.set(null);
   }
 
   protected goBack(): void {

@@ -195,7 +195,7 @@
           <div class="flex flex-col gap-3 w-full max-w-xs">
             @if (step() === 'idle') {
               @if (auth.isLoggedIn() && profileService.proScansRemaining() === 0) {
-                <!-- Quota depleted: offer manual entry instead -->
+                <!-- Quota depleted: manual entry is primary action -->
                 <button
                   (click)="navigateToManualEntry()"
                   class="w-full py-3.5 rounded-2xl bg-burgundy text-cream font-semibold
@@ -217,6 +217,13 @@
                          transition-all duration-200 active:scale-[0.98] hover:bg-white/10"
                 >
                   Velg fra galleri
+                </button>
+                <button
+                  (click)="navigateToManualEntry()"
+                  class="w-full py-3 rounded-2xl text-cream-dark font-medium text-sm
+                         transition-all duration-200 active:scale-[0.98] hover:text-cream"
+                >
+                  Søk og registrer manuelt
                 </button>
               }
             }

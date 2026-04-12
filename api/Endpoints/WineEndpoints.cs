@@ -100,13 +100,15 @@ public static class WineEndpoints
 
         var results = await conn.QueryAsync<WineSearchResult>(
             """
-            SELECT w.id       AS Id,
-                   w.name     AS Name,
-                   w.producer AS Producer,
-                   w.vintage  AS Vintage,
-                   w.type     AS Type,
-                   w.country  AS Country,
-                   w.region   AS Region
+            SELECT w.id              AS Id,
+                   w.name            AS Name,
+                   w.producer        AS Producer,
+                   w.vintage         AS Vintage,
+                   w.type            AS Type,
+                   w.country         AS Country,
+                   w.region          AS Region,
+                   w.grapes          AS Grapes,
+                   w.alcohol_content AS AlcoholContent
             FROM wines w
             WHERE w.name     ILIKE '%' || @Search || '%'
                OR w.producer ILIKE '%' || @Search || '%'

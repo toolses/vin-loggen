@@ -13,7 +13,7 @@
       </svg>
     </button>
     <h1 class="font-serif text-2xl text-cream font-semibold">
-      {{ editMode() ? 'Rediger vin' : searchStep() ? 'Finn vin' : 'Legg til vin' }}
+      {{ editScope() === 'wine' ? 'Rediger vin' : editScope() === 'tasting' ? 'Rediger smakslogg' : editMode() ? 'Rediger vin' : searchStep() ? 'Finn vin' : 'Legg til vin' }}
     </h1>
   </div>
 
@@ -182,6 +182,21 @@
     <!-- ── Form ──────────────────────────────────────────────── -->
     <div class="glass rounded-2xl p-5 space-y-5">
 
+      <!-- ═══ WINE FIELDS (hidden when editScope is 'tasting') ═══ -->
+      @if (editScope() !== 'tasting') {
+
+      <!-- Catalogue wine info banner -->
+      @if (catalogueWine()) {
+        <div class="rounded-xl px-4 py-3 bg-white/5 border border-white/10 flex items-start gap-3">
+          <svg class="w-5 h-5 text-gold flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 0 1-1.043 3.296 3.745 3.745 0 0 1-3.296 1.043A3.745 3.745 0 0 1 12 21c-1.268 0-2.39-.63-3.068-1.593a3.746 3.746 0 0 1-3.296-1.043 3.745 3.745 0 0 1-1.043-3.296A3.745 3.745 0 0 1 3 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 0 1 1.043-3.296 3.746 3.746 0 0 1 3.296-1.043A3.746 3.746 0 0 1 12 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 0 1 3.296 1.043 3.745 3.745 0 0 1 1.043 3.296A3.745 3.745 0 0 1 21 12Z" />
+          </svg>
+          <p class="text-xs text-cream-dark leading-relaxed">
+            Vin hentet fra katalogen – fyll inn din smaksopplevelse nedenfor.
+          </p>
+        </div>
+      }
+
       <!-- Name -->
       <div>
         <label for="wine-name" class="block text-xs uppercase tracking-wider text-cream-dark mb-1.5 font-medium">
@@ -192,10 +207,13 @@
           type="text"
           [ngModel]="name()"
           (ngModelChange)="name.set($event)"
+          [readonly]="catalogueWine()"
           placeholder="f.eks. Barolo Riserva"
           class="w-full min-h-12 px-4 rounded-xl bg-white/5 text-cream placeholder-cream-dark/40
                  border border-white/10 focus:border-burgundy-light focus:ring-1 focus:ring-burgundy-light
                  transition-colors outline-none"
+          [class.opacity-60]="catalogueWine()"
+          [class.cursor-not-allowed]="catalogueWine()"
         />
       </div>
 
@@ -209,10 +227,13 @@
           type="text"
           [ngModel]="producer()"
           (ngModelChange)="producer.set($event)"
+          [readonly]="catalogueWine()"
           placeholder="f.eks. Marchesi di Barolo"
           class="w-full min-h-12 px-4 rounded-xl bg-white/5 text-cream placeholder-cream-dark/40
                  border border-white/10 focus:border-burgundy-light focus:ring-1 focus:ring-burgundy-light
                  transition-colors outline-none"
+          [class.opacity-60]="catalogueWine()"
+          [class.cursor-not-allowed]="catalogueWine()"
         />
       </div>
 
@@ -227,12 +248,15 @@
             type="number"
             [ngModel]="vintage()"
             (ngModelChange)="vintage.set($event)"
+            [readonly]="catalogueWine()"
             placeholder="2020"
             min="1900"
             max="2030"
             class="w-full min-h-12 px-4 rounded-xl bg-white/5 text-cream placeholder-cream-dark/40
                    border border-white/10 focus:border-burgundy-light focus:ring-1 focus:ring-burgundy-light
                    transition-colors outline-none"
+            [class.opacity-60]="catalogueWine()"
+            [class.cursor-not-allowed]="catalogueWine()"
           />
         </div>
         <div>
@@ -243,9 +267,12 @@
             id="wine-type"
             [ngModel]="type()"
             (ngModelChange)="type.set($event)"
+            [disabled]="catalogueWine()"
             class="w-full min-h-12 px-4 rounded-xl bg-white/5 text-cream
                    border border-white/10 focus:border-burgundy-light focus:ring-1 focus:ring-burgundy-light
                    transition-colors outline-none appearance-none"
+            [class.opacity-60]="catalogueWine()"
+            [class.cursor-not-allowed]="catalogueWine()"
           >
             @for (t of wineTypes; track t) {
               <option [value]="t" class="bg-cellar-surface text-cream">{{ t }}</option>
@@ -265,10 +292,13 @@
             type="text"
             [ngModel]="country()"
             (ngModelChange)="country.set($event)"
+            [readonly]="catalogueWine()"
             placeholder="f.eks. Italia"
             class="w-full min-h-12 px-4 rounded-xl bg-white/5 text-cream placeholder-cream-dark/40
                    border border-white/10 focus:border-burgundy-light focus:ring-1 focus:ring-burgundy-light
                    transition-colors outline-none"
+            [class.opacity-60]="catalogueWine()"
+            [class.cursor-not-allowed]="catalogueWine()"
           />
         </div>
         <div>
@@ -280,10 +310,13 @@
             type="text"
             [ngModel]="region()"
             (ngModelChange)="region.set($event)"
+            [readonly]="catalogueWine()"
             placeholder="f.eks. Piemonte"
             class="w-full min-h-12 px-4 rounded-xl bg-white/5 text-cream placeholder-cream-dark/40
                    border border-white/10 focus:border-burgundy-light focus:ring-1 focus:ring-burgundy-light
                    transition-colors outline-none"
+            [class.opacity-60]="catalogueWine()"
+            [class.cursor-not-allowed]="catalogueWine()"
           />
         </div>
       </div>
@@ -299,10 +332,13 @@
             type="text"
             [ngModel]="grapeVariety()"
             (ngModelChange)="grapeVariety.set($event)"
+            [readonly]="catalogueWine()"
             placeholder="f.eks. Nebbiolo"
             class="w-full min-h-12 px-4 rounded-xl bg-white/5 text-cream placeholder-cream-dark/40
                    border border-white/10 focus:border-burgundy-light focus:ring-1 focus:ring-burgundy-light
                    transition-colors outline-none"
+            [class.opacity-60]="catalogueWine()"
+            [class.cursor-not-allowed]="catalogueWine()"
           />
         </div>
         <div>
@@ -314,13 +350,21 @@
             type="text"
             [ngModel]="alcoholContent()"
             (ngModelChange)="alcoholContent.set($event)"
+            [readonly]="catalogueWine()"
             placeholder="f.eks. 14%"
             class="w-full min-h-12 px-4 rounded-xl bg-white/5 text-cream placeholder-cream-dark/40
                    border border-white/10 focus:border-burgundy-light focus:ring-1 focus:ring-burgundy-light
                    transition-colors outline-none"
+            [class.opacity-60]="catalogueWine()"
+            [class.cursor-not-allowed]="catalogueWine()"
           />
         </div>
       </div>
+
+      } <!-- end wine fields -->
+
+      <!-- ═══ TASTING FIELDS (hidden when editScope is 'wine') ═══ -->
+      @if (editScope() !== 'wine') {
 
       <!-- Rating -->
       <div>
@@ -338,11 +382,12 @@
         <input
           id="wine-tasted"
           type="date"
+          lang="nb"
           [ngModel]="tastedAt()"
           (ngModelChange)="tastedAt.set($event)"
-          class="w-full min-h-12 px-4 rounded-xl bg-white/5 text-cream
+          class="w-full min-w-0 max-w-full min-h-12 px-4 rounded-xl bg-white/5 text-cream
                  border border-white/10 focus:border-burgundy-light focus:ring-1 focus:ring-burgundy-light
-                 transition-colors outline-none"
+                 transition-colors outline-none box-border"
         />
       </div>
 
@@ -362,6 +407,49 @@
                  transition-colors outline-none resize-none"
         ></textarea>
       </div>
+
+      <!-- Location (tasting field) -->
+      <div>
+        <label class="block text-xs uppercase tracking-wider text-cream-dark mb-1.5 font-medium">
+          Sted
+        </label>
+        @if (locationSet()) {
+          <div class="flex items-center gap-3 px-4 py-3 rounded-xl bg-white/5 border border-white/10">
+            <svg class="w-5 h-5 text-burgundy-light flex-shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+              <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
+            </svg>
+            <div class="flex-1 min-w-0">
+              <p class="text-sm text-cream truncate">{{ locationName() }}</p>
+              @if (locationType()) {
+                <p class="text-[10px] text-cream-dark capitalize">{{ locationType() }}</p>
+              }
+            </div>
+            <button
+              type="button"
+              (click)="clearLocation()"
+              class="text-cream-dark hover:text-cream transition-colors flex-shrink-0"
+              aria-label="Endre sted"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125" />
+              </svg>
+            </button>
+          </div>
+        } @else {
+          <app-location-search
+            [initialType]="locationType()"
+            [homeAddress]="homeAddress()"
+            (locationSelected)="onLocationSelected($event)"
+            (typeChanged)="locationType.set($event)"
+          />
+        }
+      </div>
+
+      } <!-- end tasting fields -->
+
+      <!-- ═══ PRO ENRICHMENT (wine data, read-only display — hidden when tasting-only) ═══ -->
+      @if (editScope() !== 'tasting') {
 
       <!-- ── Pro enrichment: Description ──────────────────────── -->
       @if (description()) {
@@ -449,42 +537,7 @@
         </div>
       }
 
-      <!-- Location -->
-      <div>
-        <label class="block text-xs uppercase tracking-wider text-cream-dark mb-1.5 font-medium">
-          Sted
-        </label>
-        @if (locationSet()) {
-          <div class="flex items-center gap-3 px-4 py-3 rounded-xl bg-white/5 border border-white/10">
-            <svg class="w-5 h-5 text-burgundy-light flex-shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
-              <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
-            </svg>
-            <div class="flex-1 min-w-0">
-              <p class="text-sm text-cream truncate">{{ locationName() }}</p>
-              @if (locationType()) {
-                <p class="text-[10px] text-cream-dark capitalize">{{ locationType() }}</p>
-              }
-            </div>
-            <button
-              type="button"
-              (click)="clearLocation()"
-              class="text-cream-dark hover:text-cream transition-colors flex-shrink-0"
-              aria-label="Endre sted"
-            >
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125" />
-              </svg>
-            </button>
-          </div>
-        } @else {
-          <app-location-search
-            [initialType]="locationType()"
-            (locationSelected)="onLocationSelected($event)"
-            (typeChanged)="locationType.set($event)"
-          />
-        }
-      </div>
+      } <!-- end pro enrichment / wine scope -->
 
       <!-- Error -->
       @if (wineService.error()) {
@@ -512,7 +565,7 @@
             <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
             </svg>
-            {{ editMode() ? 'Oppdater vin' : 'Lagre vin' }}
+            {{ editScope() === 'tasting' ? 'Oppdater smakslogg' : editMode() ? 'Oppdater vin' : 'Lagre vin' }}
           </span>
         }
       </button>

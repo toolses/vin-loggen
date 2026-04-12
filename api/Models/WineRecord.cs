@@ -26,5 +26,7 @@ public record WineSearchResult(
     int?    Vintage,
     string  Type,
     string? Country,
-    string? Region
+    string? Region,
+    string[]? Grapes,
+    decimal?  AlcoholContent
 );

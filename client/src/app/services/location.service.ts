@@ -1,6 +1,13 @@
 import { Injectable, signal } from '@angular/core';
 import { environment } from '../../environments/environment';
 
+export interface PlaceSuggestion {
+  mapbox_id: string;
+  name: string;
+  address: string;
+  category?: string;
+}
+
 export interface Place {
   name: string;
   address: string;
@@ -12,6 +19,7 @@ export interface Place {
 @Injectable({ providedIn: 'root' })
 export class LocationService {
   private readonly token = environment.mapboxToken;
+  private sessionToken = crypto.randomUUID();
 
   readonly permissionState = signal<'prompt' | 'granted' | 'denied'>('prompt');
 
@@ -58,29 +66,33 @@ export class LocationService {
     if (!this.token) return null;
 
     try {
-      const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json`
-        + `?access_token=${this.token}&types=poi,address&limit=1&language=no`;
+      const url = `https://api.mapbox.com/search/geocode/v6/reverse`
+        + `?longitude=${lng}&latitude=${lat}`
+        + `&access_token=${this.token}&types=address&limit=1&language=no`;
 
       const res = await fetch(url);
       const data = await res.json();
       const feature = data.features?.[0];
       if (!feature) return null;
 
+      const props = feature.properties ?? {};
       return {
-        name: feature.text ?? feature.place_name,
-        address: feature.place_name ?? '',
+        name: props.name ?? props.full_address ?? '',
+        address: props.full_address ?? '',
       };
     } catch {
       return null;
     }
   }
 
-  async searchPlaces(query: string, proximity?: { lat: number; lng: number }): Promise<Place[]> {
+  async searchPlaces(query: string, proximity?: { lat: number; lng: number }): Promise<PlaceSuggestion[]> {
     if (!this.token || !query.trim()) return [];
 
     try {
-      let url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json`
-        + `?access_token=${this.token}&limit=5&language=no`;
+      let url = `https://api.mapbox.com/search/searchbox/v1/suggest`
+        + `?q=${encodeURIComponent(query)}`
+        + `&access_token=${this.token}&session_token=${this.sessionToken}`
+        + `&limit=5&language=no&types=poi,address,place,neighborhood,street`;
 
       if (proximity) {
         url += `&proximity=${proximity.lng},${proximity.lat}`;
@@ -89,15 +101,44 @@ export class LocationService {
       const res = await fetch(url);
       const data = await res.json();
 
-      return (data.features ?? []).map((f: Record<string, unknown>) => ({
-        name: f['text'] as string ?? '',
-        address: f['place_name'] as string ?? '',
-        lat: (f['center'] as number[])[1],
-        lng: (f['center'] as number[])[0],
-        category: ((f['properties'] as Record<string, unknown>)?.['category'] as string) ?? undefined,
+      return (data.suggestions ?? []).map((s: Record<string, unknown>) => ({
+        mapbox_id: (s['mapbox_id'] as string) ?? '',
+        name: (s['name'] as string) ?? '',
+        address: (s['full_address'] as string) ?? (s['place_formatted'] as string) ?? '',
+        category: ((s['poi_category'] as string[]) ?? [])[0] ?? undefined,
       }));
     } catch {
       return [];
+    }
+  }
+
+  async retrievePlace(mapboxId: string): Promise<Place | null> {
+    if (!this.token || !mapboxId) return null;
+
+    try {
+      const url = `https://api.mapbox.com/search/searchbox/v1/retrieve/${mapboxId}`
+        + `?access_token=${this.token}&session_token=${this.sessionToken}`;
+
+      const res = await fetch(url);
+      const data = await res.json();
+      const feature = data.features?.[0];
+      if (!feature) return null;
+
+      const props = feature.properties ?? {};
+      const coords = feature.geometry?.coordinates ?? [0, 0];
+
+      // Rotate session token after a complete suggest → retrieve cycle
+      this.sessionToken = crypto.randomUUID();
+
+      return {
+        name: props.name ?? '',
+        address: props.full_address ?? '',
+        lat: coords[1],
+        lng: coords[0],
+        category: (props.poi_category ?? [])[0] ?? undefined,
+      };
+    } catch {
+      return null;
     }
   }
 }

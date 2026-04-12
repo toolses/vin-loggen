@@ -4,8 +4,8 @@ import {
   OnDestroy,
   afterNextRender,
   effect,
-  inject,
   input,
+  signal,
   viewChild,
 } from '@angular/core';
 import mapboxgl from 'mapbox-gl';
@@ -24,14 +24,18 @@ export class WineMapComponent implements OnDestroy {
 
   private map: mapboxgl.Map | null = null;
   private popup: mapboxgl.Popup | null = null;
+  private readonly mapReady = signal(false);
 
   constructor() {
     afterNextRender(() => this.initMap());
 
-    // Update GeoJSON source whenever wines input changes
+    // Update GeoJSON source whenever wines input changes OR map becomes ready
     effect(() => {
       const wines = this.wines();
-      this.updateSource(wines);
+      const ready = this.mapReady();
+      if (ready) {
+        this.updateSource(wines);
+      }
     });
   }
 
@@ -55,7 +59,7 @@ export class WineMapComponent implements OnDestroy {
       this.addSources();
       this.addLayers();
       this.addInteractions();
-      this.updateSource(this.wines());
+      this.mapReady.set(true);
     });
   }
 

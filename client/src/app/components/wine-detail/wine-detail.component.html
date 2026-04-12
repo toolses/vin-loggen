@@ -70,15 +70,6 @@
       <h1 class="font-serif text-3xl font-bold text-cream leading-tight mt-4">{{ w.name }}</h1>
       <p class="text-cream-dark text-lg mt-1">{{ w.producer }}</p>
 
-      <!-- Rating -->
-      @if (w.rating != null) {
-        <div class="flex items-center gap-2 mt-4">
-          <span class="text-gold text-xl tracking-wider">{{ stars() }}</span>
-          <span class="text-cream text-2xl font-bold">{{ w.rating }}</span>
-          <span class="text-cream-dark text-sm">/ 6</span>
-        </div>
-      }
-
       <!-- Badges -->
       <div class="flex flex-wrap gap-2 mt-5">
         @if (w.vintage) {
@@ -102,44 +93,6 @@
           </span>
         }
       </div>
-
-      <!-- Tasting date (only shown for single tasting; multi-tasting shows in timeline) -->
-      @if (w.tasted_at && logs().length <= 1) {
-        <div class="glass rounded-xl px-4 py-3 mt-5 flex items-center gap-3">
-          <svg class="w-5 h-5 text-cream-dark flex-shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
-          </svg>
-          <div>
-            <p class="text-[10px] uppercase tracking-wider text-cream-dark font-medium">Smakt</p>
-            <p class="text-sm text-cream">{{ w.tasted_at | date:'d. MMMM yyyy' }}</p>
-          </div>
-        </div>
-      }
-
-      <!-- Notes -->
-      @if (w.notes) {
-        <div class="glass rounded-xl px-4 py-3 mt-4">
-          <p class="text-[10px] uppercase tracking-wider text-cream-dark font-medium mb-1.5">Notater</p>
-          <p class="text-sm text-cream leading-relaxed whitespace-pre-line">{{ w.notes }}</p>
-        </div>
-      }
-
-      <!-- Location (only shown for single tasting; multi-tasting shows in timeline) -->
-      @if (w.location_name && logs().length <= 1) {
-        <div class="glass rounded-xl px-4 py-3 mt-4 flex items-center gap-3">
-          <svg class="w-5 h-5 text-cream-dark flex-shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
-            <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
-          </svg>
-          <div>
-            <p class="text-[10px] uppercase tracking-wider text-cream-dark font-medium">Sted</p>
-            <p class="text-sm text-cream">{{ w.location_name }}</p>
-            @if (w.location_type) {
-              <p class="text-[10px] text-cream-dark/60 capitalize">{{ w.location_type }}</p>
-            }
-          </div>
-        </div>
-      }
 
       <!-- Wine details (grapes, alcohol) -->
       @if (w.grapes?.length || w.alcohol_content != null) {
@@ -190,11 +143,14 @@
         </div>
       }
 
-      <!-- ── Tasting timeline ──────────────────────────────── -->
-      @if (logs().length > 1) {
+      <!-- ── Tasting timeline (always shown) ────────────────── -->
+      @if (logs().length) {
         <div class="mt-6">
           <h2 class="text-xs uppercase tracking-wider text-cream-dark font-medium mb-3">
-            Smakshistorikk ({{ logs().length }} ganger)
+            Smakshistorikk
+            @if (logs().length > 1) {
+              ({{ logs().length }} ganger)
+            }
           </h2>
           <ol class="relative border-l border-white/10 space-y-4 pl-5">
             @for (log of logs(); track log.id) {
@@ -255,10 +211,10 @@
                         />
                       }
 
-                      <!-- Edit button -->
+                      <!-- Edit tasting button -->
                       <a
                         [routerLink]="['/wines', w.id, 'edit']"
-                        [queryParams]="{ logId: log.id }"
+                        [queryParams]="{ logId: log.id, mode: 'tasting' }"
                         class="flex items-center justify-center w-7 h-7 rounded-full bg-white/5 text-cream-dark
                                hover:bg-white/10 hover:text-cream transition-colors"
                         aria-label="Rediger denne smaksloggen"
@@ -267,6 +223,18 @@
                           <path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125" />
                         </svg>
                       </a>
+
+                      <!-- Delete tasting button -->
+                      <button
+                        (click)="confirmDeleteLog(log.id)"
+                        class="flex items-center justify-center w-7 h-7 rounded-full bg-white/5 text-cream-dark
+                               hover:bg-red-500/10 hover:text-red-400 transition-colors"
+                        aria-label="Slett denne smaksloggen"
+                      >
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
+                        </svg>
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -280,13 +248,14 @@
       <div class="flex gap-3 mt-6">
         <a
           [routerLink]="['/wines', w.id, 'edit']"
+          [queryParams]="{ mode: 'wine' }"
           class="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-burgundy text-cream font-medium
                  hover:bg-burgundy-light transition-colors"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125" />
           </svg>
-          Rediger
+          Rediger vin
         </a>
         <button
           (click)="showSharePreview.set(true)"
@@ -331,12 +300,18 @@
         class="glass rounded-2xl p-6 w-full max-w-sm border border-white/10 animate-slide-up"
         (click)="$event.stopPropagation()"
       >
-        <h3 class="font-serif text-xl text-cream mb-2">Slett vin?</h3>
+        <h3 class="font-serif text-xl text-cream mb-2">
+          {{ deleteLogId() ? 'Slett smakslogg?' : 'Slett vin?' }}
+        </h3>
         <p class="text-sm text-cream-dark mb-6">
-          Er du sikker på at du vil slette denne smaksloggen for
-          <strong class="text-cream">{{ w.name }}</strong>?
-          @if (w.log_count > 1) {
-            Du har {{ w.log_count }} logger for denne vinen – de andre beholdes.
+          @if (deleteLogId()) {
+            Er du sikker på at du vil slette denne smaksloggen?
+            @if (logs().length > 1) {
+              De andre smaksloggene beholdes.
+            }
+          } @else {
+            Er du sikker på at du vil slette
+            <strong class="text-cream">{{ w.name }}</strong> og alle smakslogger?
           }
           Dette kan ikke angres.
         </p>

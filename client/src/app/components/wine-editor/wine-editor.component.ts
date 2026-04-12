@@ -46,6 +46,7 @@ export class WineEditorComponent implements OnInit {
   protected readonly locationLng = signal<number | null>(null);
   protected readonly locationType = signal<string | null>(null);
   protected readonly locationSet = signal(false);
+  protected readonly homeAddress = this.profileService.homeAddress;
 
   protected readonly imageUrl = signal<string | null>(null);
   protected readonly thumbnailUrl = signal<string | null>(null);
@@ -83,9 +84,19 @@ export class WineEditorComponent implements OnInit {
   protected readonly searching      = signal(false);
   private searchTimeout: ReturnType<typeof setTimeout> | null = null;
 
+  // Catalogue wine selected (wine fields should be read-only)
+  protected readonly catalogueWine  = signal(false);
+
+  // Edit scope: 'wine' = wine fields only, 'tasting' = tasting fields only, null = all
+  protected readonly editScope = signal<'wine' | 'tasting' | null>(null);
+
   ngOnInit(): void {
     const id = this.route.snapshot.paramMap.get('id');
     const logId = this.route.snapshot.queryParamMap.get('logId');
+    const mode = this.route.snapshot.queryParamMap.get('mode');
+    if (mode === 'wine' || mode === 'tasting') {
+      this.editScope.set(mode);
+    }
 
     if (id) {
       // Edit mode: load existing wine
@@ -124,6 +135,7 @@ export class WineEditorComponent implements OnInit {
         }
         if (scan.existingWineId) {
           this.existingWineId = scan.existingWineId;
+          this.catalogueWine.set(true);
         }
 
         // Pro enrichment
@@ -197,7 +209,7 @@ export class WineEditorComponent implements OnInit {
     this.notes.set(wine.notes ?? '');
     this.rating.set(wine.rating ?? 0);
     this.imageUrl.set(wine.image_url);
-    this.tastedAt.set(wine.tasted_at ?? '');
+    this.tastedAt.set(wine.tasted_at?.slice(0, 10) ?? '');
     if (wine.grapes?.length)   this.grapeVariety.set(wine.grapes.join(', '));
     if (wine.alcohol_content != null) this.alcoholContent.set(`${wine.alcohol_content}%`);
     this.grapes = wine.grapes ?? null;
@@ -250,7 +262,7 @@ export class WineEditorComponent implements OnInit {
     this.notes.set(log.notes ?? '');
     this.rating.set(log.rating ?? 0);
     this.imageUrl.set(log.image_url);
-    this.tastedAt.set(log.tasted_at ?? '');
+    this.tastedAt.set(log.tasted_at?.slice(0, 10) ?? '');
 
     if (log.location_name) {
       this.locationName.set(log.location_name);
@@ -367,7 +379,12 @@ export class WineEditorComponent implements OnInit {
     this.type.set(wine.type);
     if (wine.country) this.country.set(wine.country);
     if (wine.region)  this.region.set(wine.region);
+    if (wine.grapes?.length)  this.grapeVariety.set(wine.grapes.join(', '));
+    if (wine.alcoholContent != null) this.alcoholContent.set(`${wine.alcoholContent}%`);
+    this.grapes = wine.grapes ?? null;
+    this.alcoholNum = wine.alcoholContent ?? null;
     this.existingWineId = wine.id;
+    this.catalogueWine.set(true);
     this.searchStep.set(false);
   }
 

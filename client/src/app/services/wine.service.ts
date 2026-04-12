@@ -118,6 +118,8 @@ export interface WineSearchResult {
   type: string;
   country: string | null;
   region: string | null;
+  grapes: string[] | null;
+  alcoholContent: number | null;
 }
 
 @Injectable({ providedIn: 'root' })

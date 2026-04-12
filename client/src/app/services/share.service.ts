@@ -22,13 +22,13 @@ export class ShareService {
 
     const file = new File(
       [imageBlob],
-      `vinjournalen-${wine.name.replace(/\s+/g, '-').toLowerCase()}.png`,
+      `vinsomm-${wine.name.replace(/\s+/g, '-').toLowerCase()}.png`,
       { type: 'image/png' },
     );
 
     if (navigator.canShare?.({ files: [file] })) {
       await navigator.share({
-        title: `${wine.name} – Vinjournalen`,
+        title: `${wine.name} – VinSomm`,
         text: `Sjekk ut denne vinen: ${wine.name} fra ${wine.producer}`,
         files: [file],
       });

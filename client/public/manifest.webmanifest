@@ -1,6 +1,6 @@
 {
-  "name": "Vinjournalen",
-  "short_name": "Vinjournalen",
+  "name": "VinSomm",
+  "short_name": "VinSomm",
   "description": "AI-drevet vinregistrering – logg vin med kamera",
   "theme_color": "#121212",
   "background_color": "#121212",

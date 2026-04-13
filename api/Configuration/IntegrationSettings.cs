@@ -48,15 +48,13 @@ public sealed class WineApiSettings
 
     /// <summary>
     /// Name of the HTTP header used for authentication.
-    /// Common values: "Authorization" (value prefixed with "Bearer "),
-    /// or "X-Api-Key" (value = raw key).
-    /// Verify against the actual wineapi.io documentation.
+    /// wineapi.io uses <c>X-API-Key</c> with a raw key value (no prefix).
     /// </summary>
-    public string AuthHeader { get; init; } = "Authorization";
+    public string AuthHeader { get; init; } = "X-API-Key";
 
     /// <summary>
     /// Prefix added before the key value in the auth header.
-    /// Use "Bearer " for OAuth-style, or empty string for raw key headers.
+    /// Empty for raw API-key headers; use "Bearer " for OAuth-style.
     /// </summary>
-    public string AuthPrefix { get; init; } = "Bearer ";
+    public string AuthPrefix { get; init; } = "";
 }

@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Text.Json;
 using Microsoft.AspNetCore.Http.HttpResults;
 using VinLoggen.Api.Models;
 using VinLoggen.Api.Services;
@@ -16,6 +17,10 @@ public static class ExpertEndpoints
         group.MapPost("/ask", AskExpert)
             .WithName("AskExpert")
             .WithSummary("Ask the VinSomm AI expert a wine-related question (charges 1 quota)");
+
+        group.MapPost("/ask-stream", AskExpertStream)
+            .WithName("AskExpertStream")
+            .WithSummary("Ask the VinSomm AI expert with real-time progress events via SSE (charges 1 quota)");
 
         group.MapGet("/sessions", GetSessions)
             .WithName("GetExpertSessions")
@@ -37,6 +42,11 @@ public static class ExpertEndpoints
     }
 
     // ── Ask ──────────────────────────────────────────────────────────────────
+
+    private static readonly JsonSerializerOptions SseJsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+    };
 
     private static async Task<Results<Ok<ExpertResponse>, ProblemHttpResult>> AskExpert(
         ExpertRequest        request,
@@ -78,6 +88,63 @@ public static class ExpertEndpoints
                 detail: "Kunne ikke behandle forespørselen.",
                 statusCode: StatusCodes.Status500InternalServerError);
         }
+    }
+
+    // ── Ask (streaming SSE) ─────────────────────────────────────────────────
+
+    private static async Task AskExpertStream(
+        ExpertRequest        request,
+        ClaimsPrincipal      user,
+        IExpertService       expertService,
+        HttpContext          httpContext,
+        ILogger<Program>     logger,
+        CancellationToken    ct)
+    {
+        httpContext.Response.ContentType = "text/event-stream";
+        httpContext.Response.Headers.CacheControl = "no-cache";
+        httpContext.Response.Headers.Connection = "keep-alive";
+
+        if (!TryGetUserId(user, out var userId))
+        {
+            await WriteSseEvent(httpContext, "error", new { detail = "Could not resolve user identity from token." });
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(request.Question))
+        {
+            await WriteSseEvent(httpContext, "error", new { detail = "Spørsmål kan ikke være tomt." });
+            return;
+        }
+
+        try
+        {
+            var result = await expertService.AskStreamAsync(userId, request, async status =>
+            {
+                await WriteSseEvent(httpContext, "status", new { message = status });
+            }, ct);
+
+            await WriteSseEvent(httpContext, "result", result);
+        }
+        catch (ExpertQuotaExceededException ex)
+        {
+            await WriteSseEvent(httpContext, "error", new
+            {
+                detail = ex.Message,
+                errorCode = "QuotaExceeded",
+            });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error in AskExpertStream for user {UserId}", userId);
+            await WriteSseEvent(httpContext, "error", new { detail = "Kunne ikke behandle forespørselen." });
+        }
+    }
+
+    private static async Task WriteSseEvent(HttpContext httpContext, string eventName, object data)
+    {
+        var json = JsonSerializer.Serialize(data, SseJsonOptions);
+        await httpContext.Response.WriteAsync($"event: {eventName}\ndata: {json}\n\n", httpContext.RequestAborted);
+        await httpContext.Response.Body.FlushAsync(httpContext.RequestAborted);
     }
 
     // ── Sessions ─────────────────────────────────────────────────────────────

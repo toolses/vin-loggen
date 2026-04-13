@@ -11,8 +11,7 @@
         </svg>
       </div>
       <div class="flex-1">
-        <h1 class="font-serif text-xl font-bold text-cream">{{ greeting() }}</h1>
-        <p class="text-cream-dark text-xs">Din personlige VinSomm-ekspert</p>
+        <h1 class="font-serif text-xl font-bold text-cream">Din personlige vinekspert</h1>
       </div>
       <!-- History toggle -->
       <button
@@ -277,35 +276,63 @@
             }
           </div>
         }
-        <!-- Feedback buttons -->
+        <!-- Feedback & Vinmonopolet -->
         @if (wine.suggestionId) {
-          <div class="flex gap-1.5 pl-[42px] mt-0.5">
-            <button
-              (click)="onFeedback(wine, 1); $event.stopPropagation(); $event.preventDefault()"
-              class="w-6 h-6 rounded-full flex items-center justify-center transition-all"
-              [class]="wine.feedback === 1
-                ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-                : 'bg-white/5 text-cream-dark/40 hover:bg-green-500/10 hover:text-green-400 border border-transparent'"
-              aria-label="Tommel opp"
+          <div class="flex items-center pl-[42px] mt-0.5">
+            <div class="flex gap-1.5">
+              <button
+                (click)="onFeedback(wine, 1); $event.stopPropagation(); $event.preventDefault()"
+                class="w-6 h-6 rounded-full flex items-center justify-center transition-all"
+                [class]="wine.feedback === 1
+                  ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                  : 'bg-white/5 text-cream-dark/40 hover:bg-green-500/10 hover:text-green-400 border border-transparent'"
+                aria-label="Tommel opp"
+              >
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round"
+                    d="M6.633 10.25c.806 0 1.533-.446 2.031-1.08a9.041 9.041 0 0 1 2.861-2.4c.723-.384 1.35-.956 1.653-1.715a4.498 4.498 0 0 0 .322-1.672V3a.75.75 0 0 1 .75-.75 2.25 2.25 0 0 1 2.25 2.25c0 1.152-.26 2.243-.723 3.218-.266.558.107 1.282.725 1.282m0 0h3.126c1.026 0 1.945.694 2.054 1.715.045.422.068.85.068 1.285a11.95 11.95 0 0 1-2.649 7.521c-.388.482-.987.729-1.605.729H13.48c-.483 0-.964-.078-1.423-.23l-3.114-1.04a4.501 4.501 0 0 0-1.423-.23H5.904m7.848 0c.065.21.1.433.1.664 0 .414-.336.75-.75.75H4.5a2.25 2.25 0 0 1-2.25-2.25V9a2.25 2.25 0 0 1 2.25-2.25h1.404" />
+                </svg>
+              </button>
+              <button
+                (click)="onFeedback(wine, -1); $event.stopPropagation(); $event.preventDefault()"
+                class="w-6 h-6 rounded-full flex items-center justify-center transition-all"
+                [class]="wine.feedback === -1
+                  ? 'bg-red-500/20 text-red-400 border border-red-500/30'
+                  : 'bg-white/5 text-cream-dark/40 hover:bg-red-500/10 hover:text-red-400 border border-transparent'"
+                aria-label="Tommel ned"
+              >
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round"
+                    d="M7.498 15.25H4.372c-1.026 0-1.945-.694-2.054-1.715A12.137 12.137 0 0 1 2.25 12c0-2.848.992-5.464 2.649-7.521C5.287 3.997 5.886 3.75 6.504 3.75h4.369a4.5 4.5 0 0 1 1.423.23l3.114 1.04a4.5 4.5 0 0 0 1.423.23h1.294M7.498 15.25c.618 0 .991.724.725 1.282A7.471 7.471 0 0 0 7.5 19.5a2.25 2.25 0 0 0 2.25 2.25.75.75 0 0 0 .75-.75v-.633c0-.573.11-1.14.322-1.672.304-.76.93-1.33 1.653-1.715a9.04 9.04 0 0 0 2.86-2.4c.498-.634 1.226-1.08 2.032-1.08h.384" />
+                </svg>
+              </button>
+            </div>
+            <a class="ml-auto w-6 h-6 rounded-full flex items-center justify-center
+                      bg-white/5 hover:bg-white/10 transition-all border border-transparent hover:border-white/10"
+               [href]="vinmonopoletSearchUrl(wine)"
+               target="_blank"
+               rel="noopener noreferrer"
+               (click)="$event.stopPropagation()"
+               aria-label="Søk på Vinmonopolet"
+               title="Søk på Vinmonopolet"
             >
-              <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round"
-                  d="M6.633 10.25c.806 0 1.533-.446 2.031-1.08a9.041 9.041 0 0 1 2.861-2.4c.723-.384 1.35-.956 1.653-1.715a4.498 4.498 0 0 0 .322-1.672V3a.75.75 0 0 1 .75-.75 2.25 2.25 0 0 1 2.25 2.25c0 1.152-.26 2.243-.723 3.218-.266.558.107 1.282.725 1.282m0 0h3.126c1.026 0 1.945.694 2.054 1.715.045.422.068.85.068 1.285a11.95 11.95 0 0 1-2.649 7.521c-.388.482-.987.729-1.605.729H13.48c-.483 0-.964-.078-1.423-.23l-3.114-1.04a4.501 4.501 0 0 0-1.423-.23H5.904m7.848 0c.065.21.1.433.1.664 0 .414-.336.75-.75.75H4.5a2.25 2.25 0 0 1-2.25-2.25V9a2.25 2.25 0 0 1 2.25-2.25h1.404" />
-              </svg>
-            </button>
-            <button
-              (click)="onFeedback(wine, -1); $event.stopPropagation(); $event.preventDefault()"
-              class="w-6 h-6 rounded-full flex items-center justify-center transition-all"
-              [class]="wine.feedback === -1
-                ? 'bg-red-500/20 text-red-400 border border-red-500/30'
-                : 'bg-white/5 text-cream-dark/40 hover:bg-red-500/10 hover:text-red-400 border border-transparent'"
-              aria-label="Tommel ned"
+              <img src="icons/vinmonopolet-crest-iron.c7fa286a.svg" alt="" class="w-3.5 h-3.5 opacity-40 hover:opacity-70 transition-opacity">
+            </a>
+          </div>
+        }
+        @if (!wine.suggestionId) {
+          <div class="flex justify-end pl-[42px] mt-0.5">
+            <a class="w-6 h-6 rounded-full flex items-center justify-center
+                      bg-white/5 hover:bg-white/10 transition-all border border-transparent hover:border-white/10"
+               [href]="vinmonopoletSearchUrl(wine)"
+               target="_blank"
+               rel="noopener noreferrer"
+               (click)="$event.stopPropagation()"
+               aria-label="Søk på Vinmonopolet"
+               title="Søk på Vinmonopolet"
             >
-              <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round"
-                  d="M7.498 15.25H4.372c-1.026 0-1.945-.694-2.054-1.715A12.137 12.137 0 0 1 2.25 12c0-2.848.992-5.464 2.649-7.521C5.287 3.997 5.886 3.75 6.504 3.75h4.369a4.5 4.5 0 0 1 1.423.23l3.114 1.04a4.5 4.5 0 0 0 1.423.23h1.294M7.498 15.25c.618 0 .991.724.725 1.282A7.471 7.471 0 0 0 7.5 19.5a2.25 2.25 0 0 0 2.25 2.25.75.75 0 0 0 .75-.75v-.633c0-.573.11-1.14.322-1.672.304-.76.93-1.33 1.653-1.715a9.04 9.04 0 0 0 2.86-2.4c.498-.634 1.226-1.08 2.032-1.08h.384" />
-              </svg>
-            </button>
+              <img src="icons/vinmonopolet-crest-iron.c7fa286a.svg" alt="" class="w-3.5 h-3.5 opacity-40 hover:opacity-70 transition-opacity">
+            </a>
           </div>
         }
       </ng-template>
@@ -314,10 +341,15 @@
       @if (expert.loading()) {
         <div class="flex justify-start">
           <div class="glass rounded-2xl rounded-bl-md px-4 py-3 border border-white/10">
-            <div class="flex gap-1.5">
-              <div class="w-2 h-2 bg-cream-dark rounded-full animate-bounce" style="animation-delay: 0ms"></div>
-              <div class="w-2 h-2 bg-cream-dark rounded-full animate-bounce" style="animation-delay: 150ms"></div>
-              <div class="w-2 h-2 bg-cream-dark rounded-full animate-bounce" style="animation-delay: 300ms"></div>
+            <div class="flex items-center gap-2.5">
+              <div class="flex gap-1.5">
+                <div class="w-1.5 h-1.5 bg-gold/70 rounded-full animate-bounce" style="animation-delay: 0ms"></div>
+                <div class="w-1.5 h-1.5 bg-gold/70 rounded-full animate-bounce" style="animation-delay: 150ms"></div>
+                <div class="w-1.5 h-1.5 bg-gold/70 rounded-full animate-bounce" style="animation-delay: 300ms"></div>
+              </div>
+              @if (expert.statusText()) {
+                <span class="text-xs text-cream-dark animate-fade-in">{{ expert.statusText() }}</span>
+              }
             </div>
           </div>
         </div>
@@ -366,6 +398,7 @@
         @if (profile.proScansRemaining() === 0) {
           <p class="text-xs text-red-400 text-center mt-1.5">Dagens kvote er brukt opp. Prøv igjen i morgen.</p>
         }
+        <p class="text-[10px] text-cream-dark/40 text-center mt-1.5">Eksperten kan gjøre feil. Viktig informasjon må kvalitetssikres.</p>
       </section>
     } @else {
       <section class="flex-shrink-0 py-3 text-center" style="padding-bottom: env(safe-area-inset-bottom)">

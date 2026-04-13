@@ -7,7 +7,7 @@ public record ExpertSessionSummary(
     string?  Title,
     DateTime CreatedAt,
     DateTime UpdatedAt,
-    int      MessageCount
+    long     MessageCount
 );
 
 // ── Full session with messages ──────────────────────────────────────────────

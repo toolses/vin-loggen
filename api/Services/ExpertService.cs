@@ -13,18 +13,24 @@ public sealed class ExpertService : IExpertService
 {
     private const string WineDelimiter = "---WINES---";
 
-    private const string SystemInstruction = """
+    private const string SystemInstructionTemplate = """
         Du er VinSomm-eksperten — en personlig og profesjonell AI-vinkelner.
+        Dagens dato er {DATE}.
         Bruk vedlagte data fra vår lokale vinkatalog og brukerens smaksprofil
-        for å gi skreddersydde anbefalinger.
+        for å gi skreddersydde anbefalinger. Hvis katalogen ikke dekker det
+        brukeren spør om, anbefal viner fra din egen kunnskap — du er IKKE
+        begrenset til katalogen.
 
         Regler:
         - Svar alltid på norsk.
         - Vær vennlig, konsis og kompetent.
         - Hvis du foreslår en vin fra katalogen, nevn HVORFOR den passer brukerens smak.
+        - Hvis katalogen mangler relevante viner, foreslå konkrete viner du kjenner til
+          (bruk ekte vin- og produsentnavn). Merk dem med «whyRecommended».
         - Hvis brukerens smaksprofil er tilgjengelig, bruk den til å gi personlige råd.
         - Hvis du ikke har nok informasjon til å svare, si det ærlig.
         - Bruk brukerens fornavn når det passer.
+        - Foretrekk nyere årganger (siste 4 år) med mindre brukeren spesifikt ber om noe annet.
 
         VIKTIG — Etter ditt svar SKAL du legge til en seksjon med vinene du anbefaler.
         Bruk nøyaktig dette formatet:
@@ -32,14 +38,18 @@ public sealed class ExpertService : IExpertService
         [ditt markdown-svar her]
 
         ---WINES---
-        [{"name":"Vinnavn","producer":"Produsent","vintage":2020,"type":"Rød","country":"Italia","region":"Toscana","whyRecommended":"Kort grunn"}]
+        [{"name":"Vinnavn","producer":"Produsent","vintage":2024,"type":"Rød","country":"Italia","region":"Toscana","whyRecommended":"Kort grunn"}]
 
         Regler for ---WINES---:
         - Plasser «---WINES---» på en egen linje etter svaret ditt.
         - Etter delimiteren: en JSON-array (ingen markdown-formatering, ingen code fences).
-        - Bruk nøyaktig samme navn og produsent som i katalogdataen når det er mulig.
-        - «type» skal være en av: «Rød», «Hvit», «Rosé», «Musserende», «Oransje».
+        - Bruk nøyaktig samme navn og produsent som i katalogdataen når vinen finnes der.
+          Ellers bruk ekte vin- og produsentnavn fra din egen kunnskap.
+        - «type» skal være en av: «Rød», «Hvit», «Rosé», «Musserende», «Oransje», «Dessert».
+          Champagne, Cava, Prosecco og Crémant er «Musserende».
+          Portvin, Sherry, Madeira og Marsala er «Dessert».
         - «whyRecommended»: Forklar kort HVORFOR vinen passer.
+        - Foreslå alltid minst 2–3 viner når spørsmålet handler om vin, selv om katalogen er tom.
         - Hvis spørsmålet ikke handler om viner, sett en tom array: []
         """;
 
@@ -89,8 +99,17 @@ public sealed class ExpertService : IExpertService
         _logger        = logger;
     }
 
-    public async Task<ExpertResponse> AskAsync(Guid userId, ExpertRequest request, CancellationToken ct)
+    public Task<ExpertResponse> AskAsync(Guid userId, ExpertRequest request, CancellationToken ct)
+        => AskCoreAsync(userId, request, onProgress: null, ct);
+
+    public Task<ExpertResponse> AskStreamAsync(Guid userId, ExpertRequest request, Func<string, Task> onProgress, CancellationToken ct)
+        => AskCoreAsync(userId, request, onProgress, ct);
+
+    private async Task<ExpertResponse> AskCoreAsync(
+        Guid userId, ExpertRequest request, Func<string, Task>? onProgress, CancellationToken ct)
     {
+        async Task Progress(string status) { if (onProgress is not null) await onProgress(status); }
+
         // 1. Check quota
         var proStatus = await _proUsage.GetStatusAsync(userId, ct);
         if (!proStatus.CanUsePro)
@@ -102,6 +121,7 @@ public sealed class ExpertService : IExpertService
         await using var conn = await _dataSource.OpenConnectionAsync(ct);
 
         // 2. Search local wines DB for context
+        await Progress("Søker i vinkatalogen …");
         var catalogWines = await SearchCatalogWinesAsync(conn, request.Question, ct);
 
         // 3. Fetch user's taste profile
@@ -139,9 +159,11 @@ public sealed class ExpertService : IExpertService
         }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
 
         // 6. Call AI via provider chain (DeepSeek → Gemini fallback)
+        await Progress("Spør AI-sommelieren …");
+        var systemInstruction = SystemInstructionTemplate.Replace("{DATE}", DateTime.UtcNow.ToString("yyyy-MM-dd"));
         var chatResult = await _aiChain.ChatAsync(
             _settings.AiFallback.ExpertChatPriority,
-            SystemInstruction,
+            systemInstruction,
             contextJson,
             ct);
 
@@ -161,7 +183,11 @@ public sealed class ExpertService : IExpertService
         var parsed = ParseAiResponse(chatResult.Answer);
 
         // 8. Enrich AI-suggested wines via WineAPI, with AI fallback for gaps
-        var enrichedSuggestions = await EnrichWinesAsync(parsed.Wines, ct);
+        if (parsed.Wines.Length > 0)
+        {
+            await Progress("Henter vindetaljer fra WineAPI …");
+        }
+        var enrichedSuggestions = await EnrichWinesAsync(parsed.Wines, onProgress, ct);
 
         // 9. Build merged wine references (catalog + enriched AI suggestions)
         var refs = BuildEnrichedReferences(catalogWines, parsed.Wines, enrichedSuggestions);
@@ -432,12 +458,15 @@ public sealed class ExpertService : IExpertService
     // ── Enrichment pipeline (mirrors WineOrchestratorService pattern) ────────────
 
     private async Task<WineApiService.WineEnrichment?[]> EnrichWinesAsync(
-        AiWineSuggestion[] aiWines, CancellationToken ct)
+        AiWineSuggestion[] aiWines, Func<string, Task>? onProgress, CancellationToken ct)
     {
         if (aiWines.Length == 0)
             return [];
 
+        async Task Progress(string status) { if (onProgress is not null) await onProgress(status); }
+
         var results = new WineApiService.WineEnrichment?[aiWines.Length];
+        var usedAiFallback = false;
 
         for (int i = 0; i < aiWines.Length; i++)
         {
@@ -455,6 +484,12 @@ public sealed class ExpertService : IExpertService
             // Step b: AI fallback if WineAPI has gaps (missing food pairings OR description)
             if (enrichment?.FoodPairings is not { Length: > 0 } || string.IsNullOrWhiteSpace(enrichment?.Description))
             {
+                if (!usedAiFallback)
+                {
+                    await Progress("WineAPI hadde ikke alt — supplerer med AI …");
+                    usedAiFallback = true;
+                }
+
                 var aiFallback = await GetWineEnrichmentViaAiAsync(wine, ct);
 
                 if (aiFallback is not null)

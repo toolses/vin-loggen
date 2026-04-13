@@ -1,7 +1,6 @@
 import { Component, computed, ElementRef, inject, OnInit, signal, viewChild } from '@angular/core';
 import { DatePipe, NgTemplateOutlet } from '@angular/common';
 import { Router, RouterLink } from '@angular/router';
-import { AuthService } from '../../services/auth.service';
 import { ProfileService } from '../../services/profile.service';
 import { ExpertService, ExpertMessage, ExpertWineRef } from '../../services/expert.service';
 import { MarkdownPipe } from '../../pipes/markdown.pipe';
@@ -13,7 +12,6 @@ import { MarkdownPipe } from '../../pipes/markdown.pipe';
   templateUrl: './expert.component.html',
 })
 export class ExpertComponent implements OnInit {
-  protected readonly auth = inject(AuthService);
   protected readonly profile = inject(ProfileService);
   protected readonly expert = inject(ExpertService);
   private readonly router = inject(Router);
@@ -27,12 +25,6 @@ export class ExpertComponent implements OnInit {
     const limit = this.profile.dailyProLimit();
     if (limit === 0) return 0;
     return Math.round((this.profile.proScansRemaining() / limit) * 100);
-  });
-
-  protected readonly greeting = computed(() => {
-    const name = this.auth.displayName();
-    const firstName = name?.split(' ')[0] ?? null;
-    return firstName ? `Hei, ${firstName}!` : 'Hei!';
   });
 
   protected readonly isViewingPastSession = computed(() => this.expert.viewingHistory());
@@ -131,6 +123,12 @@ export class ExpertComponent implements OnInit {
       case 'ai':      return 'AI-forslag';
       default:        return 'Katalog';
     }
+  }
+
+  protected vinmonopoletSearchUrl(wine: ExpertWineRef): string {
+    const q = [wine.name, wine.vintage].filter(Boolean).join(' ')
+      .split(/\s+/).map(w => encodeURIComponent(w)).join('+');
+    return `https://www.vinmonopolet.no/search?q=${q}:relevance`;
   }
 
   protected getSourceStyle(source: string | null | undefined): string {

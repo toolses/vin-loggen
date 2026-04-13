@@ -4,6 +4,7 @@ import { environment } from '../../environments/environment';
 import { firstValueFrom } from 'rxjs';
 import { NotificationService } from './notification.service';
 import { ProfileService } from './profile.service';
+import { AuthService } from './auth.service';
 
 // ── Wine reference with optional feedback ────────────────────────────────
 
@@ -86,9 +87,11 @@ export class ExpertService {
   private readonly http = inject(HttpClient);
   private readonly notifications = inject(NotificationService);
   private readonly profileService = inject(ProfileService);
+  private readonly auth = inject(AuthService);
 
   private readonly _messages = signal<ExpertMessage[]>([]);
   private readonly _loading = signal(false);
+  private readonly _statusText = signal<string | null>(null);
   private readonly _currentSessionId = signal<string | null>(null);
   private readonly _sessions = signal<ExpertSessionSummary[]>([]);
   private readonly _sessionsLoading = signal(false);
@@ -96,6 +99,7 @@ export class ExpertService {
 
   readonly messages = this._messages.asReadonly();
   readonly loading = this._loading.asReadonly();
+  readonly statusText = this._statusText.asReadonly();
   readonly currentSessionId = this._currentSessionId.asReadonly();
   readonly sessions = this._sessions.asReadonly();
   readonly sessionsLoading = this._sessionsLoading.asReadonly();
@@ -107,6 +111,7 @@ export class ExpertService {
     // Add user message immediately
     this._messages.update(msgs => [...msgs, { role: 'user', content: question }]);
     this._loading.set(true);
+    this._statusText.set(null);
     this._viewingHistory.set(false);
 
     try {
@@ -114,9 +119,7 @@ export class ExpertService {
       const sid = this._currentSessionId();
       if (sid) body.sessionId = sid;
 
-      const result = await firstValueFrom(
-        this.http.post<ExpertAskResponse>(`${environment.apiBaseUrl}/expert/ask`, body),
-      );
+      const result = await this.fetchSseAsk(body);
 
       // Track the session
       if (result.sessionId) {
@@ -150,13 +153,11 @@ export class ExpertService {
 
       return result;
     } catch (err: unknown) {
-      const httpErr = err as { error?: { extensions?: { errorCode?: string }; detail?: string }; status?: number };
-      const errorCode = httpErr?.error?.extensions?.errorCode;
-
-      if (errorCode) {
-        this.notifications.showApiError(errorCode);
+      const sseErr = err as { errorCode?: string; detail?: string };
+      if (sseErr?.errorCode) {
+        this.notifications.showApiError(sseErr.errorCode);
       } else {
-        const detail = httpErr?.error?.detail
+        const detail = sseErr?.detail
           ?? (err instanceof Error ? err.message : 'Kunne ikke kontakte eksperten');
         this.notifications.error(detail);
       }
@@ -166,7 +167,65 @@ export class ExpertService {
       return null;
     } finally {
       this._loading.set(false);
+      this._statusText.set(null);
     }
+  }
+
+  // ── SSE fetch helper ───────────────────────────────────────────────
+
+  private async fetchSseAsk(body: { question: string; sessionId?: string }): Promise<ExpertAskResponse> {
+    const token = this.auth.session()?.access_token;
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const response = await fetch(`${environment.apiBaseUrl}/expert/ask-stream`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok || !response.body) {
+      throw { detail: 'Kunne ikke kontakte eksperten' };
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let result: ExpertAskResponse | null = null;
+
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+
+      // Parse complete SSE messages from buffer
+      const parts = buffer.split('\n\n');
+      buffer = parts.pop() ?? '';
+
+      for (const part of parts) {
+        const lines = part.split('\n');
+        let eventName = '';
+        let data = '';
+
+        for (const line of lines) {
+          if (line.startsWith('event: ')) eventName = line.slice(7);
+          else if (line.startsWith('data: ')) data = line.slice(6);
+        }
+
+        if (eventName === 'status' && data) {
+          const parsed = JSON.parse(data) as { message: string };
+          this._statusText.set(parsed.message);
+        } else if (eventName === 'result' && data) {
+          result = JSON.parse(data) as ExpertAskResponse;
+        } else if (eventName === 'error' && data) {
+          throw JSON.parse(data);
+        }
+      }
+    }
+
+    if (!result) throw { detail: 'Ingen respons mottatt fra serveren' };
+    return result;
   }
 
   // ── Session history ──────────────────────────────────────────────────

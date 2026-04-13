@@ -91,7 +91,7 @@ public sealed class GeminiService : IGeminiService
           "country": string,
           "region": string,
           "grapes": string[],
-          "type": "Rød"|"Hvit"|"Musserende"|"Rosé"|"Oransje",
+          "type": "Rød"|"Hvit"|"Musserende"|"Rosé"|"Oransje"|"Dessert",
           "alcoholContent": number
         }
 
@@ -117,7 +117,7 @@ public sealed class GeminiService : IGeminiService
           "country": string,
           "region": string,
           "grapes": string[],
-          "type": "Rød"|"Hvit"|"Musserende"|"Rosé"|"Oransje",
+          "type": "Rød"|"Hvit"|"Musserende"|"Rosé"|"Oransje"|"Dessert",
           "alcoholContent": number,
           "foodPairings": string[]
         }

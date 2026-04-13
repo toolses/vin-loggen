@@ -34,6 +34,8 @@ public interface IExpertService
 {
     Task<ExpertResponse> AskAsync(Guid userId, ExpertRequest request, CancellationToken ct);
 
+    Task<ExpertResponse> AskStreamAsync(Guid userId, ExpertRequest request, Func<string, Task> onProgress, CancellationToken ct);
+
     Task<IEnumerable<ExpertSessionSummary>> GetSessionsAsync(Guid userId, int limit, int offset, CancellationToken ct);
 
     Task<ExpertSessionDetail?> GetSessionAsync(Guid userId, Guid sessionId, CancellationToken ct);

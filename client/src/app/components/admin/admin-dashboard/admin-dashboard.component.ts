@@ -84,7 +84,7 @@ export class AdminDashboardComponent implements OnInit {
     this.resetting.set(false);
     this.showResetConfirm.set(false);
     if (result) {
-      this.notificationService.show(`Slettet ${result.deletedWines} viner, ${result.deletedWineLogs} loggføringer og ${result.deletedStorageObjects} bilder.`, 'success');
+      this.notificationService.show(`Slettet ${result.deletedWines} viner, ${result.deletedWineLogs} loggføringer og ${result.deletedExternalIds} eksterne ID-er.`, 'success');
       this.totalWines.set(0);
       await Promise.all([
         this.usageService.loadTodayUsage(),

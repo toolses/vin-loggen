@@ -28,11 +28,13 @@ public static class AdminResetEndpoints
             await using var conn = await dataSource.OpenConnectionAsync(ct);
 
             var deletedWineLogs = await conn.ExecuteAsync("DELETE FROM wine_logs;");
+            var deletedExternalIds = await conn.ExecuteAsync("DELETE FROM wine_external_ids;");
             var deletedWines = await conn.ExecuteAsync("DELETE FROM wines;");
 
             return TypedResults.Ok<object>(new
             {
                 deletedWineLogs,
+                deletedExternalIds,
                 deletedWines,
             });
         }

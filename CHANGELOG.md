@@ -6,12 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+### Fixed
+- Wine API 401 errors: corrected default auth header from `Authorization: Bearer` to `X-API-Key` to match wineapi.io docs
+- Share image on iOS Safari: replaced canvas-based image inlining with cache-busted fetch to avoid tainted CORS cache
+- Date picker overflowing viewport on iOS Safari in wine editor
+
 ### Added
+- Google Places API integration for location search and details in tasting log
 - Admin "Reset Data" tool (danger zone) for clearing all wines, tasting logs, and storage objects during alpha/beta testing
 - Agent rules in INSTRUCTIONS.md requiring README.md and CHANGELOG.md updates on every change
-- This changelog
 
 ### Changed
+- Refactored icon generation script to read from existing SVG file instead of inline definition
 - Updated INSTRUCTIONS.md to reflect current project status (database schema, admin panel, all environment variables, full project structure)
 - Updated README.md to match actual tech stack and hosting setup
 

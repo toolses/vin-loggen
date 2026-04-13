@@ -1,7 +1,7 @@
-<div class="animate-fade-in">
+<div class="animate-fade-in max-w-lg mx-auto px-4 py-6">
 
   <!-- ── Hero Section ──────────────────────────────────────── -->
-  <section class="px-6 pt-12 pb-8 text-center">
+  <section class="pt-6 pb-8 text-center">
     <span class="text-5xl block mb-4" aria-hidden="true">🍷</span>
     <h1 class="font-serif text-4xl font-bold text-cream tracking-tight">VinSomm</h1>
     <p class="text-cream-dark mt-2 text-sm">Din personlige vinekspert</p>
@@ -14,7 +14,7 @@
   </section>
 
   <!-- ── Scan CTA ──────────────────────────────────────────── -->
-  <section class="px-6 mb-10">
+  <section class="mb-10">
     <a
       routerLink="/scan"
       class="block w-full py-4 rounded-2xl bg-burgundy text-cream text-center text-lg font-semibold
@@ -35,14 +35,14 @@
 
   <!-- ── Error banner ──────────────────────────────────────── -->
   @if (wineService.error()) {
-    <div class="mx-6 mb-6 glass rounded-xl px-4 py-3 text-sm text-red-400 border border-red-500/20" role="alert">
+    <div class="mb-6 glass rounded-xl px-4 py-3 text-sm text-red-400 border border-red-500/20" role="alert">
       {{ wineService.error() }}
     </div>
   }
 
   <!-- ── Loading (Skeleton) ────────────────────────────────── -->
   @if (wineService.loading()) {
-    <section class="px-6">
+    <section>
       <div class="h-5 w-28 bg-white/10 rounded animate-shimmer mb-4"></div>
       <ul class="space-y-3">
         @for (i of [1,2,3,4]; track i) {
@@ -61,7 +61,7 @@
 
   <!-- ── Recent Wines Section ──────────────────────────────── -->
   @if (!wineService.loading()) {
-    <section class="px-6 pb-4">
+    <section class="pb-4">
       <div class="flex items-center justify-between mb-4">
         <h2 class="font-serif text-lg text-cream font-semibold">Siste viner</h2>
         @if (wineService.wineCount() > 0) {

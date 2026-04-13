@@ -13,7 +13,8 @@ En moderne, AI-drevet PWA for registrering og vurdering av vin. Ta bilde av etik
 | **Database** | Supabase (Postgres) med Row Level Security |
 | **Auth** | Supabase Auth (Google + Apple OAuth) |
 | **AI** | Gemini 2.0 Flash — etikett-analyse med multi-bilde-støtte |
-| **Vindata** | WineAPI (Vinmonopolet) — berikelse og priser |
+| **Vindata** | wineapi.io — berikelse, priser og matparing |
+| **Lokasjon** | Google Places API — stedsøk for smakslogg |
 | **Lagring** | Supabase Storage — bilder av vinetiketter |
 | **Hosting** | Vercel (frontend) · Render (API) |
 

@@ -25,11 +25,16 @@ export class ShareService {
         const src = img.src;
         if (!src || src.startsWith('data:')) return;
         try {
-          const resp = await fetch(src);
+          // Fetch with cache-bust to avoid iOS Safari's tainted CORS cache.
+          // iOS caches images loaded without crossorigin, then serves the
+          // opaque cached response when re-requested with CORS, tainting
+          // the canvas. A cache-busted fetch forces a fresh CORS request.
+          const bustUrl = src + (src.includes('?') ? '&' : '?') + '_cb=' + Date.now();
+          const resp = await fetch(bustUrl, { mode: 'cors', cache: 'no-store' });
           const blob = await resp.blob();
           img.src = await this.blobToDataUrl(blob);
         } catch {
-          // If fetch fails, leave the original src (image will be missing in export)
+          // Image will be missing in export — silent fallback
         }
       }),
     );

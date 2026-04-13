@@ -25,48 +25,19 @@ export class ShareService {
         const src = img.src;
         if (!src || src.startsWith('data:')) return;
         try {
-          // Load via Image + canvas — more reliable on iOS Safari than fetch
-          const dataUrl = await this.imageToDataUrl(src);
-          img.src = dataUrl;
+          // Fetch with cache-bust to avoid iOS Safari's tainted CORS cache.
+          // iOS caches images loaded without crossorigin, then serves the
+          // opaque cached response when re-requested with CORS, tainting
+          // the canvas. A cache-busted fetch forces a fresh CORS request.
+          const bustUrl = src + (src.includes('?') ? '&' : '?') + '_cb=' + Date.now();
+          const resp = await fetch(bustUrl, { mode: 'cors', cache: 'no-store' });
+          const blob = await resp.blob();
+          img.src = await this.blobToDataUrl(blob);
         } catch {
-          // If canvas approach fails, try fetch as fallback
-          try {
-            const resp = await fetch(src, { mode: 'cors' });
-            const blob = await resp.blob();
-            img.src = await this.blobToDataUrl(blob);
-          } catch {
-            // Image will be missing in export
-          }
+          // Image will be missing in export — silent fallback
         }
       }),
     );
-  }
-
-  /**
-   * Load an image via HTMLImageElement and draw it onto a canvas to extract
-   * a data URL. This avoids iOS Safari fetch/CORS issues with Supabase
-   * storage URLs by using the browser's native image loading pipeline.
-   */
-  private imageToDataUrl(src: string): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      img.onload = () => {
-        try {
-          const canvas = document.createElement('canvas');
-          canvas.width = img.naturalWidth;
-          canvas.height = img.naturalHeight;
-          const ctx = canvas.getContext('2d');
-          if (!ctx) { reject(new Error('No 2d context')); return; }
-          ctx.drawImage(img, 0, 0);
-          resolve(canvas.toDataURL('image/png'));
-        } catch (e) {
-          reject(e);
-        }
-      };
-      img.onerror = () => reject(new Error('Image load failed'));
-      img.src = src;
-    });
   }
 
   private blobToDataUrl(blob: Blob): Promise<string> {

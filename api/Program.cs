@@ -10,6 +10,7 @@ using System.Security.Claims;
 using VinLoggen.Api.Configuration;
 using VinLoggen.Api.Endpoints;
 using VinLoggen.Api.Services;
+using VinLoggen.Api.Services.AiProviders;
 
 Dapper.SqlMapper.AddTypeHandler(new StringArrayTypeHandler());
 
@@ -45,11 +46,16 @@ builder.Services.AddHttpLogging(options =>
 
 // ── HTTP clients ──────────────────────────────────────────────────────────────
 // Gemini: retry up to 3 times with exponential back-off; circuit-break on failure bursts.
-builder.Services.AddHttpClient("gemini")
+builder.Services.AddHttpClient("gemini", client =>
+    {
+        client.Timeout = TimeSpan.FromSeconds(60);
+    })
     .AddStandardResilienceHandler(opts =>
     {
-        opts.Retry.MaxRetryAttempts       = 3;
-        opts.CircuitBreaker.SamplingDuration = TimeSpan.FromSeconds(30);
+        opts.Retry.MaxRetryAttempts              = 2;
+        opts.AttemptTimeout.Timeout              = TimeSpan.FromSeconds(45);
+        opts.TotalRequestTimeout.Timeout         = TimeSpan.FromSeconds(90);
+        opts.CircuitBreaker.SamplingDuration     = TimeSpan.FromSeconds(120);
     });
 
 // wineapi.io: same resilience profile; base address from config.
@@ -82,8 +88,28 @@ builder.Services.AddHttpClient("googlePlaces", client =>
 // Generic named client (kept for backwards compat with GeminiService factory usage)
 builder.Services.AddHttpClient();
 
+// DeepSeek: OpenAI-compatible API with resilience.
+builder.Services.AddHttpClient("deepseek", client =>
+    {
+        client.Timeout = TimeSpan.FromSeconds(60);
+    })
+    .AddStandardResilienceHandler(opts =>
+    {
+        opts.Retry.MaxRetryAttempts          = 2;
+        opts.AttemptTimeout.Timeout          = TimeSpan.FromSeconds(45);
+        opts.TotalRequestTimeout.Timeout     = TimeSpan.FromSeconds(90);
+        opts.CircuitBreaker.SamplingDuration  = TimeSpan.FromSeconds(120);
+    });
+
 // ── Application services ──────────────────────────────────────────────────────
 builder.Services.AddMemoryCache();
+
+// AI providers (registered as IEnumerable<IAiChatProvider> / IEnumerable<IAiVisionProvider>)
+builder.Services.AddScoped<IAiChatProvider, DeepSeekChatProvider>();
+builder.Services.AddScoped<IAiChatProvider, GeminiChatProvider>();
+builder.Services.AddScoped<IAiVisionProvider, GeminiVisionProvider>();
+builder.Services.AddScoped<AiProviderChain>();
+
 builder.Services.AddScoped<IGeminiService,   GeminiService>();
 builder.Services.AddScoped<IWineApiService,  WineApiService>();
 builder.Services.AddScoped<IProUsageService, ProUsageService>();
@@ -95,6 +121,7 @@ builder.Services.AddScoped<ProUsageService>();
 builder.Services.AddScoped<WineOrchestratorService>();
 builder.Services.AddScoped<WineMatchingService>();
 builder.Services.AddScoped<IGooglePlacesService, GooglePlacesService>();
+builder.Services.AddScoped<IExpertService, ExpertService>();
 // EnrichmentService retained for backwards compat (stub only)
 builder.Services.AddScoped<EnrichmentService>();
 
@@ -232,7 +259,9 @@ app.MapAdminWineEndpoints();
 app.MapAdminUsageEndpoints();
 app.MapAdminResetEndpoints();
 app.MapAdminCorrectionEndpoints();
+app.MapAdminUserEndpoints();
 app.MapLocationEndpoints();
+app.MapExpertEndpoints();
 
 app.Run();
 

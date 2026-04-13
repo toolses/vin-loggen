@@ -1,7 +1,10 @@
+using System.Text.Json;
+using System.Text.RegularExpressions;
 using Dapper;
 using Npgsql;
 using VinLoggen.Api.Configuration;
 using VinLoggen.Api.Models;
+using VinLoggen.Api.Services.AiProviders;
 
 namespace VinLoggen.Api.Services;
 
@@ -16,7 +19,7 @@ namespace VinLoggen.Api.Services;
 ///
 /// Step 3 – Pro enrichment (when authenticated + quota available):
 ///   a. wineapi.io lookup → description, food pairings, technical notes
-///   b. If wineapi.io returns no food pairings → fallback Gemini Pro prompt
+///   b. If wineapi.io returns no food pairings → fallback via AI provider chain (DeepSeek → Gemini)
 ///
 /// Quota is only charged when step 3 produces a meaningful enrichment result.
 /// Technical API failures in step 3 are swallowed so the user always receives
@@ -27,6 +30,7 @@ public sealed class WineOrchestratorService
     private readonly IGeminiService      _gemini;
     private readonly IWineApiService     _wineApi;
     private readonly IProUsageService    _proUsage;
+    private readonly AiProviderChain     _aiChain;
     private readonly NpgsqlDataSource    _dataSource;
     private readonly IntegrationSettings _settings;
     private readonly ILogger<WineOrchestratorService> _logger;
@@ -39,6 +43,7 @@ public sealed class WineOrchestratorService
         IGeminiService                      gemini,
         IWineApiService                     wineApi,
         IProUsageService                    proUsage,
+        AiProviderChain                     aiChain,
         NpgsqlDataSource                    dataSource,
         IntegrationSettings                 settings,
         ILogger<WineOrchestratorService>    logger)
@@ -46,6 +51,7 @@ public sealed class WineOrchestratorService
         _gemini     = gemini;
         _wineApi    = wineApi;
         _proUsage   = proUsage;
+        _aiChain    = aiChain;
         _dataSource = dataSource;
         _settings   = settings;
         _logger     = logger;
@@ -128,28 +134,28 @@ public sealed class WineOrchestratorService
                 analysis.Vintage,
                 ct);
 
-            // Fallback: ask Gemini for enrichment if wineapi.io had gaps
+            // Fallback: ask AI provider chain (DeepSeek → Gemini) for enrichment if wineapi.io had gaps
             if (enrichment?.FoodPairings is not { Length: > 0 } || string.IsNullOrWhiteSpace(enrichment?.Description))
             {
-                var geminiFoodResult = await _gemini.GetFoodPairingsAsync(
+                var aiFoodResult = await GetFoodPairingsViaChainAsync(
                     analysis.WineName, analysis.Producer,
                     analysis.Vintage, analysis.Type, analysis.Country, ct);
 
-                if (geminiFoodResult is not null)
+                if (aiFoodResult is not null)
                 {
-                    // Merge Gemini results into (potentially null) enrichment
+                    // Merge AI results into (potentially null) enrichment
                     enrichment = enrichment is not null
                         ? enrichment with
                         {
-                            FoodPairings   = enrichment.FoodPairings is { Length: > 0 } ? enrichment.FoodPairings : geminiFoodResult.FoodPairings,
-                            TechnicalNotes = enrichment.TechnicalNotes ?? geminiFoodResult.TechnicalNotes,
-                            Description    = enrichment.Description ?? geminiFoodResult.Description,
+                            FoodPairings   = enrichment.FoodPairings is { Length: > 0 } ? enrichment.FoodPairings : aiFoodResult.FoodPairings,
+                            TechnicalNotes = enrichment.TechnicalNotes ?? aiFoodResult.TechnicalNotes,
+                            Description    = enrichment.Description ?? aiFoodResult.Description,
                         }
                         : new WineApiService.WineEnrichment(
                             ExternalId:    null,
-                            Description:   geminiFoodResult.Description,
-                            FoodPairings:  geminiFoodResult.FoodPairings,
-                            TechnicalNotes: geminiFoodResult.TechnicalNotes,
+                            Description:   aiFoodResult.Description,
+                            FoodPairings:  aiFoodResult.FoodPairings,
+                            TechnicalNotes: aiFoodResult.TechnicalNotes,
                             AlcoholContent: null,
                             Grapes:        null);
                 }
@@ -201,6 +207,59 @@ public sealed class WineOrchestratorService
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
+
+    private const string FoodPairingPrompt = """
+        Du er en sommelier-ekspert. Basert på vinen nedenfor, generer en kort vinbeskrivelse, matanbefalinger og tekniske smaksnotater.
+        Returner KUN rå JSON (uten markdown-formatering).
+        JSON-struktur:
+        {
+          "description": string,
+          "foodPairings": string[],
+          "technicalNotes": string
+        }
+        - description: 1-2 setninger som beskriver vinens karakter og stil på norsk
+        - foodPairings: 3-5 konkrete matanbefalinger på norsk (f.eks. "Lammekoteletter", "Modnet parmesan")
+        - technicalNotes: 1-2 setninger med tekniske smaksnotater på norsk (tanniner, syre, finish)
+        """;
+
+    private record FoodPairingResult(string[]? FoodPairings, string? TechnicalNotes, string? Description);
+
+    private async Task<FoodPairingResult?> GetFoodPairingsViaChainAsync(
+        string? wineName, string? producer, int? vintage, string? type, string? country,
+        CancellationToken ct)
+    {
+        var userContent = $"Vin: {producer ?? ""} {wineName ?? ""}, {vintage?.ToString() ?? "ukjent årgang"}, {type ?? ""} {country ?? ""}";
+
+        var chatResult = await _aiChain.ChatAsync(
+            _settings.AiFallback.ExpertChatPriority,
+            FoodPairingPrompt,
+            userContent,
+            ct);
+
+        if (!chatResult.IsSuccess || chatResult.Answer is null)
+        {
+            _logger.LogWarning("OrchestratorService: AI chain food-pairing fallback failed");
+            return null;
+        }
+
+        try
+        {
+            var rawJson = Regex.Replace(chatResult.Answer.Trim(), @"^```(?:json)?\s*|\s*```$", "", RegexOptions.Multiline).Trim();
+            var result = JsonSerializer.Deserialize<FoodPairingResult>(
+                rawJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+            _logger.LogInformation(
+                "OrchestratorService: food-pairing fallback via {Provider}: {Count} pairings for '{Wine}'",
+                chatResult.ProviderName, result?.FoodPairings?.Length, wineName);
+
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "OrchestratorService: failed to parse food-pairing response from {Provider}", chatResult.ProviderName);
+            return null;
+        }
+    }
 
     private async Task<DedupMatch?> CheckDuplicateAsync(
         string producer, string name, int? vintage, Guid userId, CancellationToken ct)

@@ -67,7 +67,22 @@ public sealed class WineMatchingService
                 wineId = await UpsertWine(conn, tx, request, ct);
             }
 
-            // ── Step 3: Insert wine_log ──────────────────────────────────────
+            // ── Step 3: Save external ID mapping ───────────────────────────
+            if (!string.IsNullOrWhiteSpace(request.ExternalSourceId))
+            {
+                await conn.ExecuteAsync(
+                    new CommandDefinition(
+                        """
+                        INSERT INTO wine_external_ids (wine_id, source, external_id)
+                        VALUES (@WineId, 'wineapi', @ExternalId)
+                        ON CONFLICT (wine_id, source) DO UPDATE SET external_id = EXCLUDED.external_id
+                        """,
+                        new { WineId = wineId, ExternalId = request.ExternalSourceId },
+                        transaction: tx,
+                        cancellationToken: ct));
+            }
+
+            // ── Step 4: Insert wine_log ──────────────────────────────────────
             var logId = await conn.ExecuteScalarAsync<Guid>(
                 new CommandDefinition(
                     """
@@ -94,7 +109,7 @@ public sealed class WineMatchingService
                     transaction: tx,
                     cancellationToken: ct));
 
-            // ── Step 4: Log correction ───────────────────────────────────────
+            // ── Step 5: Log correction ───────────────────────────────────────
             if (hasCorrections && request.OriginalData is not null)
             {
                 var originalJson  = JsonSerializer.Serialize(originalFields);
@@ -118,7 +133,7 @@ public sealed class WineMatchingService
                         cancellationToken: ct));
             }
 
-            // ── Step 5: Commit and return ────────────────────────────────────
+            // ── Step 6: Commit and return ────────────────────────────────────
             await tx.CommitAsync(ct);
 
             return new WineSaveResponse(wineId, logId, hasCorrections, newWineCreated);

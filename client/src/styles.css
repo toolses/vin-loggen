@@ -165,6 +165,39 @@ textarea {
   scrollbar-width: none;
 }
 
+/* ── Chat Markdown Prose ──────────────────────────────────────── */
+.prose-chat {
+  line-height: 1.6;
+}
+.prose-chat p { margin: 0.25em 0; }
+.prose-chat p:first-child { margin-top: 0; }
+.prose-chat p:last-child { margin-bottom: 0; }
+.prose-chat strong { font-weight: 600; color: #F5F5F5; }
+.prose-chat em { font-style: italic; }
+.prose-chat ul, .prose-chat ol { margin: 0.4em 0; padding-left: 1.25em; }
+.prose-chat li { margin: 0.15em 0; }
+.prose-chat ul li { list-style-type: disc; }
+.prose-chat ol li { list-style-type: decimal; }
+.prose-chat h1, .prose-chat h2, .prose-chat h3 {
+  font-weight: 600;
+  color: #F5F5F5;
+  margin: 0.5em 0 0.25em;
+}
+.prose-chat h1 { font-size: 1.1em; }
+.prose-chat h2 { font-size: 1.05em; }
+.prose-chat h3 { font-size: 1em; }
+.prose-chat code {
+  background: rgba(255, 255, 255, 0.08);
+  padding: 0.1em 0.3em;
+  border-radius: 0.25em;
+  font-size: 0.9em;
+}
+.prose-chat a {
+  color: var(--color-gold);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 /* ── Mapbox GL Popup Theme ───────────────────────────────────── */
 .mapboxgl-popup-content {
   background: #1a1a1a !important;

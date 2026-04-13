@@ -21,6 +21,12 @@ export const routes: Routes = [
       import('./components/scanner/scanner.component').then(m => m.ScannerComponent),
   },
   {
+    path: 'expert',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./components/expert/expert.component').then(m => m.ExpertComponent),
+  },
+  {
     path: 'edit',
     canActivate: [authGuard],
     loadComponent: () =>
@@ -77,6 +83,13 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./components/admin/admin-wine-editor/admin-wine-editor.component').then(
             m => m.AdminWineEditorComponent,
+          ),
+      },
+      {
+        path: 'users',
+        loadComponent: () =>
+          import('./components/admin/admin-user-list/admin-user-list.component').then(
+            m => m.AdminUserListComponent,
           ),
       },
       {

@@ -87,7 +87,7 @@ VinLoggen is a mobile-first PWA for logging and rating wine. Users photograph a 
 
 ## Database Schema
 
-The database has evolved through 11 DbUp migrations. Current tables:
+The database has evolved through 18 DbUp migrations. Current tables:
 
 | Table | Description |
 |---|---|
@@ -95,6 +95,12 @@ The database has evolved through 11 DbUp migrations. Current tables:
 | `wine_logs` | Per-user tasting events with rating, notes, images, location. FK to `wines`. |
 | `user_profiles` | User settings, taste profile JSON, subscription tier, quota tracking. |
 | `api_usage_logs` | External API call tracking (provider, endpoint, status, response time). |
+| `data_corrections` | User corrections to AI/API data. |
+| `locations` | Google Places cache. |
+| `wine_external_ids` | Multi-source external ID mapping (wineapi, vivino, etc.). |
+| `expert_sessions` | Expert conversation sessions per user. |
+| `expert_messages` | Individual messages (user/assistant) within a session. |
+| `expert_wine_suggestions` | Wine suggestions linked to assistant messages, with feedback (thumbs up/down). |
 
 **Views:** `wine_entries` (joins wines + latest wine_logs per user per wine, security_invoker for RLS).
 

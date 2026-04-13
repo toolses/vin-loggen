@@ -10,7 +10,7 @@ import {
   afterNextRender,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { WineService, Wine } from '../../services/wine.service';
 import { SharePreviewComponent } from '../share-preview/share-preview.component';
 import { WineMapComponent } from '../wine-map/wine-map.component';
@@ -23,6 +23,7 @@ import { WineMapComponent } from '../wine-map/wine-map.component';
 })
 export class WineListComponent implements OnInit, OnDestroy {
   private readonly wineService = inject(WineService);
+  private readonly route = inject(ActivatedRoute);
 
   protected readonly sentinelRef = viewChild<ElementRef<HTMLDivElement>>('sentinel');
 
@@ -30,6 +31,7 @@ export class WineListComponent implements OnInit, OnDestroy {
   protected readonly typeFilter = signal<string | null>(null);
   protected readonly displayCount = signal(20);
   protected readonly viewMode = signal<'list' | 'map'>('list');
+  protected readonly flyToTarget = signal<{ lng: number; lat: number } | null>(null);
   protected readonly loading = this.wineService.loading;
   protected readonly error = this.wineService.error;
   protected readonly sharingWine = signal<Wine | null>(null);
@@ -80,6 +82,16 @@ export class WineListComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.wineService.loadWines();
+
+    const params = this.route.snapshot.queryParams;
+    if (params['view'] === 'map') {
+      this.viewMode.set('map');
+      const lat = parseFloat(params['lat']);
+      const lng = parseFloat(params['lng']);
+      if (!isNaN(lat) && !isNaN(lng)) {
+        this.flyToTarget.set({ lat, lng });
+      }
+    }
   }
 
   private setupIntersectionObserver(): void {
@@ -126,6 +138,12 @@ export class WineListComponent implements OnInit, OnDestroy {
 
   protected closeSharePreview(): void {
     this.sharingWine.set(null);
+  }
+
+  protected showOnMap(wine: Wine): void {
+    if (wine.location_lat == null || wine.location_lng == null) return;
+    this.flyToTarget.set({ lng: wine.location_lng, lat: wine.location_lat });
+    this.viewMode.set('map');
   }
 
   ngOnDestroy(): void {

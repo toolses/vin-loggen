@@ -1,6 +1,7 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { WineService, Wine } from '../../services/wine.service';
+import { ProfileService } from '../../services/profile.service';
 import { SharePreviewComponent } from '../share-preview/share-preview.component';
 
 @Component({
@@ -11,10 +12,13 @@ import { SharePreviewComponent } from '../share-preview/share-preview.component'
 })
 export class DashboardComponent implements OnInit {
   protected readonly wineService = inject(WineService);
+  protected readonly profile = inject(ProfileService);
+  private readonly router = inject(Router);
   protected readonly sharingWine = signal<Wine | null>(null);
 
   ngOnInit(): void {
     this.wineService.loadWines();
+    this.profile.loadProQuota();
   }
 
   protected recentWines() {
@@ -39,5 +43,12 @@ export class DashboardComponent implements OnInit {
 
   protected closeSharePreview(): void {
     this.sharingWine.set(null);
+  }
+
+  protected showOnMap(wine: Wine): void {
+    if (wine.location_lat == null || wine.location_lng == null) return;
+    this.router.navigate(['/cellar'], {
+      queryParams: { view: 'map', lat: wine.location_lat, lng: wine.location_lng },
+    });
   }
 }

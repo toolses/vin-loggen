@@ -15,6 +15,22 @@ public sealed class IntegrationSettings
     /// <summary>Enable wineapi.io enrichment calls (Pro tier step).</summary>
     public bool EnableWineApi { get; init; } = true;
 
+    /// <summary>
+    /// Hard daily ceiling on Gemini API requests (across all endpoints).
+    /// Once reached, Gemini calls return error/fallback results.
+    /// Set to 0 to disable the cap (unlimited). Default: 500.
+    /// Override via <c>Integration__GeminiMaxDailyRequests</c>.
+    /// </summary>
+    public int GeminiMaxDailyRequests { get; init; } = 500;
+
+    /// <summary>
+    /// Hard daily ceiling on WineAPI requests (across all endpoints).
+    /// Once reached, WineAPI calls return null.
+    /// Set to 0 to disable the cap (unlimited). Default: 100.
+    /// Override via <c>Integration__WineApiMaxDailyRequests</c>.
+    /// </summary>
+    public int WineApiMaxDailyRequests { get; init; } = 100;
+
     /// <summary>Enable Vinmonopolet product catalogue lookups (not yet implemented).</summary>
     public bool EnableVinmonopolet { get; init; } = false;
 
@@ -25,6 +41,10 @@ public sealed class IntegrationSettings
     public int DailyProLimit { get; init; } = 10;
 
     public WineApiSettings WineApi { get; init; } = new();
+
+    public DeepSeekSettings DeepSeek { get; init; } = new();
+
+    public AiFallbackSettings AiFallback { get; init; } = new();
 
     /// <summary>
     /// Hard ceiling on the total number of requests sent to the Google Places API.
@@ -39,22 +59,26 @@ public sealed class IntegrationSettings
 /// <summary>Connection details for the wineapi.io REST API.</summary>
 public sealed class WineApiSettings
 {
-    /// <summary>
-    /// Base URL for the wineapi.io REST API.
-    /// Adjust if the actual base URL differs from this default.
-    /// The API key is read from the <c>WINE_API_KEY</c> environment variable.
-    /// </summary>
     public string BaseUrl { get; init; } = "https://api.wineapi.io";
-
-    /// <summary>
-    /// Name of the HTTP header used for authentication.
-    /// wineapi.io uses <c>X-API-Key</c> with a raw key value (no prefix).
-    /// </summary>
     public string AuthHeader { get; init; } = "X-API-Key";
-
-    /// <summary>
-    /// Prefix added before the key value in the auth header.
-    /// Empty for raw API-key headers; use "Bearer " for OAuth-style.
-    /// </summary>
     public string AuthPrefix { get; init; } = "";
+}
+
+/// <summary>Connection details for the DeepSeek API (OpenAI-compatible).</summary>
+public sealed class DeepSeekSettings
+{
+    public string BaseUrl { get; init; } = "https://api.deepseek.com";
+}
+
+/// <summary>
+/// Configures which AI providers are tried (in order) for each capability.
+/// Each entry is a provider name: "DeepSeek", "Gemini", "Groq".
+/// </summary>
+public sealed class AiFallbackSettings
+{
+    /// <summary>Provider priority for label scanning (vision). Default: Gemini only.</summary>
+    public string[] LabelScanPriority { get; init; } = ["Gemini"];
+
+    /// <summary>Provider priority for expert chat. Default: DeepSeek, then Gemini fallback.</summary>
+    public string[] ExpertChatPriority { get; init; } = ["DeepSeek", "Gemini"];
 }

@@ -54,9 +54,28 @@ export class AdminDashboardComponent implements OnInit {
   providerLabel(provider: string): string {
     const labels: Record<string, string> = {
       gemini: 'Gemini',
+      deepseek: 'DeepSeek',
       wineapi: 'WineAPI',
     };
     return labels[provider] ?? provider;
+  }
+
+  endpointLabel(endpoint: string): string {
+    const labels: Record<string, string> = {
+      ExpertChat: 'Expert',
+      AnalyzeLabel: 'Skann',
+      GetFoodPairings: 'Matkombo',
+    };
+    return labels[endpoint] ?? endpoint;
+  }
+
+  providerIcon(provider: string): string {
+    const icons: Record<string, string> = {
+      deepseek: 'DS',
+      gemini: 'GEM',
+      wineapi: 'API',
+    };
+    return icons[provider] ?? '?';
   }
 
   async resetData(): Promise<void> {

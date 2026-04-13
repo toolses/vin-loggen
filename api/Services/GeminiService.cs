@@ -2,6 +2,9 @@ using System.Diagnostics;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Net.Http.Json;
+using Microsoft.Extensions.Caching.Memory;
+using Npgsql;
+using VinLoggen.Api.Configuration;
 using VinLoggen.Api.Models;
 
 namespace VinLoggen.Api.Services;
@@ -134,17 +137,26 @@ public sealed class GeminiService : IGeminiService
     private readonly IConfiguration     _configuration;
     private readonly ILogger<GeminiService> _logger;
     private readonly IApiUsageService _apiUsage;
+    private readonly IntegrationSettings _settings;
+    private readonly NpgsqlDataSource _dataSource;
+    private readonly IMemoryCache _cache;
 
     public GeminiService(
         IHttpClientFactory      httpClientFactory,
         IConfiguration          configuration,
         ILogger<GeminiService>  logger,
-        IApiUsageService        apiUsage)
+        IApiUsageService        apiUsage,
+        IntegrationSettings     settings,
+        NpgsqlDataSource        dataSource,
+        IMemoryCache            cache)
     {
         _httpClientFactory = httpClientFactory;
         _configuration     = configuration;
         _logger            = logger;
         _apiUsage          = apiUsage;
+        _settings          = settings;
+        _dataSource        = dataSource;
+        _cache             = cache;
     }
 
     public async Task<GeminiResult<WineAnalysisResponse>> AnalyzeLabelAsync(
@@ -152,6 +164,9 @@ public sealed class GeminiService : IGeminiService
         string            mimeType,
         CancellationToken ct)
     {
+        if (await ApiQuotaGuard.IsDailyQuotaExceededAsync("gemini", _settings.GeminiMaxDailyRequests, _cache, _dataSource, _logger, ct))
+            return new(null, "Daglig Gemini-kvote er nådd.");
+
         var apiKey = _configuration["GEMINI_API_KEY"];
         if (string.IsNullOrWhiteSpace(apiKey))
         {
@@ -186,6 +201,7 @@ public sealed class GeminiService : IGeminiService
             response = await client.PostAsJsonAsync($"{GeminiEndpoint}?key={apiKey}", payload, ct);
             sw.Stop();
             _ = _apiUsage.LogAsync("gemini", "AnalyzeLabel", (int)response.StatusCode, (int)sw.ElapsedMilliseconds, null, ct);
+            ApiQuotaGuard.EvictCache("gemini", _cache);
         }
         catch (TaskCanceledException ex) when (!ct.IsCancellationRequested)
         {
@@ -265,6 +281,9 @@ public sealed class GeminiService : IGeminiService
         if (backImageBytes is null || backImageBytes.Length == 0)
             return await AnalyzeLabelAsync(frontImageBytes, frontMimeType, ct);
 
+        if (await ApiQuotaGuard.IsDailyQuotaExceededAsync("gemini", _settings.GeminiMaxDailyRequests, _cache, _dataSource, _logger, ct))
+            return new(null, "Daglig Gemini-kvote er nådd.");
+
         var apiKey = _configuration["GEMINI_API_KEY"];
         if (string.IsNullOrWhiteSpace(apiKey))
         {
@@ -300,6 +319,7 @@ public sealed class GeminiService : IGeminiService
             response = await client.PostAsJsonAsync($"{GeminiEndpoint}?key={apiKey}", payload, ct);
             sw.Stop();
             _ = _apiUsage.LogAsync("gemini", "AnalyzeLabels", (int)response.StatusCode, (int)sw.ElapsedMilliseconds, null, ct);
+            ApiQuotaGuard.EvictCache("gemini", _cache);
         }
         catch (TaskCanceledException ex) when (!ct.IsCancellationRequested)
         {
@@ -400,6 +420,9 @@ public sealed class GeminiService : IGeminiService
         string? country,
         CancellationToken ct)
     {
+        if (await ApiQuotaGuard.IsDailyQuotaExceededAsync("gemini", _settings.GeminiMaxDailyRequests, _cache, _dataSource, _logger, ct))
+            return null;
+
         var apiKey = _configuration["GEMINI_API_KEY"];
         if (string.IsNullOrWhiteSpace(apiKey)) return null;
 
@@ -423,6 +446,7 @@ public sealed class GeminiService : IGeminiService
             var response = await client.PostAsJsonAsync($"{GeminiEndpoint}?key={apiKey}", payload, ct);
             sw.Stop();
             _ = _apiUsage.LogAsync("gemini", "GetFoodPairings", (int)response.StatusCode, (int)sw.ElapsedMilliseconds, null, ct);
+            ApiQuotaGuard.EvictCache("gemini", _cache);
             if (!response.IsSuccessStatusCode) return null;
 
             using var doc = await JsonDocument.ParseAsync(
@@ -481,6 +505,9 @@ public sealed class GeminiService : IGeminiService
         IEnumerable<WineProfileData> wines,
         CancellationToken ct)
     {
+        if (await ApiQuotaGuard.IsDailyQuotaExceededAsync("gemini", _settings.GeminiMaxDailyRequests, _cache, _dataSource, _logger, ct))
+            return null;
+
         var apiKey = _configuration["GEMINI_API_KEY"];
         if (string.IsNullOrWhiteSpace(apiKey))
         {
@@ -532,6 +559,7 @@ public sealed class GeminiService : IGeminiService
             response = await client.PostAsJsonAsync($"{GeminiEndpoint}?key={apiKey}", payload, ct);
             sw.Stop();
             _ = _apiUsage.LogAsync("gemini", "GenerateTasteProfile", (int)response.StatusCode, (int)sw.ElapsedMilliseconds, null, ct);
+            ApiQuotaGuard.EvictCache("gemini", _cache);
         }
         catch (Exception ex)
         {

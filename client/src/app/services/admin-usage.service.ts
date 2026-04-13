@@ -5,6 +5,7 @@ import { environment } from '../../environments/environment';
 
 export interface ProviderUsageToday {
   provider: string;
+  endpoint: string;
   totalCalls: number;
   avgResponseMs: number;
   errorCount: number;
@@ -13,6 +14,7 @@ export interface ProviderUsageToday {
 export interface DailyUsageRow {
   date: string;
   provider: string;
+  endpoint: string;
   totalCalls: number;
   avgResponseMs: number;
 }

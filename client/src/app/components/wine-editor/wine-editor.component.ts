@@ -77,6 +77,7 @@ export class WineEditorComponent implements OnInit {
   protected readonly suggestedName      = signal<string | null>(null);
   protected readonly suggestedProducer  = signal<string | null>(null);
   protected readonly showSuggestion     = signal(false);
+  protected readonly nameFromCatalogue  = signal(false);
 
   // Wine search step (manual entry without scan result)
   protected readonly searchStep     = signal(false);
@@ -188,15 +189,20 @@ export class WineEditorComponent implements OnInit {
         this.description.set(scan.description ?? null);
         this.technicalNotes.set(scan.technicalNotes ?? null);
 
-        // Catalogue name suggestion
-        const sn = scan.suggestedName?.trim();
-        const sp = scan.suggestedProducer?.trim();
-        const namesDiffer  = sn && sn.toLowerCase() !== (scan.wineName ?? '').trim().toLowerCase();
-        const prodsDiffer  = sp && sp.toLowerCase() !== (scan.producer ?? '').trim().toLowerCase();
-        if (namesDiffer || prodsDiffer) {
-          this.suggestedName.set(sn ?? null);
-          this.suggestedProducer.set(sp ?? null);
+        // Catalogue name (auto-applied by backend, or interactive suggestion fallback)
+        this.nameFromCatalogue.set(scan.nameFromCatalogue ?? false);
+        if (scan.nameFromCatalogue) {
           this.showSuggestion.set(true);
+        } else {
+          const sn = scan.suggestedName?.trim();
+          const sp = scan.suggestedProducer?.trim();
+          const namesDiffer  = sn && sn.toLowerCase() !== (scan.wineName ?? '').trim().toLowerCase();
+          const prodsDiffer  = sp && sp.toLowerCase() !== (scan.producer ?? '').trim().toLowerCase();
+          if (namesDiffer || prodsDiffer) {
+            this.suggestedName.set(sn ?? null);
+            this.suggestedProducer.set(sp ?? null);
+            this.showSuggestion.set(true);
+          }
         }
 
         // Sync quota state to ProfileService (avoids an extra DB round-trip)
@@ -410,6 +416,15 @@ export class WineEditorComponent implements OnInit {
   }
 
   // ── Catalogue name suggestion ─────────────────────────────────────────────
+
+  protected fieldSource(field: string): string | null {
+    if (this.editMode() || !this.originalData) return null;
+    if (field === 'name' || field === 'producer')
+      return this.nameFromCatalogue() ? 'Katalog' : 'OCR';
+    if (field === 'description' || field === 'foodPairings' || field === 'technicalNotes')
+      return 'AI';
+    return 'OCR';
+  }
 
   protected acceptSuggestion(): void {
     const sn = this.suggestedName();

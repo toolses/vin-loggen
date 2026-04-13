@@ -180,8 +180,34 @@ public sealed class WineOrchestratorService
         // ── Step 5: Assemble response ─────────────────────────────────────────
         bool proLimitReached = proStatus is { CanUsePro: false };
 
+        // Auto-prefer catalogue name when WineAPI suggests a different spelling
+        var catalogueName     = enrichment?.SuggestedName?.Trim();
+        var catalogueProducer = enrichment?.SuggestedProducer?.Trim();
+        var ocrName           = analysis.WineName?.Trim();
+        var ocrProducer       = analysis.Producer?.Trim();
+
+        bool nameFromCatalogue = false;
+        string? finalName      = ocrName;
+        string? finalProducer  = ocrProducer;
+
+        if (!string.IsNullOrWhiteSpace(catalogueName)
+            && !string.Equals(catalogueName, ocrName, StringComparison.OrdinalIgnoreCase))
+        {
+            finalName = catalogueName;
+            nameFromCatalogue = true;
+        }
+        if (!string.IsNullOrWhiteSpace(catalogueProducer)
+            && !string.Equals(catalogueProducer, ocrProducer, StringComparison.OrdinalIgnoreCase))
+        {
+            finalProducer = catalogueProducer;
+            nameFromCatalogue = true;
+        }
+
         return ApiResult<WineAnalysisResponse>.Ok(analysis with
         {
+            // Catalogue name override
+            WineName  = finalName,
+            Producer  = finalProducer,
             // Dedup
             AlreadyTasted  = dedup is not null && dedup.UserLogCount > 0,
             ExistingWineId = dedup?.WineId,
@@ -195,9 +221,10 @@ public sealed class WineOrchestratorService
                               ?? (dedup is not null
                                   ? await GetExistingExternalIdAsync(dedup.WineId, ct)
                                   : null),
-            // Name suggestions from catalogue match
-            SuggestedName     = enrichment?.SuggestedName,
-            SuggestedProducer = enrichment?.SuggestedProducer,
+            // Name suggestions (cleared when auto-applied)
+            SuggestedName      = nameFromCatalogue ? null : enrichment?.SuggestedName,
+            SuggestedProducer  = nameFromCatalogue ? null : enrichment?.SuggestedProducer,
+            NameFromCatalogue  = nameFromCatalogue,
             // Quota
             ProLimitReached = proLimitReached,
             ProScansToday   = proStatus?.ScansToday   ?? 0,

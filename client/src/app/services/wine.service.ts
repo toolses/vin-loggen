@@ -102,6 +102,7 @@ export interface WineAnalysisResult {
   // Name suggestions from catalogue match
   suggestedName: string | null;
   suggestedProducer: string | null;
+  nameFromCatalogue: boolean;
   // Quota metadata (always returned for UI)
   proLimitReached: boolean;
   proScansToday: number;

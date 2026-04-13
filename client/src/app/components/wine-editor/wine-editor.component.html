@@ -108,7 +108,34 @@
     }
 
     <!-- ── Catalogue name suggestion banner ───────────────────── -->
-    @if (showSuggestion()) {
+    @if (showSuggestion() && nameFromCatalogue()) {
+      <div class="mb-5 rounded-2xl border border-gold/30 bg-gold/10 px-5 py-4">
+        <div class="flex items-start gap-3">
+          <svg class="w-5 h-5 text-gold flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 18v-5.25m0 0a6.01 6.01 0 0 0 1.5-.189m-1.5.189a6.01 6.01 0 0 1-1.5-.189m3.75 7.478a12.06 12.06 0 0 1-4.5 0m3.75 2.383a14.406 14.406 0 0 1-3 0M14.25 18v-.192c0-.983.658-1.823 1.508-2.316a7.5 7.5 0 1 0-7.517 0c.85.493 1.509 1.333 1.509 2.316V18" />
+          </svg>
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-semibold text-gold leading-snug">
+              Navn oppdatert fra vinkatalog
+            </p>
+            <p class="text-xs text-cream-dark mt-1 leading-relaxed">
+              Vinnavnet ble automatisk justert til offisiell katalogstavelse.
+            </p>
+          </div>
+          <button
+            type="button"
+            (click)="dismissSuggestion()"
+            class="w-6 h-6 rounded-full flex items-center justify-center text-cream-dark/40
+                   hover:text-cream-dark hover:bg-white/10 transition-colors flex-shrink-0"
+            aria-label="Lukk"
+          >
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    } @else if (showSuggestion() && (suggestedName() || suggestedProducer())) {
       <div class="mb-5 rounded-2xl border border-gold/30 bg-gold/10 px-5 py-4">
         <div class="flex items-start gap-3">
           <svg class="w-5 h-5 text-gold flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
@@ -189,6 +216,9 @@
       <div>
         <label for="wine-name" class="block text-xs uppercase tracking-wider text-cream-dark mb-1.5 font-medium">
           Navn *
+          @if (fieldSource('name'); as src) {
+            <span class="ml-1 text-cream-dark/50 text-[10px] normal-case tracking-normal font-normal">({{ src }})</span>
+          }
           @if (editedFields().has('name')) {
             <span class="ml-1 text-gold text-[10px] normal-case tracking-normal font-normal">(endret)</span>
           }
@@ -212,6 +242,9 @@
       <div>
         <label for="wine-producer" class="block text-xs uppercase tracking-wider text-cream-dark mb-1.5 font-medium">
           Produsent *
+          @if (fieldSource('producer'); as src) {
+            <span class="ml-1 text-cream-dark/50 text-[10px] normal-case tracking-normal font-normal">({{ src }})</span>
+          }
           @if (editedFields().has('producer')) {
             <span class="ml-1 text-gold text-[10px] normal-case tracking-normal font-normal">(endret)</span>
           }
@@ -236,6 +269,9 @@
         <div>
           <label for="wine-vintage" class="block text-xs uppercase tracking-wider text-cream-dark mb-1.5 font-medium">
             Årgang
+            @if (fieldSource('vintage'); as src) {
+              <span class="ml-1 text-cream-dark/50 text-[10px] normal-case tracking-normal font-normal">({{ src }})</span>
+            }
             @if (editedFields().has('vintage')) {
               <span class="ml-1 text-gold text-[10px] normal-case tracking-normal font-normal">(endret)</span>
             }
@@ -259,6 +295,9 @@
         <div>
           <label for="wine-type" class="block text-xs uppercase tracking-wider text-cream-dark mb-1.5 font-medium">
             Type
+            @if (fieldSource('type'); as src) {
+              <span class="ml-1 text-cream-dark/50 text-[10px] normal-case tracking-normal font-normal">({{ src }})</span>
+            }
             @if (editedFields().has('type')) {
               <span class="ml-1 text-gold text-[10px] normal-case tracking-normal font-normal">(endret)</span>
             }
@@ -286,6 +325,9 @@
         <div>
           <label for="wine-country" class="block text-xs uppercase tracking-wider text-cream-dark mb-1.5 font-medium">
             Land
+            @if (fieldSource('country'); as src) {
+              <span class="ml-1 text-cream-dark/50 text-[10px] normal-case tracking-normal font-normal">({{ src }})</span>
+            }
             @if (editedFields().has('country')) {
               <span class="ml-1 text-gold text-[10px] normal-case tracking-normal font-normal">(endret)</span>
             }
@@ -307,6 +349,9 @@
         <div>
           <label for="wine-region" class="block text-xs uppercase tracking-wider text-cream-dark mb-1.5 font-medium">
             Region
+            @if (fieldSource('region'); as src) {
+              <span class="ml-1 text-cream-dark/50 text-[10px] normal-case tracking-normal font-normal">({{ src }})</span>
+            }
             @if (editedFields().has('region')) {
               <span class="ml-1 text-gold text-[10px] normal-case tracking-normal font-normal">(endret)</span>
             }
@@ -332,6 +377,9 @@
         <div>
           <label for="wine-grape" class="block text-xs uppercase tracking-wider text-cream-dark mb-1.5 font-medium">
             Drue
+            @if (fieldSource('grapeVariety'); as src) {
+              <span class="ml-1 text-cream-dark/50 text-[10px] normal-case tracking-normal font-normal">({{ src }})</span>
+            }
             @if (editedFields().has('grapeVariety')) {
               <span class="ml-1 text-gold text-[10px] normal-case tracking-normal font-normal">(endret)</span>
             }
@@ -353,6 +401,9 @@
         <div>
           <label for="wine-alcohol" class="block text-xs uppercase tracking-wider text-cream-dark mb-1.5 font-medium">
             Alkohol
+            @if (fieldSource('alcoholContent'); as src) {
+              <span class="ml-1 text-cream-dark/50 text-[10px] normal-case tracking-normal font-normal">({{ src }})</span>
+            }
             @if (editedFields().has('alcoholContent')) {
               <span class="ml-1 text-gold text-[10px] normal-case tracking-normal font-normal">(endret)</span>
             }
@@ -473,6 +524,7 @@
               <path fill-rule="evenodd" d="M10 1a.75.75 0 0 1 .75.75v1.5a.75.75 0 0 1-1.5 0v-1.5A.75.75 0 0 1 10 1ZM5.05 3.05a.75.75 0 0 1 1.06 0l1.062 1.06A.75.75 0 1 1 6.11 5.173L5.05 4.11a.75.75 0 0 1 0-1.06Zm9.9 0a.75.75 0 0 1 0 1.06l-1.06 1.062a.75.75 0 0 1-1.062-1.061l1.061-1.06a.75.75 0 0 1 1.06 0ZM3 8a.75.75 0 0 1 .75-.75h1.5a.75.75 0 0 1 0 1.5h-1.5A.75.75 0 0 1 3 8Zm11 0a.75.75 0 0 1 .75-.75h1.5a.75.75 0 0 1 0 1.5h-1.5A.75.75 0 0 1 14 8Z" clip-rule="evenodd"/>
             </svg>
             Vinbeskrivelse
+            <span class="text-cream-dark/50 text-[10px] normal-case tracking-normal font-normal">(AI)</span>
           </label>
           <p class="text-sm text-cream/80 leading-relaxed px-4 py-3 rounded-xl bg-white/5 border border-white/10">
             {{ description() }}
@@ -488,6 +540,7 @@
               <path fill-rule="evenodd" d="M10 1a.75.75 0 0 1 .75.75v1.5a.75.75 0 0 1-1.5 0v-1.5A.75.75 0 0 1 10 1ZM5.05 3.05a.75.75 0 0 1 1.06 0l1.062 1.06A.75.75 0 1 1 6.11 5.173L5.05 4.11a.75.75 0 0 1 0-1.06Zm9.9 0a.75.75 0 0 1 0 1.06l-1.06 1.062a.75.75 0 0 1-1.062-1.061l1.061-1.06a.75.75 0 0 1 1.06 0ZM3 8a.75.75 0 0 1 .75-.75h1.5a.75.75 0 0 1 0 1.5h-1.5A.75.75 0 0 1 3 8Zm11 0a.75.75 0 0 1 .75-.75h1.5a.75.75 0 0 1 0 1.5h-1.5A.75.75 0 0 1 14 8Z" clip-rule="evenodd"/>
             </svg>
             Matparing
+            <span class="text-cream-dark/50 text-[10px] normal-case tracking-normal font-normal">(AI)</span>
           </label>
           <div class="relative rounded-xl overflow-hidden">
             @if (foodPairings()?.length) {
@@ -528,6 +581,7 @@
               <path fill-rule="evenodd" d="M10 1a.75.75 0 0 1 .75.75v1.5a.75.75 0 0 1-1.5 0v-1.5A.75.75 0 0 1 10 1ZM5.05 3.05a.75.75 0 0 1 1.06 0l1.062 1.06A.75.75 0 1 1 6.11 5.173L5.05 4.11a.75.75 0 0 1 0-1.06Zm9.9 0a.75.75 0 0 1 0 1.06l-1.06 1.062a.75.75 0 0 1-1.062-1.061l1.061-1.06a.75.75 0 0 1 1.06 0ZM3 8a.75.75 0 0 1 .75-.75h1.5a.75.75 0 0 1 0 1.5h-1.5A.75.75 0 0 1 3 8Zm11 0a.75.75 0 0 1 .75-.75h1.5a.75.75 0 0 1 0 1.5h-1.5A.75.75 0 0 1 14 8Z" clip-rule="evenodd"/>
             </svg>
             Tekniske detaljer
+            <span class="text-cream-dark/50 text-[10px] normal-case tracking-normal font-normal">(AI)</span>
           </label>
           <div class="relative rounded-xl overflow-hidden">
             @if (technicalNotes()) {

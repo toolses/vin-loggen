@@ -34,6 +34,7 @@ public record WineAnalysisResponse(
     // ── Name suggestions – from wineapi.io catalogue match ──────────────────
     string?   SuggestedName     = null,
     string?   SuggestedProducer = null,
+    bool      NameFromCatalogue = false,
     // ── Quota metadata – always returned for UI ───────────────────────────────
     bool      ProLimitReached = false,
     int       ProScansToday   = 0,

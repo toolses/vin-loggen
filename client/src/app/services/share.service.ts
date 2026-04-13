@@ -25,14 +25,48 @@ export class ShareService {
         const src = img.src;
         if (!src || src.startsWith('data:')) return;
         try {
-          const resp = await fetch(src);
-          const blob = await resp.blob();
-          img.src = await this.blobToDataUrl(blob);
+          // Load via Image + canvas — more reliable on iOS Safari than fetch
+          const dataUrl = await this.imageToDataUrl(src);
+          img.src = dataUrl;
         } catch {
-          // If fetch fails, leave the original src (image will be missing in export)
+          // If canvas approach fails, try fetch as fallback
+          try {
+            const resp = await fetch(src, { mode: 'cors' });
+            const blob = await resp.blob();
+            img.src = await this.blobToDataUrl(blob);
+          } catch {
+            // Image will be missing in export
+          }
         }
       }),
     );
+  }
+
+  /**
+   * Load an image via HTMLImageElement and draw it onto a canvas to extract
+   * a data URL. This avoids iOS Safari fetch/CORS issues with Supabase
+   * storage URLs by using the browser's native image loading pipeline.
+   */
+  private imageToDataUrl(src: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.naturalWidth;
+          canvas.height = img.naturalHeight;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) { reject(new Error('No 2d context')); return; }
+          ctx.drawImage(img, 0, 0);
+          resolve(canvas.toDataURL('image/png'));
+        } catch (e) {
+          reject(e);
+        }
+      };
+      img.onerror = () => reject(new Error('Image load failed'));
+      img.src = src;
+    });
   }
 
   private blobToDataUrl(blob: Blob): Promise<string> {

@@ -387,7 +387,7 @@
       </div>
 
       <!-- Tasting date -->
-      <div>
+      <div class="overflow-hidden">
         <label for="wine-tasted" class="block text-xs uppercase tracking-wider text-cream-dark mb-1.5 font-medium">
           Smaksdato
         </label>
@@ -397,9 +397,10 @@
           lang="nb"
           [ngModel]="tastedAt()"
           (ngModelChange)="tastedAt.set($event)"
-          class="w-full min-w-0 max-w-full min-h-12 px-4 rounded-xl bg-white/5 text-cream
+          class="w-full min-w-0 min-h-12 px-4 rounded-xl bg-white/5 text-cream
                  border border-white/10 focus:border-burgundy-light focus:ring-1 focus:ring-burgundy-light
-                 transition-colors outline-none box-border"
+                 transition-colors outline-none"
+          style="-webkit-appearance: none; appearance: none;"
         />
       </div>
 

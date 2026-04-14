@@ -152,7 +152,7 @@ public sealed class WineApiService : IWineApiService
         // Build free-text query: "producer name vintage"
         var query = $"{producer.Trim()} {name.Trim()}{(vintage.HasValue ? $" {vintage.Value}" : "")}".Trim();
         var cfg = _settings.WineApi;
-        var url = $"{cfg.BaseUrl.TrimEnd('/')}{SearchPath}?q={Uri.EscapeDataString(query)}&limit=5";
+        var url = $"{cfg.BaseUrl.TrimEnd('/')}{SearchPath}?q={Uri.EscapeDataString(query)}&limit=15";
 
         _logger.LogInformation("WineApiService: searching for q='{Query}'", query);
 

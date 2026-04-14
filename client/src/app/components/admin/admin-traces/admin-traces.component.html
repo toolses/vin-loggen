@@ -1,7 +1,16 @@
 <div class="p-6 max-w-6xl">
   <div class="flex items-center justify-between mb-6">
     <h1 class="text-2xl font-serif text-cream">API-sporing</h1>
-    <div class="flex gap-2">
+    <div class="flex items-center gap-2">
+      <button
+        (click)="refresh()"
+        [disabled]="traceService.loading()"
+        class="px-3 py-1.5 rounded-lg text-sm transition-colors bg-white/5 text-cream/50 hover:bg-white/10 border border-white/10 disabled:opacity-40">
+        <svg class="w-4 h-4" [class.animate-spin]="traceService.loading()" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+        </svg>
+      </button>
+      <div class="w-px h-5 bg-white/10"></div>
       @for (d of [7, 14, 30]; track d) {
         <button
           (click)="changeDays(d)"

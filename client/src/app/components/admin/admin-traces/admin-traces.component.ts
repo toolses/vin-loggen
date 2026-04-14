@@ -33,6 +33,11 @@ export class AdminTracesComponent implements OnInit {
     this.expandedEntryId.set(this.expandedEntryId() === entryId ? null : entryId);
   }
 
+  async refresh(): Promise<void> {
+    this.selectedTrace.set(null);
+    await this.traceService.loadTraces(this.days());
+  }
+
   async changeDays(newDays: number): Promise<void> {
     this.days.set(newDays);
     this.selectedTrace.set(null);

@@ -81,6 +81,11 @@ export class WineEditorComponent implements OnInit {
   protected readonly showSuggestion     = signal(false);
   protected readonly nameFromCatalogue  = signal(false);
 
+  // Candidate selection metadata (set when user picked from selection step)
+  private candidateSelected = false;
+  private candidateIsLocal  = false;
+  private candidateFields: Record<string, boolean> = {};
+
   // Wine search step (manual entry without scan result)
   protected readonly searchStep     = signal(false);
   protected readonly searchQuery    = signal('');
@@ -191,9 +196,17 @@ export class WineEditorComponent implements OnInit {
         this.description.set(scan.description ?? null);
         this.technicalNotes.set(scan.technicalNotes ?? null);
 
+        // Candidate selection metadata
+        this.candidateSelected = scan.candidateSelected ?? false;
+        this.candidateIsLocal  = scan.candidateIsLocal ?? false;
+        this.candidateFields   = scan.candidateFields ?? {};
+
         // Catalogue name (auto-applied by backend, or interactive suggestion fallback)
+        // Skip suggestion banner if user already manually selected a candidate
         this.nameFromCatalogue.set(scan.nameFromCatalogue ?? false);
-        if (scan.nameFromCatalogue) {
+        if (this.candidateSelected) {
+          this.showSuggestion.set(false);
+        } else if (scan.nameFromCatalogue) {
           this.showSuggestion.set(true);
         } else {
           const sn = scan.suggestedName?.trim();
@@ -421,10 +434,14 @@ export class WineEditorComponent implements OnInit {
 
   protected fieldSource(field: string): string | null {
     if (this.editMode() || !this.originalData) return null;
-    if (field === 'name' || field === 'producer')
-      return this.nameFromCatalogue() ? 'Katalog' : 'OCR';
     if (field === 'description' || field === 'foodPairings' || field === 'technicalNotes')
       return 'AI';
+    if (this.candidateSelected) {
+      const candidateLabel = this.candidateIsLocal ? 'Katalog' : 'WineAPI';
+      return this.candidateFields[field] ? candidateLabel : 'OCR';
+    }
+    if (field === 'name' || field === 'producer')
+      return this.nameFromCatalogue() ? 'Katalog' : 'OCR';
     return 'OCR';
   }
 

@@ -73,6 +73,7 @@
                   <th class="px-3 py-2 font-medium">Region</th>
                   <th class="px-3 py-2 font-medium text-right">Rating</th>
                   <th class="px-3 py-2 font-medium text-right">Confidence</th>
+                  <th class="px-3 py-2 font-medium text-center">Katalog</th>
                   <th class="px-3 py-2 font-medium"></th>
                 </tr>
               </thead>
@@ -87,6 +88,11 @@
                     <td class="px-3 py-2.5 text-cream/50">{{ hit.region ?? '–' }}</td>
                     <td class="px-3 py-2.5 text-cream/50 text-right">{{ formatRating(hit.averageRating) }}</td>
                     <td class="px-3 py-2.5 text-cream/50 text-right">{{ formatConfidence(hit.confidence) }}</td>
+                    <td class="px-3 py-2.5 text-center">
+                      @if (isSaved(hit.id)) {
+                        <span class="text-xs px-2 py-0.5 rounded-full bg-green-500/20 text-green-300">Lagret</span>
+                      }
+                    </td>
                     <td class="px-3 py-2.5 text-right">
                       @if (hit.id) {
                         <button (click)="fetchDetails(hit.id!)"
@@ -100,7 +106,7 @@
                   <!-- Inline detail panel -->
                   @if (expandedDetailId() === hit.id && hit.id) {
                     <tr>
-                      <td colspan="8" class="px-5 py-4 bg-white/[0.02]">
+                      <td colspan="9" class="px-5 py-4 bg-white/[0.02]">
                         @if (getDetail(hit.id!); as d) {
                           <div class="grid grid-cols-2 gap-4 max-w-3xl">
                             @if (d.description) {
@@ -148,6 +154,11 @@
                               @if (d.country) { <span>{{ d.country }}</span> }
                               @if (d.region) { <span>{{ d.region }}</span> }
                             </div>
+                            @if (isSaved(hit.id)) {
+                              <div class="col-span-2 flex items-center gap-1.5 text-xs text-green-400">
+                                <span class="w-2 h-2 rounded-full bg-green-400"></span> Lagret i katalogen
+                              </div>
+                            }
                           </div>
                         } @else {
                           <div class="text-cream/30 text-sm">Laster detaljer…</div>
@@ -175,6 +186,11 @@
       </div>
     }
   </section>
+
+  <!-- Detail fetch error (shared between sections) -->
+  @if (detailError()) {
+    <div class="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-300 text-sm">{{ detailError() }}</div>
+  }
 
   <!-- ═══════════════════════════════════════════════════════════════════════
        Section 2: WineAPI – Identifiser via tekst
@@ -243,6 +259,9 @@
                 @if (wine.region) { <span>{{ wine.region }}</span> }
                 @if (wine.country) { <span>{{ wine.country }}</span> }
                 @if (wine.averageRating != null) { <span>Rating: {{ formatRating(wine.averageRating) }}</span> }
+                @if (isSaved(wine.id)) {
+                  <span class="text-xs px-2 py-0.5 rounded-full bg-green-500/20 text-green-300">Lagret</span>
+                }
               </div>
               @if (wine.id) {
                 <button (click)="fetchDetails(wine.id!)"
@@ -304,6 +323,7 @@
                     <th class="px-3 py-2 font-medium">Type</th>
                     <th class="px-3 py-2 font-medium">Region</th>
                     <th class="px-3 py-2 font-medium text-right">Rating</th>
+                    <th class="px-3 py-2 font-medium text-center">Katalog</th>
                     <th class="px-3 py-2 font-medium"></th>
                   </tr>
                 </thead>
@@ -315,6 +335,11 @@
                       <td class="px-3 py-2.5 text-cream/50">{{ s.type ?? '–' }}</td>
                       <td class="px-3 py-2.5 text-cream/50">{{ s.region ?? '–' }}</td>
                       <td class="px-3 py-2.5 text-cream/50 text-right">{{ formatRating(s.averageRating) }}</td>
+                      <td class="px-3 py-2.5 text-center">
+                        @if (isSaved(s.id)) {
+                          <span class="text-xs px-2 py-0.5 rounded-full bg-green-500/20 text-green-300">Lagret</span>
+                        }
+                      </td>
                       <td class="px-3 py-2.5 text-right">
                         @if (s.id) {
                           <button (click)="fetchDetails(s.id!)"

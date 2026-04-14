@@ -5,13 +5,16 @@ namespace VinLoggen.Api.Services;
 /// </summary>
 public interface IWineApiService
 {
-    Task<WineApiService.WineEnrichment?> FindAsync(
+    Task<WineApiService.FindResult?> FindAsync(
         string  producer,
         string  name,
         int?    vintage,
         CancellationToken ct,
         Guid?   userId        = null,
-        Guid?   correlationId = null);
+        Guid?   correlationId = null,
+        string? region        = null,
+        string? country       = null,
+        string[]? grapes      = null);
 
     /// <summary>
     /// Identifies a wine from a free-text description via /identify/text.
@@ -57,7 +60,8 @@ public interface IWineApiService
 public record WineApiSearchHitDto(
     string? Id, string? Name, string? Winery, int? Vintage,
     string? Type, string? Region, string? Country,
-    double? AverageRating, int? RatingsCount, double? Confidence);
+    double? AverageRating, int? RatingsCount, double? Confidence,
+    bool IsLocalMatch = false);
 
 public record WineApiDetailDto(
     string? Id, string? Name, string? Winery, int? Vintage,

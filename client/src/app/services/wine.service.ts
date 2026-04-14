@@ -108,6 +108,28 @@ export interface WineAnalysisResult {
   proScansToday: number;
   dailyProLimit: number;
   isPro: boolean;
+  // Candidate wines from WineAPI search
+  candidateWines: CandidateWine[] | null;
+  // Set when user explicitly selected a candidate from the selection step
+  candidateSelected?: boolean;
+  candidateIsLocal?: boolean;
+  // Per-field source: tracks which fields came from the candidate vs OCR
+  candidateFields?: Record<string, boolean>;
+}
+
+/** A single candidate wine from WineAPI search results or local catalogue */
+export interface CandidateWine {
+  id: string | null;
+  name: string | null;
+  winery: string | null;
+  vintage: number | null;
+  type: string | null;
+  region: string | null;
+  country: string | null;
+  averageRating: number | null;
+  ratingsCount: number | null;
+  confidence: number | null;
+  isLocalMatch: boolean;
 }
 
 /** Lightweight wine record returned by the search endpoint */
@@ -617,6 +639,11 @@ export class WineService {
 
   setScanThumbnailUrl(url: string): void {
     this._lastScanThumbnailUrl.set(url);
+  }
+
+  /** Update the last scan result (used when merging selected candidate wine data). */
+  setLastScanResult(result: WineAnalysisResult): void {
+    this._lastScanResult.set(result);
   }
 
   setScanLocation(lat: number, lng: number): void {

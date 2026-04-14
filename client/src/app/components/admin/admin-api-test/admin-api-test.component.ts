@@ -24,6 +24,7 @@ interface WineApiSearchResult {
   correlationId: string;
   hitCount: number;
   hits: WineApiSearchHit[];
+  savedWines: Record<string, string>;
 }
 
 // ── Details ──────────────────────────────────────────────────────────────
@@ -49,6 +50,7 @@ interface WineApiDetailResult {
   correlationId: string;
   found: boolean;
   detail: WineApiDetail | null;
+  savedWineId: string | null;
 }
 
 // ── Identify ─────────────────────────────────────────────────────────────
@@ -72,6 +74,7 @@ interface WineApiIdentifyResult {
     suggestions: WineApiIdentifyHit[] | null;
     confidence: number | null;
   } | null;
+  savedWines: Record<string, string>;
 }
 
 @Component({
@@ -97,6 +100,7 @@ export class AdminApiTestComponent {
   protected readonly detailLoadingId = signal<string | null>(null);
   protected readonly detailResults = signal<Record<string, WineApiDetail>>({});
   protected readonly expandedDetailId = signal<string | null>(null);
+  protected readonly detailError = signal<string | null>(null);
 
   // ── Identify state ───────────────────────────────────────────────────────
   protected readonly identifyQuery = signal('');
@@ -104,6 +108,9 @@ export class AdminApiTestComponent {
   protected readonly identifyResult = signal<WineApiIdentifyResult | null>(null);
   protected readonly identifyError = signal<string | null>(null);
   protected readonly identifyRawJson = signal<string | null>(null);
+
+  // ── Catalogue state ─────────────────────────────────────────────────
+  protected readonly savedWineIds = signal<Record<string, string>>({});
 
   // ── Search ───────────────────────────────────────────────────────────────
 
@@ -117,6 +124,7 @@ export class AdminApiTestComponent {
     this.searchResult.set(null);
     this.searchRawJson.set(null);
     this.expandedDetailId.set(null);
+    this.detailError.set(null);
 
     try {
       let params = new HttpParams().set('producer', p).set('name', n);
@@ -128,6 +136,9 @@ export class AdminApiTestComponent {
       );
       this.searchResult.set(res);
       this.searchRawJson.set(JSON.stringify(res, null, 2));
+      if (res.savedWines) {
+        this.savedWineIds.update(m => ({ ...m, ...res.savedWines }));
+      }
     } catch (err: unknown) {
       const httpErr = err as { error?: { detail?: string }; status?: number };
       this.searchError.set(httpErr?.error?.detail ?? 'Søket feilet');
@@ -152,6 +163,7 @@ export class AdminApiTestComponent {
 
     this.detailLoadingId.set(wineId);
     this.expandedDetailId.set(wineId);
+    this.detailError.set(null);
 
     try {
       const res = await firstValueFrom(
@@ -159,9 +171,17 @@ export class AdminApiTestComponent {
       );
       if (res.detail) {
         this.detailResults.update(map => ({ ...map, [wineId]: res.detail! }));
+        if (res.savedWineId) {
+          this.savedWineIds.update(m => ({ ...m, [wineId]: res.savedWineId! }));
+        }
+      } else {
+        this.detailError.set('Ingen detaljer funnet for denne vinen');
+        this.expandedDetailId.set(null);
       }
-    } catch {
-      // silently ignore detail fetch failures
+    } catch (err: unknown) {
+      const httpErr = err as { error?: { detail?: string }; status?: number };
+      this.detailError.set(httpErr?.error?.detail ?? 'Klarte ikke hente detaljer');
+      this.expandedDetailId.set(null);
     } finally {
       this.detailLoadingId.set(null);
     }
@@ -181,6 +201,7 @@ export class AdminApiTestComponent {
     this.identifyError.set(null);
     this.identifyResult.set(null);
     this.identifyRawJson.set(null);
+    this.detailError.set(null);
 
     try {
       const res = await firstValueFrom(
@@ -188,6 +209,9 @@ export class AdminApiTestComponent {
       );
       this.identifyResult.set(res);
       this.identifyRawJson.set(JSON.stringify(res, null, 2));
+      if (res.savedWines) {
+        this.savedWineIds.update(m => ({ ...m, ...res.savedWines }));
+      }
     } catch (err: unknown) {
       const httpErr = err as { error?: { detail?: string }; status?: number };
       this.identifyError.set(httpErr?.error?.detail ?? 'Identifisering feilet');
@@ -205,5 +229,9 @@ export class AdminApiTestComponent {
   formatConfidence(confidence: number | null): string {
     if (confidence == null) return '–';
     return `${(confidence * 100).toFixed(0)}%`;
+  }
+
+  isSaved(externalId: string | null): boolean {
+    return externalId != null && externalId in this.savedWineIds();
   }
 }

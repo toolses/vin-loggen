@@ -6,19 +6,22 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
+import { DecimalPipe } from '@angular/common';
 import { Router } from '@angular/router';
 import { WineService } from '../../services/wine.service';
+import type { CandidateWine, WineAnalysisResult } from '../../services/wine.service';
 import { ProfileService } from '../../services/profile.service';
 import { AuthService } from '../../services/auth.service';
 import { LocationService } from '../../services/location.service';
 import { ImageProcessingService, ProcessedImages } from '../../services/image-processing.service';
 import { NotificationService } from '../../services/notification.service';
 
-type ScanStep = 'idle' | 'front' | 'back' | 'processing';
+type ScanStep = 'idle' | 'front' | 'back' | 'processing' | 'select';
 
 @Component({
   selector: 'app-scanner',
   standalone: true,
+  imports: [DecimalPipe],
   templateUrl: './scanner.component.html',
 })
 export class ScannerComponent implements OnDestroy {
@@ -45,6 +48,9 @@ export class ScannerComponent implements OnDestroy {
   /** Thumbnail previews for captured images */
   protected readonly frontPreviewUrl = signal<string | null>(null);
   protected readonly backPreviewUrl = signal<string | null>(null);
+
+  /** Candidate wines from WineAPI search (filtered to high-confidence, top 5) */
+  protected readonly candidateWines = signal<CandidateWine[]>([]);
 
   private stream: MediaStream | null = null;
   private frontPreviewObjectUrl: string | null = null;
@@ -219,12 +225,97 @@ export class ScannerComponent implements OnDestroy {
         navigator.vibrate(200);
       }
 
-      this.router.navigate(['/edit']);
+      // Check for high-confidence candidate wines (local matches always included)
+      const scanResult = this.wineService.lastScanResult();
+      const candidates = scanResult?.candidateWines ?? [];
+      const viableCandidates = candidates
+        .filter(c => c.isLocalMatch || (c.confidence ?? 0) >= 0.65)
+        .sort((a, b) => {
+          // Local matches first, then by confidence desc
+          if (a.isLocalMatch && !b.isLocalMatch) return -1;
+          if (!a.isLocalMatch && b.isLocalMatch) return 1;
+          return (b.confidence ?? 0) - (a.confidence ?? 0);
+        })
+        .slice(0, 5);
+
+      if (viableCandidates.length > 0) {
+        this.candidateWines.set(viableCandidates);
+        this.step.set('select');
+      } else {
+        this.router.navigate(['/edit']);
+      }
     } catch (err) {
       console.error('Scanner: submitImages error', err);
       this.notifications.error('Noe gikk galt under analyse. Prøv igjen.');
       this.step.set('back');
     }
+  }
+
+  /** User selected a candidate wine from the list */
+  private static readonly wineTypeMap: Record<string, string> = {
+    red: 'Rød',
+    white: 'Hvit',
+    rosé: 'Rosé',
+    rose: 'Rosé',
+    sparkling: 'Musserende',
+    dessert: 'Dessert',
+    orange: 'Oransje',
+  };
+
+  private mapWineType(type: string | null): string | null {
+    if (!type) return null;
+    return ScannerComponent.wineTypeMap[type.toLowerCase()] ?? type;
+  }
+
+  protected selectCandidate(candidate: CandidateWine): void {
+    const scanResult = this.wineService.lastScanResult();
+    if (!scanResult) return;
+
+    // Track which fields came from the candidate (non-null candidate value)
+    const candidateFields: Record<string, boolean> = {
+      name: candidate.name != null,
+      producer: candidate.winery != null,
+      vintage: candidate.vintage != null,
+      type: candidate.type != null,
+      region: candidate.region != null,
+      country: candidate.country != null,
+    };
+
+    // Merge candidate values with OCR scan result (candidate overrides, OCR fallback)
+    const merged: WineAnalysisResult = {
+      ...scanResult,
+      wineName: candidate.name ?? scanResult.wineName,
+      producer: candidate.winery ?? scanResult.producer,
+      vintage: candidate.vintage ?? scanResult.vintage,
+      type: this.mapWineType(candidate.type) ?? scanResult.type,
+      region: candidate.region ?? scanResult.region,
+      country: candidate.country ?? scanResult.country,
+      // Local match → set existingWineId; WineAPI match → set externalSourceId
+      existingWineId: candidate.isLocalMatch ? candidate.id : scanResult.existingWineId,
+      externalSourceId: candidate.isLocalMatch ? scanResult.externalSourceId : (candidate.id ?? scanResult.externalSourceId),
+      // Clear name suggestions since user explicitly chose a candidate
+      suggestedName: null,
+      suggestedProducer: null,
+      nameFromCatalogue: false,
+      // Candidate selection metadata
+      candidateSelected: true,
+      candidateIsLocal: candidate.isLocalMatch,
+      candidateFields,
+    };
+
+    this.wineService.setLastScanResult(merged);
+    this.router.navigate(['/edit']);
+  }
+
+  /** User chose to register a new wine (use original OCR values) */
+  protected registerNewWine(): void {
+    this.router.navigate(['/edit']);
+  }
+
+  /** Go back from the selection step */
+  protected goBackFromSelect(): void {
+    this.candidateWines.set([]);
+    this.step.set('back');
   }
 
   private stopCamera(): void {

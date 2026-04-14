@@ -50,8 +50,117 @@
     </div>
   }
 
+  <!-- ── Wine selection overlay ──────────────────────────────── -->
+  @if (step() === 'select') {
+    <div class="absolute inset-0 z-50 flex flex-col bg-cellar-bg">
+      <!-- Header -->
+      <div class="flex items-center gap-3 px-4 pt-6" style="padding-top: calc(1.5rem + var(--sat))">
+        <button
+          (click)="goBackFromSelect()"
+          class="w-10 h-10 rounded-full glass flex items-center justify-center text-cream transition-colors hover:bg-white/10"
+          aria-label="Tilbake"
+        >
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
+          </svg>
+        </button>
+        <h2 class="font-serif text-xl text-cream">Velg vin</h2>
+      </div>
+
+      <!-- Thumbnails context -->
+      <div class="flex gap-3 justify-center px-4 py-3">
+        @if (frontPreviewUrl()) {
+          <div class="relative">
+            <img [src]="frontPreviewUrl()" alt="Forside" class="w-14 h-14 object-cover rounded-lg border-2 border-gold/40" />
+          </div>
+        }
+        @if (backPreviewUrl()) {
+          <div class="relative">
+            <img [src]="backPreviewUrl()" alt="Bakside" class="w-14 h-14 object-cover rounded-lg border-2 border-gold/40" />
+          </div>
+        }
+      </div>
+
+      <p class="text-sm text-cream-dark text-center px-6 mb-4">
+        Vi fant flere viner som kan matche etiketten. Velg riktig vin, eller registrer en ny.
+      </p>
+
+      <!-- Candidate list -->
+      <div class="flex-1 overflow-y-auto px-4 space-y-2">
+        @for (candidate of candidateWines(); track candidate.id) {
+          <button
+            type="button"
+            (click)="selectCandidate(candidate)"
+            class="w-full text-left px-4 py-3 rounded-xl border transition-colors active:scale-[0.98]"
+            [class]="candidate.isLocalMatch
+              ? 'bg-burgundy/10 border-burgundy/30 hover:bg-burgundy/20'
+              : 'bg-white/5 border-white/10 hover:bg-white/10 hover:border-burgundy-light/30'"
+          >
+            <div class="flex items-center justify-between">
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2">
+                  <p class="text-sm font-medium text-cream truncate">
+                    @if (candidate.winery) {
+                      {{ candidate.winery }} &mdash;
+                    }
+                    {{ candidate.name }}
+                  </p>
+                  @if (candidate.isLocalMatch) {
+                    <span class="flex-shrink-0 text-[10px] bg-burgundy text-cream px-1.5 py-0.5 rounded-full">Din vin</span>
+                  }
+                </div>
+                <p class="text-xs text-cream-dark mt-0.5">
+                  @if (candidate.vintage) {
+                    {{ candidate.vintage }} &middot;
+                  }
+                  @if (candidate.type) {
+                    {{ candidate.type }}
+                  }
+                  @if (candidate.country) {
+                    &middot; {{ candidate.country }}
+                  }
+                  @if (candidate.region) {
+                    , {{ candidate.region }}
+                  }
+                </p>
+              </div>
+              <div class="flex flex-col items-end flex-shrink-0 ml-3">
+                @if (candidate.isLocalMatch) {
+                  <span class="text-xs text-burgundy-light font-medium">Lokal match</span>
+                } @else if (candidate.confidence) {
+                  <span class="text-xs text-gold font-medium">
+                    {{ candidate.confidence * 100 | number:'1.0-0' }}% treff
+                  </span>
+                }
+                @if (candidate.averageRating) {
+                  <span class="text-[10px] text-cream-dark mt-0.5">
+                    {{ candidate.averageRating | number:'1.1-1' }}
+                    @if (candidate.ratingsCount) {
+                      ({{ candidate.ratingsCount }})
+                    }
+                  </span>
+                }
+              </div>
+            </div>
+          </button>
+        }
+      </div>
+
+      <!-- "Register new wine" button at bottom -->
+      <div class="px-4 py-4" style="padding-bottom: calc(1rem + env(safe-area-inset-bottom))">
+        <button
+          (click)="registerNewWine()"
+          class="w-full py-3.5 rounded-2xl glass text-cream font-medium
+                 transition-all duration-200 active:scale-[0.98] hover:bg-white/10"
+        >
+          Registrer som ny vin
+        </button>
+      </div>
+    </div>
+  }
+
   <!-- ── Camera / Capture flow ───────────────────────────────── -->
-  @if (step() !== 'processing') {
+  @if (step() !== 'processing' && step() !== 'select') {
     <div class="flex-1 relative overflow-hidden">
 
       @if (cameraActive()) {

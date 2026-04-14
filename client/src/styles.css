@@ -222,3 +222,46 @@ textarea {
   color: #F5F5F5 !important;
   background: transparent !important;
 }
+
+/* ── Mapbox Popup Pagination ─────────────────────────────────── */
+.popup-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 6px 12px 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.popup-page-info {
+  font-size: 11px;
+  color: #a3a3a3;
+  min-width: 32px;
+  text-align: center;
+}
+
+.popup-nav-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: transparent;
+  color: #F5F5F5;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.popup-nav-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.popup-nav-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}

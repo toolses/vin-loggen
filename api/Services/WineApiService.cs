@@ -42,6 +42,12 @@ public sealed class WineApiService : IWineApiService
         string?   SuggestedProducer = null
     );
 
+    /// <summary>Combined result from <see cref="FindAsync"/>: best-match enrichment plus all candidate hits.</summary>
+    public sealed record FindResult(
+        WineEnrichment? Enrichment,
+        List<WineApiSearchHitDto>? Candidates
+    );
+
     /// <summary>Rich wine identification result from /identify/text.</summary>
     public sealed record WineIdentification(
         string    Id,
@@ -65,17 +71,28 @@ public sealed class WineApiService : IWineApiService
     );
 
     internal sealed record WineApiHit(
-        [property: JsonPropertyName("id")]              string?   Id,
-        [property: JsonPropertyName("name")]            string?   Name,
-        [property: JsonPropertyName("winery")]          string?   Winery,
-        [property: JsonPropertyName("vintage")]         int?      Vintage,
-        [property: JsonPropertyName("type")]            string?   Type,
-        [property: JsonPropertyName("region")]          string?   Region,
-        [property: JsonPropertyName("country")]         string?   Country,
-        [property: JsonPropertyName("averageRating")]   double?   AverageRating,
-        [property: JsonPropertyName("ratingsCount")]    int?      RatingsCount,
-        [property: JsonPropertyName("confidence")]      double?   Confidence
-    );
+        [property: JsonPropertyName("id")]              string?      Id,
+        [property: JsonPropertyName("name")]            string?      Name,
+        [property: JsonPropertyName("winery")]          string?      Winery,
+        [property: JsonPropertyName("vintage")]         int?         Vintage,
+        [property: JsonPropertyName("type")]            string?      Type,
+        [property: JsonPropertyName("region")]          JsonElement  RegionRaw,
+        [property: JsonPropertyName("country")]         string?      Country,
+        [property: JsonPropertyName("averageRating")]   double?      AverageRating,
+        [property: JsonPropertyName("ratingsCount")]    int?         RatingsCount,
+        [property: JsonPropertyName("confidence")]      double?      Confidence
+    )
+    {
+        [JsonIgnore]
+        public string? Region => RegionRaw.ValueKind switch
+        {
+            JsonValueKind.String => RegionRaw.GetString(),
+            JsonValueKind.Object =>
+                RegionRaw.TryGetProperty("name", out var n) ? n.GetString() : RegionRaw.ToString(),
+            JsonValueKind.Undefined or JsonValueKind.Null => null,
+            _ => RegionRaw.ToString()
+        };
+    }
 
     // ── Fields ────────────────────────────────────────────────────────────────
 
@@ -117,13 +134,16 @@ public sealed class WineApiService : IWineApiService
     /// data for the best match. Returns <c>null</c> when the feature is disabled,
     /// no API key is configured, no match is found, or the API call fails.
     /// </summary>
-    public async Task<WineEnrichment?> FindAsync(
+    public async Task<FindResult?> FindAsync(
         string  producer,
         string  name,
         int?    vintage,
         CancellationToken ct,
         Guid?   userId        = null,
-        Guid?   correlationId = null)
+        Guid?   correlationId = null,
+        string? region        = null,
+        string? country       = null,
+        string[]? grapes      = null)
     {
         if (!_settings.EnableWineApi)
         {
@@ -143,16 +163,19 @@ public sealed class WineApiService : IWineApiService
 
         // ── Cache lookup ────────────────────────────────────────────────────────
         var cacheKey = $"wineapi:{producer.Trim().ToLowerInvariant()}|{name.Trim().ToLowerInvariant()}|{vintage?.ToString() ?? "nv"}";
-        if (_cache.TryGetValue<WineEnrichment?>(cacheKey, out var cached))
+        if (_cache.TryGetValue<FindResult?>(cacheKey, out var cached))
         {
             _logger.LogDebug("WineApiService: cache hit for '{CacheKey}'", cacheKey);
             return cached;
         }
 
-        // Build free-text query: "producer name vintage"
-        var query = $"{producer.Trim()} {name.Trim()}{(vintage.HasValue ? $" {vintage.Value}" : "")}".Trim();
+        // Build free-text query: "name producer region"
+        var queryParts = new[] { name.Trim(), producer.Trim(), region?.Trim(), country?.Trim() }
+            .Concat(grapes?.Select(g => g.Trim()) ?? [])
+            .Where(s => !string.IsNullOrWhiteSpace(s));
+        var query = string.Join(" ", queryParts);
         var cfg = _settings.WineApi;
-        var url = $"{cfg.BaseUrl.TrimEnd('/')}{SearchPath}?q={Uri.EscapeDataString(query)}&limit=15";
+        var url = $"{cfg.BaseUrl.TrimEnd('/')}{SearchPath}?q={Uri.EscapeDataString(query)}&limit=20";
 
         _logger.LogInformation("WineApiService: searching for q='{Query}'", query);
 
@@ -183,12 +206,18 @@ public sealed class WineApiService : IWineApiService
 
             var result = JsonSerializer.Deserialize<SearchResponse>(body, JsonOpts);
 
+            // Map all hits to DTOs for the candidate list
+            var candidates = result?.Results?.Select(h => new WineApiSearchHitDto(
+                h.Id, h.Name, h.Winery, h.Vintage, h.Type, h.Region, h.Country,
+                h.AverageRating, h.RatingsCount, h.Confidence)).ToList();
+
             var hit = FindBestMatch(result?.Results, producer, name, vintage);
             if (hit is null)
             {
                 _logger.LogInformation("WineApiService: no match for q='{Query}'", query);
-                _cache.Set(cacheKey, (WineEnrichment?)null, CacheTtl);
-                return null;
+                var noMatchResult = new FindResult(null, candidates);
+                _cache.Set(cacheKey, (FindResult?)noMatchResult, CacheTtl);
+                return noMatchResult;
             }
 
             _logger.LogInformation(
@@ -207,8 +236,9 @@ public sealed class WineApiService : IWineApiService
                 SuggestedProducer: hit.Winery
             );
 
-            _cache.Set(cacheKey, (WineEnrichment?)enrichment, CacheTtl);
-            return enrichment;
+            var findResult = new FindResult(enrichment, candidates);
+            _cache.Set(cacheKey, (FindResult?)findResult, CacheTtl);
+            return findResult;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -269,15 +299,26 @@ public sealed class WineApiService : IWineApiService
     );
 
     private sealed record IdentifyWineHit(
-        [property: JsonPropertyName("id")]            string?  Id,
-        [property: JsonPropertyName("name")]          string?  Name,
-        [property: JsonPropertyName("vintage")]       int?     Vintage,
-        [property: JsonPropertyName("type")]          string?  Type,
-        [property: JsonPropertyName("region")]        string?  Region,
-        [property: JsonPropertyName("country")]       string?  Country,
-        [property: JsonPropertyName("averageRating")] double?  AverageRating,
-        [property: JsonPropertyName("ratingsCount")]  int?     RatingsCount
-    );
+        [property: JsonPropertyName("id")]            string?      Id,
+        [property: JsonPropertyName("name")]          string?      Name,
+        [property: JsonPropertyName("vintage")]       int?         Vintage,
+        [property: JsonPropertyName("type")]          string?      Type,
+        [property: JsonPropertyName("region")]        JsonElement  RegionRaw,
+        [property: JsonPropertyName("country")]       string?      Country,
+        [property: JsonPropertyName("averageRating")] double?      AverageRating,
+        [property: JsonPropertyName("ratingsCount")]  int?         RatingsCount
+    )
+    {
+        [JsonIgnore]
+        public string? Region => RegionRaw.ValueKind switch
+        {
+            JsonValueKind.String => RegionRaw.GetString(),
+            JsonValueKind.Object =>
+                RegionRaw.TryGetProperty("name", out var n) ? n.GetString() : RegionRaw.ToString(),
+            JsonValueKind.Undefined or JsonValueKind.Null => null,
+            _ => RegionRaw.ToString()
+        };
+    }
 
     /// <inheritdoc />
     public async Task<WineIdentification?> IdentifyByTextAsync(
@@ -469,7 +510,7 @@ public sealed class WineApiService : IWineApiService
             if (d is null) return null;
 
             return new WineApiDetailDto(
-                d.Id, d.Name, d.Winery, d.Vintage, d.Type, d.Region, d.Country,
+                d.Id, d.Name, d.WineryName, d.Vintage, d.Type, d.RegionName, d.Country,
                 d.Description, d.FoodPairings, d.TechnicalNotes, d.AlcoholContent,
                 d.Grapes, d.AverageRating, d.RatingsCount);
         }
@@ -552,21 +593,38 @@ public sealed class WineApiService : IWineApiService
 
     /// <summary>Deserialization DTO for GET /wines/{id}.</summary>
     private sealed record WineDetailsResponse(
-        [property: JsonPropertyName("id")]              string?   Id,
-        [property: JsonPropertyName("name")]            string?   Name,
-        [property: JsonPropertyName("winery")]          string?   Winery,
-        [property: JsonPropertyName("vintage")]         int?      Vintage,
-        [property: JsonPropertyName("type")]            string?   Type,
-        [property: JsonPropertyName("region")]          string?   Region,
-        [property: JsonPropertyName("country")]         string?   Country,
-        [property: JsonPropertyName("description")]     string?   Description,
-        [property: JsonPropertyName("foodPairings")]    string[]? FoodPairings,
-        [property: JsonPropertyName("technicalNotes")]  string?   TechnicalNotes,
-        [property: JsonPropertyName("alcoholContent")]  double?   AlcoholContent,
-        [property: JsonPropertyName("grapes")]          string[]? Grapes,
-        [property: JsonPropertyName("averageRating")]   double?   AverageRating,
-        [property: JsonPropertyName("ratingsCount")]    int?      RatingsCount
-    );
+        [property: JsonPropertyName("id")]              string?      Id,
+        [property: JsonPropertyName("name")]            string?      Name,
+        [property: JsonPropertyName("winery")]          JsonElement Winery,
+        [property: JsonPropertyName("vintage")]         int?         Vintage,
+        [property: JsonPropertyName("type")]            string?      Type,
+        [property: JsonPropertyName("region")]          JsonElement  Region,
+        [property: JsonPropertyName("country")]         string?      Country,
+        [property: JsonPropertyName("description")]     string?      Description,
+        [property: JsonPropertyName("foodPairings")]    string[]?    FoodPairings,
+        [property: JsonPropertyName("technicalNotes")]  string?      TechnicalNotes,
+        [property: JsonPropertyName("alcoholContent")]  double?      AlcoholContent,
+        [property: JsonPropertyName("grapes")]          string[]?    Grapes,
+        [property: JsonPropertyName("averageRating")]   double?      AverageRating,
+        [property: JsonPropertyName("ratingsCount")]    int?         RatingsCount
+    )
+    {
+        /// <summary>Extracts the winery name whether the API returns a string or an object with a "name" property.</summary>
+        public string? WineryName => ExtractString(Winery);
+
+        /// <summary>Extracts the region name whether the API returns a string or an object with a "name" property.</summary>
+        [JsonIgnore]
+        public string? RegionName => ExtractString(Region);
+
+        private static string? ExtractString(JsonElement el) => el.ValueKind switch
+        {
+            JsonValueKind.String => el.GetString(),
+            JsonValueKind.Object =>
+                el.TryGetProperty("name", out var n) ? n.GetString() : el.ToString(),
+            JsonValueKind.Undefined or JsonValueKind.Null => null,
+            _ => el.ToString()
+        };
+    }
 
     /// <inheritdoc />
     public async Task<WineEnrichment?> GetDetailsAsync(string wineId, CancellationToken ct,
@@ -636,7 +694,7 @@ public sealed class WineApiService : IWineApiService
                 AlcoholContent: detail.AlcoholContent,
                 Grapes:         detail.Grapes,
                 SuggestedName:     detail.Name,
-                SuggestedProducer: detail.Winery);
+                SuggestedProducer: detail.WineryName);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

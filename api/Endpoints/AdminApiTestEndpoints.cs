@@ -40,6 +40,7 @@ public static class AdminApiTestEndpoints
         int? vintage,
         ClaimsPrincipal user,
         IWineApiService wineApiService,
+        WineCatalogueService catalogueService,
         CancellationToken ct)
     {
         var userId = ExtractUserId(user);
@@ -48,16 +49,22 @@ public static class AdminApiTestEndpoints
         var hits = await wineApiService.SearchRawAsync(
             producer, name, vintage, ct, userId, correlationId);
 
+        var savedWines = hits is { Count: > 0 }
+            ? await catalogueService.UpsertFromSearchHitsAsync(hits, ct)
+            : new Dictionary<string, Guid>();
+
         return TypedResults.Ok(new WineApiSearchTestResult(
             CorrelationId: correlationId,
             HitCount: hits?.Count ?? 0,
-            Hits: hits ?? []));
+            Hits: hits ?? [],
+            SavedWines: savedWines));
     }
 
     private static async Task<Results<Ok<WineApiDetailTestResult>, ProblemHttpResult>> GetWineApiDetails(
         string wineId,
         ClaimsPrincipal user,
         IWineApiService wineApiService,
+        WineCatalogueService catalogueService,
         CancellationToken ct)
     {
         var userId = ExtractUserId(user);
@@ -66,16 +73,22 @@ public static class AdminApiTestEndpoints
         var detail = await wineApiService.GetDetailsRawAsync(
             wineId, ct, userId, correlationId);
 
+        Guid? savedWineId = detail is not null
+            ? await catalogueService.UpsertFromDetailAsync(detail, ct)
+            : null;
+
         return TypedResults.Ok(new WineApiDetailTestResult(
             CorrelationId: correlationId,
             Found: detail is not null,
-            Detail: detail));
+            Detail: detail,
+            SavedWineId: savedWineId));
     }
 
     private static async Task<Results<Ok<WineApiIdentifyTestResult>, ProblemHttpResult>> IdentifyByText(
         IdentifyTextRequest body,
         ClaimsPrincipal user,
         IWineApiService wineApiService,
+        WineCatalogueService catalogueService,
         CancellationToken ct)
     {
         var userId = ExtractUserId(user);
@@ -84,10 +97,15 @@ public static class AdminApiTestEndpoints
         var result = await wineApiService.IdentifyByTextRawAsync(
             body.Query, ct, userId, correlationId);
 
+        var savedWines = result is not null
+            ? await catalogueService.UpsertFromIdentifyHitsAsync(result, ct)
+            : new Dictionary<string, Guid>();
+
         return TypedResults.Ok(new WineApiIdentifyTestResult(
             CorrelationId: correlationId,
             Found: result?.Wine is not null,
-            Result: result));
+            Result: result,
+            SavedWines: savedWines));
     }
 }
 
@@ -96,16 +114,19 @@ public static class AdminApiTestEndpoints
 public record WineApiSearchTestResult(
     Guid CorrelationId,
     int HitCount,
-    List<WineApiSearchHitDto> Hits);
+    List<WineApiSearchHitDto> Hits,
+    Dictionary<string, Guid> SavedWines);
 
 public record WineApiDetailTestResult(
     Guid CorrelationId,
     bool Found,
-    WineApiDetailDto? Detail);
+    WineApiDetailDto? Detail,
+    Guid? SavedWineId);
 
 public record IdentifyTextRequest(string Query);
 
 public record WineApiIdentifyTestResult(
     Guid CorrelationId,
     bool Found,
-    WineApiIdentifyResultDto? Result);
+    WineApiIdentifyResultDto? Result,
+    Dictionary<string, Guid> SavedWines);

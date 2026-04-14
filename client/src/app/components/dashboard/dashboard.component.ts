@@ -1,36 +1,29 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { WineService, Wine } from '../../services/wine.service';
+import { ProfileService } from '../../services/profile.service';
 import { SharePreviewComponent } from '../share-preview/share-preview.component';
+import { WineCardComponent } from '../wine-card/wine-card.component';
 
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [RouterLink, SharePreviewComponent],
+  imports: [RouterLink, SharePreviewComponent, WineCardComponent],
   templateUrl: './dashboard.component.html',
 })
 export class DashboardComponent implements OnInit {
   protected readonly wineService = inject(WineService);
+  protected readonly profile = inject(ProfileService);
+  private readonly router = inject(Router);
   protected readonly sharingWine = signal<Wine | null>(null);
 
   ngOnInit(): void {
     this.wineService.loadWines();
+    this.profile.loadProQuota();
   }
 
   protected recentWines() {
     return this.wineService.wines().slice(0, 8);
-  }
-
-  protected getTypeColor(type: string): string {
-    switch (type) {
-      case 'Rød': return 'bg-red-900/40 text-red-300 border-red-500/20';
-      case 'Hvit': return 'bg-yellow-900/30 text-yellow-300 border-yellow-500/20';
-      case 'Rosé': return 'bg-pink-900/30 text-pink-300 border-pink-500/20';
-      case 'Musserende': return 'bg-amber-900/30 text-amber-300 border-amber-500/20';
-      case 'Oransje': return 'bg-orange-900/30 text-orange-300 border-orange-500/20';
-      case 'Dessert': return 'bg-purple-900/30 text-purple-300 border-purple-500/20';
-      default: return 'bg-white/5 text-cream-dark border-white/10';
-    }
   }
 
   protected openSharePreview(wine: Wine): void {
@@ -39,5 +32,12 @@ export class DashboardComponent implements OnInit {
 
   protected closeSharePreview(): void {
     this.sharingWine.set(null);
+  }
+
+  protected showOnMap(wine: Wine): void {
+    if (wine.location_lat == null || wine.location_lng == null) return;
+    this.router.navigate(['/cellar'], {
+      queryParams: { view: 'map', lat: wine.location_lat, lng: wine.location_lng },
+    });
   }
 }

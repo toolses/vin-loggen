@@ -21,6 +21,12 @@ export const routes: Routes = [
       import('./components/scanner/scanner.component').then(m => m.ScannerComponent),
   },
   {
+    path: 'expert',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./components/expert/expert.component').then(m => m.ExpertComponent),
+  },
+  {
     path: 'edit',
     canActivate: [authGuard],
     loadComponent: () =>
@@ -80,6 +86,13 @@ export const routes: Routes = [
           ),
       },
       {
+        path: 'users',
+        loadComponent: () =>
+          import('./components/admin/admin-user-list/admin-user-list.component').then(
+            m => m.AdminUserListComponent,
+          ),
+      },
+      {
         path: 'corrections',
         loadComponent: () =>
           import('./components/admin/admin-corrections/admin-correction-list.component').then(
@@ -91,6 +104,27 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./components/admin/admin-corrections/admin-correction-detail.component').then(
             m => m.AdminCorrectionDetailComponent,
+          ),
+      },
+      {
+        path: 'settings',
+        loadComponent: () =>
+          import('./components/admin/admin-settings/admin-settings.component').then(
+            m => m.AdminSettingsComponent,
+          ),
+      },
+      {
+        path: 'traces',
+        loadComponent: () =>
+          import('./components/admin/admin-traces/admin-traces.component').then(
+            m => m.AdminTracesComponent,
+          ),
+      },
+      {
+        path: 'api-test',
+        loadComponent: () =>
+          import('./components/admin/admin-api-test/admin-api-test.component').then(
+            m => m.AdminApiTestComponent,
           ),
       },
     ],

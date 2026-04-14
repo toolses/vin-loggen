@@ -1,7 +1,10 @@
 using System.Diagnostics;
+using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using System.Net.Http.Json;
+using Microsoft.Extensions.Caching.Memory;
+using Npgsql;
+using VinLoggen.Api.Configuration;
 using VinLoggen.Api.Models;
 
 namespace VinLoggen.Api.Services;
@@ -31,6 +34,7 @@ public record WineAnalysisResponse(
     // ── Name suggestions – from wineapi.io catalogue match ──────────────────
     string?   SuggestedName     = null,
     string?   SuggestedProducer = null,
+    bool      NameFromCatalogue = false,
     // ── Quota metadata – always returned for UI ───────────────────────────────
     bool      ProLimitReached = false,
     int       ProScansToday   = 0,
@@ -88,7 +92,7 @@ public sealed class GeminiService : IGeminiService
           "country": string,
           "region": string,
           "grapes": string[],
-          "type": "Rød"|"Hvit"|"Musserende"|"Rosé"|"Oransje",
+          "type": "Rød"|"Hvit"|"Musserende"|"Rosé"|"Oransje"|"Dessert",
           "alcoholContent": number
         }
 
@@ -114,7 +118,7 @@ public sealed class GeminiService : IGeminiService
           "country": string,
           "region": string,
           "grapes": string[],
-          "type": "Rød"|"Hvit"|"Musserende"|"Rosé"|"Oransje",
+          "type": "Rød"|"Hvit"|"Musserende"|"Rosé"|"Oransje"|"Dessert",
           "alcoholContent": number,
           "foodPairings": string[]
         }
@@ -134,24 +138,39 @@ public sealed class GeminiService : IGeminiService
     private readonly IConfiguration     _configuration;
     private readonly ILogger<GeminiService> _logger;
     private readonly IApiUsageService _apiUsage;
+    private readonly IntegrationSettings _settings;
+    private readonly NpgsqlDataSource _dataSource;
+    private readonly IMemoryCache _cache;
 
     public GeminiService(
         IHttpClientFactory      httpClientFactory,
         IConfiguration          configuration,
         ILogger<GeminiService>  logger,
-        IApiUsageService        apiUsage)
+        IApiUsageService        apiUsage,
+        IntegrationSettings     settings,
+        NpgsqlDataSource        dataSource,
+        IMemoryCache            cache)
     {
         _httpClientFactory = httpClientFactory;
         _configuration     = configuration;
         _logger            = logger;
         _apiUsage          = apiUsage;
+        _settings          = settings;
+        _dataSource        = dataSource;
+        _cache             = cache;
     }
 
     public async Task<GeminiResult<WineAnalysisResponse>> AnalyzeLabelAsync(
         byte[]            imageBytes,
         string            mimeType,
-        CancellationToken ct)
+        CancellationToken ct,
+        Guid?             userId        = null,
+        Guid?             correlationId = null,
+        string?           frontImageUrl = null)
     {
+        if (await ApiQuotaGuard.IsDailyQuotaExceededAsync("gemini", _settings.GeminiMaxDailyRequests, _cache, _dataSource, _logger, ct))
+            return new(null, "Daglig Gemini-kvote er nådd.");
+
         var apiKey = _configuration["GEMINI_API_KEY"];
         if (string.IsNullOrWhiteSpace(apiKey))
         {
@@ -160,8 +179,8 @@ public sealed class GeminiService : IGeminiService
         }
 
         var base64Image = Convert.ToBase64String(imageBytes);
+        var reqSummary  = BuildReqSummary(mimeType, null, null, frontImageUrl, null);
 
-        // Build request using anonymous types – keeps the file-scoped record list short
         var payload = new
         {
             contents = new[]
@@ -179,43 +198,45 @@ public sealed class GeminiService : IGeminiService
 
         var client = _httpClientFactory.CreateClient("gemini");
 
-        HttpResponseMessage response;
+        string responseBodyText;
         var sw = Stopwatch.StartNew();
         try
         {
-            response = await client.PostAsJsonAsync($"{GeminiEndpoint}?key={apiKey}", payload, ct);
+            var response = await client.PostAsJsonAsync($"{GeminiEndpoint}?key={apiKey}", payload, ct);
             sw.Stop();
-            _ = _apiUsage.LogAsync("gemini", "AnalyzeLabel", (int)response.StatusCode, (int)sw.ElapsedMilliseconds, null, ct);
+            responseBodyText = await response.Content.ReadAsStringAsync(ct);
+            ApiQuotaGuard.EvictCache("gemini", _cache);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _ = _apiUsage.LogAsync("gemini", "AnalyzeLabel", (int)response.StatusCode, (int)sw.ElapsedMilliseconds,
+                    userId, ct, requestBody: reqSummary, responseBody: responseBodyText, correlationId: correlationId, usedModel: "GEM");
+                _logger.LogError("GeminiService: Gemini returned {Status}: {Body}", response.StatusCode, responseBodyText);
+                return new(null, $"Gemini returned {(int)response.StatusCode} {response.StatusCode}: {responseBodyText}");
+            }
         }
         catch (TaskCanceledException ex) when (!ct.IsCancellationRequested)
         {
             sw.Stop();
-            _ = _apiUsage.LogAsync("gemini", "AnalyzeLabel", null, (int)sw.ElapsedMilliseconds, null, ct);
+            _ = _apiUsage.LogAsync("gemini", "AnalyzeLabel", null, (int)sw.ElapsedMilliseconds,
+                userId, ct, requestBody: reqSummary, correlationId: correlationId, usedModel: "GEM");
             _logger.LogError(ex, "GeminiService: HTTP request to Gemini timed out");
             return new(null, "Gemini API request timed out");
         }
         catch (Exception ex)
         {
             sw.Stop();
-            _ = _apiUsage.LogAsync("gemini", "AnalyzeLabel", null, (int)sw.ElapsedMilliseconds, null, ct);
+            _ = _apiUsage.LogAsync("gemini", "AnalyzeLabel", null, (int)sw.ElapsedMilliseconds,
+                userId, ct, requestBody: reqSummary, correlationId: correlationId, usedModel: "GEM");
             _logger.LogError(ex, "GeminiService: HTTP request to Gemini failed");
             return new(null, $"HTTP request to Gemini failed: {ex.Message}");
-        }
-
-        if (!response.IsSuccessStatusCode)
-        {
-            var errorBody = await response.Content.ReadAsStringAsync(ct);
-            _logger.LogError("GeminiService: Gemini returned {Status}: {Body}", response.StatusCode, errorBody);
-            return new(null, $"Gemini returned {(int)response.StatusCode} {response.StatusCode}: {errorBody}");
         }
 
         // Extract the text field from the Gemini response structure
         string rawJson;
         try
         {
-            using var doc = await JsonDocument.ParseAsync(
-                await response.Content.ReadAsStreamAsync(ct), cancellationToken: ct);
-
+            using var doc = JsonDocument.Parse(responseBodyText);
             rawJson = doc.RootElement
                 .GetProperty("candidates")[0]
                 .GetProperty("content")
@@ -225,6 +246,8 @@ public sealed class GeminiService : IGeminiService
         }
         catch (Exception ex)
         {
+            _ = _apiUsage.LogAsync("gemini", "AnalyzeLabel", 200, (int)sw.ElapsedMilliseconds,
+                userId, ct, requestBody: reqSummary, responseBody: responseBodyText, correlationId: correlationId, usedModel: "GEM");
             _logger.LogError(ex, "GeminiService: failed to navigate Gemini response structure");
             return new(null, "Failed to parse Gemini response structure");
         }
@@ -235,6 +258,9 @@ public sealed class GeminiService : IGeminiService
             @"^```(?:json)?\s*|\s*```$",
             "",
             RegexOptions.Multiline).Trim();
+
+        _ = _apiUsage.LogAsync("gemini", "AnalyzeLabel", 200, (int)sw.ElapsedMilliseconds,
+            userId, ct, requestBody: reqSummary, responseBody: rawJson, correlationId: correlationId, usedModel: "GEM");
 
         try
         {
@@ -259,11 +285,18 @@ public sealed class GeminiService : IGeminiService
         string            frontMimeType,
         byte[]?           backImageBytes,
         string?           backMimeType,
-        CancellationToken ct)
+        CancellationToken ct,
+        Guid?             userId        = null,
+        Guid?             correlationId = null,
+        string?           frontImageUrl = null,
+        string?           backImageUrl  = null)
     {
         // If no back image, fall back to single-image analysis
         if (backImageBytes is null || backImageBytes.Length == 0)
-            return await AnalyzeLabelAsync(frontImageBytes, frontMimeType, ct);
+            return await AnalyzeLabelAsync(frontImageBytes, frontMimeType, ct, userId, correlationId, frontImageUrl);
+
+        if (await ApiQuotaGuard.IsDailyQuotaExceededAsync("gemini", _settings.GeminiMaxDailyRequests, _cache, _dataSource, _logger, ct))
+            return new(null, "Daglig Gemini-kvote er nådd.");
 
         var apiKey = _configuration["GEMINI_API_KEY"];
         if (string.IsNullOrWhiteSpace(apiKey))
@@ -274,6 +307,7 @@ public sealed class GeminiService : IGeminiService
 
         var frontBase64 = Convert.ToBase64String(frontImageBytes);
         var backBase64  = Convert.ToBase64String(backImageBytes);
+        var reqSummary  = BuildReqSummary(frontMimeType, backImageBytes, backMimeType, frontImageUrl, backImageUrl);
 
         var payload = new
         {
@@ -293,42 +327,44 @@ public sealed class GeminiService : IGeminiService
 
         var client = _httpClientFactory.CreateClient("gemini");
 
-        HttpResponseMessage response;
+        string responseBodyText;
         var sw = Stopwatch.StartNew();
         try
         {
-            response = await client.PostAsJsonAsync($"{GeminiEndpoint}?key={apiKey}", payload, ct);
+            var response = await client.PostAsJsonAsync($"{GeminiEndpoint}?key={apiKey}", payload, ct);
             sw.Stop();
-            _ = _apiUsage.LogAsync("gemini", "AnalyzeLabels", (int)response.StatusCode, (int)sw.ElapsedMilliseconds, null, ct);
+            responseBodyText = await response.Content.ReadAsStringAsync(ct);
+            ApiQuotaGuard.EvictCache("gemini", _cache);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _ = _apiUsage.LogAsync("gemini", "AnalyzeLabels", (int)response.StatusCode, (int)sw.ElapsedMilliseconds,
+                    userId, ct, requestBody: reqSummary, responseBody: responseBodyText, correlationId: correlationId, usedModel: "GEM");
+                _logger.LogError("GeminiService: Gemini returned {Status} (multi-image): {Body}", response.StatusCode, responseBodyText);
+                return new(null, $"Gemini returned {(int)response.StatusCode} {response.StatusCode}: {responseBodyText}");
+            }
         }
         catch (TaskCanceledException ex) when (!ct.IsCancellationRequested)
         {
             sw.Stop();
-            _ = _apiUsage.LogAsync("gemini", "AnalyzeLabels", null, (int)sw.ElapsedMilliseconds, null, ct);
+            _ = _apiUsage.LogAsync("gemini", "AnalyzeLabels", null, (int)sw.ElapsedMilliseconds,
+                userId, ct, requestBody: reqSummary, correlationId: correlationId, usedModel: "GEM");
             _logger.LogError(ex, "GeminiService: HTTP request to Gemini timed out (multi-image)");
             return new(null, "Gemini API request timed out");
         }
         catch (Exception ex)
         {
             sw.Stop();
-            _ = _apiUsage.LogAsync("gemini", "AnalyzeLabels", null, (int)sw.ElapsedMilliseconds, null, ct);
+            _ = _apiUsage.LogAsync("gemini", "AnalyzeLabels", null, (int)sw.ElapsedMilliseconds,
+                userId, ct, requestBody: reqSummary, correlationId: correlationId, usedModel: "GEM");
             _logger.LogError(ex, "GeminiService: HTTP request to Gemini failed (multi-image)");
             return new(null, $"HTTP request to Gemini failed: {ex.Message}");
-        }
-
-        if (!response.IsSuccessStatusCode)
-        {
-            var errorBody = await response.Content.ReadAsStringAsync(ct);
-            _logger.LogError("GeminiService: Gemini returned {Status} (multi-image): {Body}", response.StatusCode, errorBody);
-            return new(null, $"Gemini returned {(int)response.StatusCode} {response.StatusCode}: {errorBody}");
         }
 
         string rawJson;
         try
         {
-            using var doc = await JsonDocument.ParseAsync(
-                await response.Content.ReadAsStreamAsync(ct), cancellationToken: ct);
-
+            using var doc = JsonDocument.Parse(responseBodyText);
             rawJson = doc.RootElement
                 .GetProperty("candidates")[0]
                 .GetProperty("content")
@@ -338,6 +374,8 @@ public sealed class GeminiService : IGeminiService
         }
         catch (Exception ex)
         {
+            _ = _apiUsage.LogAsync("gemini", "AnalyzeLabels", 200, (int)sw.ElapsedMilliseconds,
+                userId, ct, requestBody: reqSummary, responseBody: responseBodyText, correlationId: correlationId, usedModel: "GEM");
             _logger.LogError(ex, "GeminiService: failed to navigate Gemini response structure (multi-image)");
             return new(null, "Failed to parse Gemini response structure");
         }
@@ -347,6 +385,9 @@ public sealed class GeminiService : IGeminiService
             @"^```(?:json)?\s*|\s*```$",
             "",
             RegexOptions.Multiline).Trim();
+
+        _ = _apiUsage.LogAsync("gemini", "AnalyzeLabels", 200, (int)sw.ElapsedMilliseconds,
+            userId, ct, requestBody: reqSummary, responseBody: rawJson, correlationId: correlationId, usedModel: "GEM");
 
         try
         {
@@ -398,8 +439,13 @@ public sealed class GeminiService : IGeminiService
         int?    vintage,
         string? type,
         string? country,
-        CancellationToken ct)
+        CancellationToken ct,
+        Guid?   userId        = null,
+        Guid?   correlationId = null)
     {
+        if (await ApiQuotaGuard.IsDailyQuotaExceededAsync("gemini", _settings.GeminiMaxDailyRequests, _cache, _dataSource, _logger, ct))
+            return null;
+
         var apiKey = _configuration["GEMINI_API_KEY"];
         if (string.IsNullOrWhiteSpace(apiKey)) return null;
 
@@ -417,13 +463,20 @@ public sealed class GeminiService : IGeminiService
         };
 
         var client = _httpClientFactory.CreateClient("gemini");
+        var sw = Stopwatch.StartNew();
         try
         {
-            var sw = Stopwatch.StartNew();
             var response = await client.PostAsJsonAsync($"{GeminiEndpoint}?key={apiKey}", payload, ct);
             sw.Stop();
-            _ = _apiUsage.LogAsync("gemini", "GetFoodPairings", (int)response.StatusCode, (int)sw.ElapsedMilliseconds, null, ct);
-            if (!response.IsSuccessStatusCode) return null;
+            ApiQuotaGuard.EvictCache("gemini", _cache);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorBody = await response.Content.ReadAsStringAsync(ct);
+                _ = _apiUsage.LogAsync("gemini", "GetFoodPairings", (int)response.StatusCode, (int)sw.ElapsedMilliseconds,
+                    userId, ct, requestBody: prompt, responseBody: errorBody, correlationId: correlationId, usedModel: "GEM");
+                return null;
+            }
 
             using var doc = await JsonDocument.ParseAsync(
                 await response.Content.ReadAsStreamAsync(ct), cancellationToken: ct);
@@ -437,6 +490,9 @@ public sealed class GeminiService : IGeminiService
 
             rawJson = Regex.Replace(rawJson.Trim(), @"^```(?:json)?\s*|\s*```$", "", RegexOptions.Multiline).Trim();
 
+            _ = _apiUsage.LogAsync("gemini", "GetFoodPairings", (int)response.StatusCode, (int)sw.ElapsedMilliseconds,
+                userId, ct, requestBody: prompt, responseBody: rawJson, correlationId: correlationId, usedModel: "GEM");
+
             var result = JsonSerializer.Deserialize<FoodPairingResult>(
                 rawJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
@@ -448,6 +504,9 @@ public sealed class GeminiService : IGeminiService
         }
         catch (Exception ex)
         {
+            sw.Stop();
+            _ = _apiUsage.LogAsync("gemini", "GetFoodPairings", null, (int)sw.ElapsedMilliseconds,
+                userId, ct, requestBody: prompt, correlationId: correlationId, usedModel: "GEM");
             _logger.LogWarning(ex, "GeminiService.GetFoodPairings: failed for '{Wine}'", wineName);
             return null;
         }
@@ -479,8 +538,13 @@ public sealed class GeminiService : IGeminiService
 
     public async Task<TasteProfileResponse?> GenerateTasteProfileAsync(
         IEnumerable<WineProfileData> wines,
-        CancellationToken ct)
+        CancellationToken ct,
+        Guid?   userId        = null,
+        Guid?   correlationId = null)
     {
+        if (await ApiQuotaGuard.IsDailyQuotaExceededAsync("gemini", _settings.GeminiMaxDailyRequests, _cache, _dataSource, _logger, ct))
+            return null;
+
         var apiKey = _configuration["GEMINI_API_KEY"];
         if (string.IsNullOrWhiteSpace(apiKey))
         {
@@ -525,36 +589,38 @@ public sealed class GeminiService : IGeminiService
 
         var client = _httpClientFactory.CreateClient("gemini");
 
-        HttpResponseMessage response;
+        string responseBodyText;
         var sw = Stopwatch.StartNew();
         try
         {
-            response = await client.PostAsJsonAsync($"{GeminiEndpoint}?key={apiKey}", payload, ct);
+            var response = await client.PostAsJsonAsync($"{GeminiEndpoint}?key={apiKey}", payload, ct);
             sw.Stop();
-            _ = _apiUsage.LogAsync("gemini", "GenerateTasteProfile", (int)response.StatusCode, (int)sw.ElapsedMilliseconds, null, ct);
+            responseBodyText = await response.Content.ReadAsStringAsync(ct);
+            ApiQuotaGuard.EvictCache("gemini", _cache);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _ = _apiUsage.LogAsync("gemini", "GenerateTasteProfile", (int)response.StatusCode, (int)sw.ElapsedMilliseconds,
+                    userId, ct, requestBody: $"[taste profile: {wines.Count()} wines]",
+                    responseBody: responseBodyText, correlationId: correlationId, usedModel: "GEM");
+                _logger.LogError("GeminiService: Gemini returned {Status} for taste profile: {Body}",
+                    response.StatusCode, responseBodyText);
+                return null;
+            }
         }
         catch (Exception ex)
         {
             sw.Stop();
-            _ = _apiUsage.LogAsync("gemini", "GenerateTasteProfile", null, (int)sw.ElapsedMilliseconds, null, ct);
+            _ = _apiUsage.LogAsync("gemini", "GenerateTasteProfile", null, (int)sw.ElapsedMilliseconds,
+                userId, ct, requestBody: $"[taste profile: {wines.Count()} wines]", correlationId: correlationId, usedModel: "GEM");
             _logger.LogError(ex, "GeminiService: HTTP request to Gemini failed (taste profile)");
-            return null;
-        }
-
-        if (!response.IsSuccessStatusCode)
-        {
-            var errorBody = await response.Content.ReadAsStringAsync(ct);
-            _logger.LogError("GeminiService: Gemini returned {Status} for taste profile: {Body}",
-                response.StatusCode, errorBody);
             return null;
         }
 
         string rawJson;
         try
         {
-            using var doc = await JsonDocument.ParseAsync(
-                await response.Content.ReadAsStreamAsync(ct), cancellationToken: ct);
-
+            using var doc = JsonDocument.Parse(responseBodyText);
             rawJson = doc.RootElement
                 .GetProperty("candidates")[0]
                 .GetProperty("content")
@@ -564,6 +630,9 @@ public sealed class GeminiService : IGeminiService
         }
         catch (Exception ex)
         {
+            _ = _apiUsage.LogAsync("gemini", "GenerateTasteProfile", 200, (int)sw.ElapsedMilliseconds,
+                userId, ct, requestBody: $"[taste profile: {wines.Count()} wines]",
+                responseBody: responseBodyText, correlationId: correlationId, usedModel: "GEM");
             _logger.LogError(ex, "GeminiService: failed to navigate Gemini response structure (taste profile)");
             return null;
         }
@@ -573,6 +642,10 @@ public sealed class GeminiService : IGeminiService
             @"^```(?:json)?\s*|\s*```$",
             "",
             RegexOptions.Multiline).Trim();
+
+        _ = _apiUsage.LogAsync("gemini", "GenerateTasteProfile", 200, (int)sw.ElapsedMilliseconds,
+            userId, ct, requestBody: $"[taste profile: {wines.Count()} wines]",
+            responseBody: rawJson, correlationId: correlationId, usedModel: "GEM");
 
         try
         {
@@ -590,5 +663,18 @@ public sealed class GeminiService : IGeminiService
             _logger.LogError(ex, "GeminiService: taste profile JSON parsing failed. Raw: {Raw}", rawJson);
             return null;
         }
+    }
+
+    private static string BuildReqSummary(
+        string frontMimeType, byte[]? backImageBytes, string? backMimeType,
+        string? frontImageUrl, string? backImageUrl)
+    {
+        var hasBack = backImageBytes is { Length: > 0 };
+        var parts = new List<string> { $"\"mimeTypes\":\"{frontMimeType}{(hasBack ? $"+{backMimeType}" : "")}\"" };
+        if (!string.IsNullOrWhiteSpace(frontImageUrl))
+            parts.Add($"\"frontImageUrl\":\"{frontImageUrl}\"");
+        if (hasBack && !string.IsNullOrWhiteSpace(backImageUrl))
+            parts.Add($"\"backImageUrl\":\"{backImageUrl}\"");
+        return "{" + string.Join(",", parts) + "}";
     }
 }

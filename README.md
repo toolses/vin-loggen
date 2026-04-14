@@ -28,6 +28,7 @@ En moderne, AI-drevet PWA for registrering og vurdering av vin. Ta bilde av etik
 
 - **Quick-Log:** Ta bilde av etiketten → AI analyserer → data fylles ut automatisk.
 - **Smart Enrichment:** Matcher automatisk mot Vinmonopolets vareutvalg for nøyaktig info, priser og matanbefalinger.
+- **Eksperten (Pro):** Personlig AI-vinkelner med tilgang til hele vinkatalogen og din smaksprofil. Still spørsmål, få anbefalinger og finn matcher til maten.
 - **Personlig Smaksprofil:** Logg notater, terningkast, lokasjon og bilder for hver smaking.
 - **Deling:** Generer delekort for viner du vil anbefale.
 - **Admin-panel:** Dashboard med API-statistikk, vinregister med søk og redigering.

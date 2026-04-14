@@ -2,6 +2,7 @@ import { Component, effect, inject } from '@angular/core';
 import { RouterLink, RouterLinkActive } from '@angular/router';
 import { AuthService } from '../../services/auth.service';
 import { AdminService } from '../../services/admin.service';
+import { ProfileService } from '../../services/profile.service';
 
 @Component({
   selector: 'app-navigation',
@@ -12,11 +13,13 @@ import { AdminService } from '../../services/admin.service';
 export class NavigationComponent {
   protected readonly auth = inject(AuthService);
   protected readonly admin = inject(AdminService);
+  protected readonly profile = inject(ProfileService);
 
   constructor() {
     effect(() => {
       if (this.auth.isLoggedIn()) {
         this.admin.checkAdminStatus();
+        this.profile.loadProQuota();
       }
     });
   }

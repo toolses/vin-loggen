@@ -109,13 +109,13 @@ public class WineApiServiceTests
         new(
             Id:             id ?? "test-id",
             Name:           name,
-            Producer:       producer,
+            Winery:         producer,
             Vintage:        vintage,
-            Description:    null,
-            FoodPairing:    null,
-            FoodPairings:   null,
-            TechnicalNotes: null,
-            AlcoholContent: null,
-            Grapes:         null
+            Type:           null,
+            Region:         null,
+            Country:        null,
+            AverageRating:  null,
+            RatingsCount:   null,
+            Confidence:     null
         );
 }

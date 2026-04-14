@@ -26,6 +26,8 @@ public static class WineAnalyzeEndpoints
     private static async Task<Results<Ok<WineAnalysisResponse>, ProblemHttpResult>> AnalyzeLabel(
         IFormFile                 image,
         IFormFile?                backImage,
+        string?                   frontImageUrl,
+        string?                   backImageUrl,
         ClaimsPrincipal           user,
         WineOrchestratorService   orchestrator,
         ILogger<Program>          logger,
@@ -83,7 +85,8 @@ public static class WineAnalyzeEndpoints
 
         // ── Delegate to the orchestrator ────────────────────────────────────
         var apiResult = await orchestrator.AnalyzeAsync(
-            imageBytes, image.ContentType, userId, ct, backImageBytes, backMimeType);
+            imageBytes, image.ContentType, userId, ct, backImageBytes, backMimeType,
+            frontImageUrl, backImageUrl);
 
         if (apiResult.Success)
             return TypedResults.Ok(apiResult.Data!);

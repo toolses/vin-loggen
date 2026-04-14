@@ -1,0 +1,171 @@
+<div class="p-6 max-w-4xl">
+  <h1 class="text-2xl font-serif text-cream mb-6">API-testing</h1>
+
+  <!-- WineAPI section -->
+  <section class="bg-cellar-surface rounded-xl border border-white/10 overflow-hidden">
+    <div class="px-5 py-4 border-b border-white/10 flex items-center gap-3">
+      <span class="text-[10px] px-1.5 py-0.5 rounded font-mono uppercase tracking-wider bg-emerald-500/20 text-emerald-300">API</span>
+      <h2 class="text-lg font-serif text-cream">WineAPI – Søk</h2>
+    </div>
+
+    <!-- Search form -->
+    <div class="p-5 space-y-4">
+      <div class="grid grid-cols-[1fr_1fr_auto] gap-3">
+        <div>
+          <label class="block text-xs text-cream/40 mb-1">Produsent</label>
+          <input
+            type="text"
+            [ngModel]="producer()"
+            (ngModelChange)="producer.set($event)"
+            (keydown.enter)="search()"
+            placeholder="f.eks. Markus Molitor"
+            class="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-cream placeholder:text-cream/20 text-sm focus:outline-none focus:border-gold/40" />
+        </div>
+        <div>
+          <label class="block text-xs text-cream/40 mb-1">Vinnavn</label>
+          <input
+            type="text"
+            [ngModel]="name()"
+            (ngModelChange)="name.set($event)"
+            (keydown.enter)="search()"
+            placeholder="f.eks. Riesling Spätlese"
+            class="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-cream placeholder:text-cream/20 text-sm focus:outline-none focus:border-gold/40" />
+        </div>
+        <div>
+          <label class="block text-xs text-cream/40 mb-1">Årgang</label>
+          <input
+            type="text"
+            [ngModel]="vintage()"
+            (ngModelChange)="vintage.set($event)"
+            (keydown.enter)="search()"
+            placeholder="2020"
+            class="w-20 px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-cream placeholder:text-cream/20 text-sm focus:outline-none focus:border-gold/40" />
+        </div>
+      </div>
+      <div class="flex items-center gap-3">
+        <button
+          (click)="search()"
+          [disabled]="loading() || (!producer().trim() && !name().trim())"
+          class="px-4 py-2 rounded-lg text-sm font-medium transition-colors bg-burgundy/40 text-gold border border-gold/30 hover:bg-burgundy/60 disabled:opacity-40 disabled:cursor-not-allowed">
+          @if (loading()) {
+            Søker...
+          } @else {
+            Søk i WineAPI
+          }
+        </button>
+        @if (result()?.correlationId) {
+          <a [routerLink]="['/admin/traces']"
+             class="text-xs text-cream/40 hover:text-gold transition-colors">
+            Vis i API-sporing
+          </a>
+        }
+      </div>
+    </div>
+
+    <!-- Error -->
+    @if (error()) {
+      <div class="mx-5 mb-5 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-300 text-sm">
+        {{ error() }}
+      </div>
+    }
+
+    <!-- Result -->
+    @if (result(); as r) {
+      <div class="border-t border-white/5">
+        <!-- Summary -->
+        <div class="px-5 py-4 flex items-center gap-4">
+          @if (r.found) {
+            <span class="inline-flex items-center gap-1.5 text-sm text-green-400">
+              <span class="w-2 h-2 rounded-full bg-green-400"></span>
+              Treff
+            </span>
+          } @else {
+            <span class="inline-flex items-center gap-1.5 text-sm text-cream/40">
+              <span class="w-2 h-2 rounded-full bg-cream/20"></span>
+              Ingen treff
+            </span>
+          }
+          @if (r.externalId) {
+            <code class="text-[11px] px-2 py-1 rounded bg-white/5 text-cream/50 font-mono">{{ r.externalId }}</code>
+          }
+          <code class="text-[10px] px-2 py-0.5 rounded bg-white/5 text-cream/30 font-mono">
+            {{ r.correlationId.substring(0, 8) }}
+          </code>
+        </div>
+
+        @if (r.found) {
+          <!-- Wine details -->
+          <div class="px-5 pb-5 grid grid-cols-2 gap-4">
+            @if (r.suggestedName || r.suggestedProducer) {
+              <div class="col-span-2 rounded-lg border border-white/5 p-4">
+                <div class="text-[10px] text-cream/30 uppercase tracking-wider mb-2">Katalogmatch</div>
+                <div class="text-cream text-sm">
+                  @if (r.suggestedProducer) {
+                    <span class="text-cream/60">{{ r.suggestedProducer }}</span>
+                    <span class="text-cream/20 mx-1">–</span>
+                  }
+                  {{ r.suggestedName ?? '—' }}
+                </div>
+              </div>
+            }
+
+            @if (r.description) {
+              <div class="col-span-2 rounded-lg border border-white/5 p-4">
+                <div class="text-[10px] text-cream/30 uppercase tracking-wider mb-2">Beskrivelse</div>
+                <p class="text-cream/70 text-sm">{{ r.description }}</p>
+              </div>
+            }
+
+            @if (r.foodPairings && r.foodPairings.length > 0) {
+              <div class="rounded-lg border border-white/5 p-4">
+                <div class="text-[10px] text-cream/30 uppercase tracking-wider mb-2">Matkombinasjoner</div>
+                <ul class="space-y-1">
+                  @for (fp of r.foodPairings; track fp) {
+                    <li class="text-cream/60 text-sm">{{ fp }}</li>
+                  }
+                </ul>
+              </div>
+            }
+
+            @if (r.grapes && r.grapes.length > 0) {
+              <div class="rounded-lg border border-white/5 p-4">
+                <div class="text-[10px] text-cream/30 uppercase tracking-wider mb-2">Druer</div>
+                <div class="flex flex-wrap gap-1.5">
+                  @for (g of r.grapes; track g) {
+                    <span class="text-xs px-2 py-0.5 rounded-full bg-white/5 text-cream/50">{{ g }}</span>
+                  }
+                </div>
+              </div>
+            }
+
+            @if (r.alcoholContent) {
+              <div class="rounded-lg border border-white/5 p-4">
+                <div class="text-[10px] text-cream/30 uppercase tracking-wider mb-2">Alkohol</div>
+                <span class="text-cream/60 text-sm">{{ r.alcoholContent }}%</span>
+              </div>
+            }
+
+            @if (r.technicalNotes) {
+              <div class="rounded-lg border border-white/5 p-4">
+                <div class="text-[10px] text-cream/30 uppercase tracking-wider mb-2">Tekniske notater</div>
+                <p class="text-cream/60 text-sm">{{ r.technicalNotes }}</p>
+              </div>
+            }
+          </div>
+        }
+
+        <!-- Raw JSON -->
+        @if (rawJson()) {
+          <div class="border-t border-white/5">
+            <details class="group">
+              <summary class="px-5 py-3 text-xs text-cream/30 cursor-pointer hover:text-cream/50 transition-colors">
+                Rå JSON-respons
+              </summary>
+              <pre class="px-5 pb-4 text-xs text-cream/40 font-mono whitespace-pre-wrap break-all overflow-x-auto max-h-80 overflow-y-auto">{{ rawJson() }}</pre>
+            </details>
+          </div>
+        }
+      </div>
+    }
+  </section>
+</div>

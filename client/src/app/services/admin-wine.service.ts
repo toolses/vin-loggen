@@ -64,8 +64,9 @@ export interface AdminWineSearchParams {
 
 export interface ResetDataResult {
   deletedWineLogs: number;
+  deletedExternalIds: number;
   deletedWines: number;
-  deletedStorageObjects: number;
+  resetProfiles: number;
 }
 
 @Injectable({ providedIn: 'root' })

@@ -28,12 +28,17 @@ public static class AdminResetEndpoints
             await using var conn = await dataSource.OpenConnectionAsync(ct);
 
             var deletedWineLogs = await conn.ExecuteAsync("DELETE FROM wine_logs;");
+            var deletedExternalIds = await conn.ExecuteAsync("DELETE FROM wine_external_ids;");
             var deletedWines = await conn.ExecuteAsync("DELETE FROM wines;");
+            var resetProfiles = await conn.ExecuteAsync(
+                "UPDATE user_profile SET taste_profile_json = NULL, wines_at_last_analysis = 0;");
 
             return TypedResults.Ok<object>(new
             {
                 deletedWineLogs,
+                deletedExternalIds,
                 deletedWines,
+                resetProfiles,
             });
         }
         catch (Exception ex)

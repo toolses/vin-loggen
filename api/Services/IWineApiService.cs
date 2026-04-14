@@ -9,5 +9,28 @@ public interface IWineApiService
         string  producer,
         string  name,
         int?    vintage,
-        CancellationToken ct);
+        CancellationToken ct,
+        Guid?   userId        = null,
+        Guid?   correlationId = null);
+
+    /// <summary>
+    /// Identifies a wine from a free-text description via /identify/text.
+    /// Returns a matched wine profile or null if no match / feature disabled.
+    /// </summary>
+    Task<WineApiService.WineIdentification?> IdentifyByTextAsync(
+        string query,
+        CancellationToken ct,
+        Guid?  userId        = null,
+        Guid?  correlationId = null);
+
+    /// <summary>
+    /// Fetches full wine details from GET /wines/{id}.
+    /// Returns enrichment data (alcohol, grapes, description, food pairings, etc.)
+    /// or null if the feature is disabled, no API key, or the call fails.
+    /// </summary>
+    Task<WineApiService.WineEnrichment?> GetDetailsAsync(
+        string wineId,
+        CancellationToken ct,
+        Guid?  userId        = null,
+        Guid?  correlationId = null);
 }

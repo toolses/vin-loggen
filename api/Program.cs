@@ -10,6 +10,7 @@ using System.Security.Claims;
 using VinLoggen.Api.Configuration;
 using VinLoggen.Api.Endpoints;
 using VinLoggen.Api.Services;
+using VinLoggen.Api.Services.AiProviders;
 
 Dapper.SqlMapper.AddTypeHandler(new StringArrayTypeHandler());
 
@@ -45,11 +46,16 @@ builder.Services.AddHttpLogging(options =>
 
 // ── HTTP clients ──────────────────────────────────────────────────────────────
 // Gemini: retry up to 3 times with exponential back-off; circuit-break on failure bursts.
-builder.Services.AddHttpClient("gemini")
+builder.Services.AddHttpClient("gemini", client =>
+    {
+        client.Timeout = TimeSpan.FromSeconds(60);
+    })
     .AddStandardResilienceHandler(opts =>
     {
-        opts.Retry.MaxRetryAttempts       = 3;
-        opts.CircuitBreaker.SamplingDuration = TimeSpan.FromSeconds(30);
+        opts.Retry.MaxRetryAttempts              = 2;
+        opts.AttemptTimeout.Timeout              = TimeSpan.FromSeconds(45);
+        opts.TotalRequestTimeout.Timeout         = TimeSpan.FromSeconds(90);
+        opts.CircuitBreaker.SamplingDuration     = TimeSpan.FromSeconds(120);
     });
 
 // wineapi.io: same resilience profile; base address from config.
@@ -57,12 +63,13 @@ builder.Services.AddHttpClient("wineApi", (sp, client) =>
     {
         var cfg = sp.GetRequiredService<IntegrationSettings>().WineApi;
         client.BaseAddress = new Uri(cfg.BaseUrl);
-        client.Timeout     = TimeSpan.FromSeconds(10);
+        client.Timeout     = TimeSpan.FromSeconds(15);
     })
     .AddStandardResilienceHandler(opts =>
     {
-        opts.Retry.MaxRetryAttempts       = 2;
-        opts.TotalRequestTimeout.Timeout  = TimeSpan.FromSeconds(12);
+        opts.Retry.MaxRetryAttempts       = 1;
+        opts.AttemptTimeout.Timeout       = TimeSpan.FromSeconds(15);
+        opts.TotalRequestTimeout.Timeout  = TimeSpan.FromSeconds(32);
         opts.CircuitBreaker.SamplingDuration = TimeSpan.FromSeconds(30);
     });
 
@@ -82,12 +89,39 @@ builder.Services.AddHttpClient("googlePlaces", client =>
 // Generic named client (kept for backwards compat with GeminiService factory usage)
 builder.Services.AddHttpClient();
 
+// DeepSeek: OpenAI-compatible API with resilience.
+builder.Services.AddHttpClient("deepseek", client =>
+    {
+        client.Timeout = TimeSpan.FromSeconds(60);
+    })
+    .AddStandardResilienceHandler(opts =>
+    {
+        opts.Retry.MaxRetryAttempts          = 2;
+        opts.AttemptTimeout.Timeout          = TimeSpan.FromSeconds(45);
+        opts.TotalRequestTimeout.Timeout     = TimeSpan.FromSeconds(90);
+        opts.CircuitBreaker.SamplingDuration  = TimeSpan.FromSeconds(120);
+    });
+
+// Groq: OpenAI-compatible API — NO auto-retry (429 → immediate fallback to next provider).
+builder.Services.AddHttpClient("groq", client =>
+    {
+        client.Timeout = TimeSpan.FromSeconds(60);
+    });
+
 // ── Application services ──────────────────────────────────────────────────────
 builder.Services.AddMemoryCache();
+
+// AI providers (registered as IEnumerable<IAiChatProvider>)
+builder.Services.AddScoped<IAiChatProvider, GroqChatProvider>();
+builder.Services.AddScoped<IAiChatProvider, DeepSeekChatProvider>();
+builder.Services.AddScoped<IAiChatProvider, GeminiChatProvider>();
+builder.Services.AddScoped<AiProviderChain>();
+
 builder.Services.AddScoped<IGeminiService,   GeminiService>();
 builder.Services.AddScoped<IWineApiService,  WineApiService>();
 builder.Services.AddScoped<IProUsageService, ProUsageService>();
 builder.Services.AddScoped<IApiUsageService, ApiUsageService>();
+builder.Services.AddScoped<ILabelScanService, LabelScanService>();
 builder.Services.AddScoped<GeminiService>();
 builder.Services.AddScoped<TasteProfileService>();
 builder.Services.AddScoped<WineApiService>();
@@ -95,6 +129,8 @@ builder.Services.AddScoped<ProUsageService>();
 builder.Services.AddScoped<WineOrchestratorService>();
 builder.Services.AddScoped<WineMatchingService>();
 builder.Services.AddScoped<IGooglePlacesService, GooglePlacesService>();
+builder.Services.AddScoped<IAppSettingsService, AppSettingsService>();
+builder.Services.AddScoped<IExpertService, ExpertService>();
 // EnrichmentService retained for backwards compat (stub only)
 builder.Services.AddScoped<EnrichmentService>();
 
@@ -224,15 +260,19 @@ app.UseAuthorization();
 app.MapHealthEndpoint();
 app.MapWineEndpoints();
 app.MapWineLogsEndpoints();
-app.MapProcessLabelEndpoints();
 app.MapWineAnalyzeEndpoints();
 app.MapTasteProfileEndpoints();
 app.MapAdminAuthEndpoints();
 app.MapAdminWineEndpoints();
 app.MapAdminUsageEndpoints();
+app.MapAdminTraceEndpoints();
 app.MapAdminResetEndpoints();
 app.MapAdminCorrectionEndpoints();
+app.MapAdminUserEndpoints();
+app.MapAdminSettingsEndpoints();
+app.MapAdminApiTestEndpoints();
 app.MapLocationEndpoints();
+app.MapExpertEndpoints();
 
 app.Run();
 

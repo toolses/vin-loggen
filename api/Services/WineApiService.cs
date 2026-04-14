@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Caching.Memory;
+using Npgsql;
 using VinLoggen.Api.Configuration;
 
 namespace VinLoggen.Api.Services;
@@ -26,7 +27,7 @@ public sealed class WineApiService : IWineApiService
     // ── Configurable constants ────────────────────────────────────────────────
 
     /// <summary>Path appended to <see cref="IntegrationSettings.WineApiSettings.BaseUrl"/>.</summary>
-    private const string SearchPath = "/v1/wines/search";
+    private const string SearchPath = "/wines/search";
 
     // ── DTOs ──────────────────────────────────────────────────────────────────
 
@@ -41,22 +42,39 @@ public sealed class WineApiService : IWineApiService
         string?   SuggestedProducer = null
     );
 
-    // Internal deserialization types (mirrors expected wineapi.io response)
+    /// <summary>Rich wine identification result from /identify/text.</summary>
+    public sealed record WineIdentification(
+        string    Id,
+        string    Name,
+        string?   Winery,
+        int?      Vintage,
+        string?   Type,
+        string?   Region,
+        string?   Country,
+        string?   Description,
+        string[]? FoodPairings,
+        string?   TechnicalNotes,
+        double?   AlcoholContent,
+        double?   AverageRating,
+        int?      RatingsCount
+    );
+
+    // Internal deserialization types (mirrors actual wineapi.io response)
     private sealed record SearchResponse(
-        [property: JsonPropertyName("wines")] List<WineApiHit>? Wines
+        [property: JsonPropertyName("results")] List<WineApiHit>? Results
     );
 
     internal sealed record WineApiHit(
-        [property: JsonPropertyName("id")]          string?   Id,
-        [property: JsonPropertyName("name")]        string?   Name,
-        [property: JsonPropertyName("producer")]    string?   Producer,
-        [property: JsonPropertyName("vintage")]     int?      Vintage,
-        [property: JsonPropertyName("description")] string?   Description,
-        [property: JsonPropertyName("food_pairing")] string[]? FoodPairing,
-        [property: JsonPropertyName("food_pairings")] string[]? FoodPairings,
-        [property: JsonPropertyName("technical_notes")] string? TechnicalNotes,
-        [property: JsonPropertyName("alcohol_content")] double? AlcoholContent,
-        [property: JsonPropertyName("grapes")]      string[]? Grapes
+        [property: JsonPropertyName("id")]              string?   Id,
+        [property: JsonPropertyName("name")]            string?   Name,
+        [property: JsonPropertyName("winery")]          string?   Winery,
+        [property: JsonPropertyName("vintage")]         int?      Vintage,
+        [property: JsonPropertyName("type")]            string?   Type,
+        [property: JsonPropertyName("region")]          string?   Region,
+        [property: JsonPropertyName("country")]         string?   Country,
+        [property: JsonPropertyName("averageRating")]   double?   AverageRating,
+        [property: JsonPropertyName("ratingsCount")]    int?      RatingsCount,
+        [property: JsonPropertyName("confidence")]      double?   Confidence
     );
 
     // ── Fields ────────────────────────────────────────────────────────────────
@@ -67,6 +85,7 @@ public sealed class WineApiService : IWineApiService
     private readonly ILogger<WineApiService> _logger;
     private readonly IMemoryCache _cache;
     private readonly IApiUsageService _apiUsage;
+    private readonly NpgsqlDataSource _dataSource;
 
     private static readonly TimeSpan CacheTtl = TimeSpan.FromHours(24);
 
@@ -81,7 +100,8 @@ public sealed class WineApiService : IWineApiService
         IntegrationSettings      settings,
         ILogger<WineApiService>  logger,
         IMemoryCache             cache,
-        IApiUsageService         apiUsage)
+        IApiUsageService         apiUsage,
+        NpgsqlDataSource         dataSource)
     {
         _httpClientFactory = httpClientFactory;
         _configuration     = configuration;
@@ -89,6 +109,7 @@ public sealed class WineApiService : IWineApiService
         _logger            = logger;
         _cache             = cache;
         _apiUsage          = apiUsage;
+        _dataSource        = dataSource;
     }
 
     /// <summary>
@@ -100,13 +121,18 @@ public sealed class WineApiService : IWineApiService
         string  producer,
         string  name,
         int?    vintage,
-        CancellationToken ct)
+        CancellationToken ct,
+        Guid?   userId        = null,
+        Guid?   correlationId = null)
     {
         if (!_settings.EnableWineApi)
         {
             _logger.LogDebug("WineApiService: disabled by configuration, skipping");
             return null;
         }
+
+        if (await ApiQuotaGuard.IsDailyQuotaExceededAsync("wineapi", _settings.WineApiMaxDailyRequests, _cache, _dataSource, _logger, ct))
+            return null;
 
         var apiKey = _configuration["WINE_API_KEY"];
         if (string.IsNullOrWhiteSpace(apiKey))
@@ -123,16 +149,14 @@ public sealed class WineApiService : IWineApiService
             return cached;
         }
 
-        // Build query string: free-text search combining key identifiers
-        var query = vintage.HasValue
-            ? $"{producer} {name} {vintage}"
-            : $"{producer} {name}";
-
+        // Build free-text query: "producer name vintage"
+        var query = $"{producer.Trim()} {name.Trim()}{(vintage.HasValue ? $" {vintage.Value}" : "")}".Trim();
         var cfg = _settings.WineApi;
-        var url = $"{cfg.BaseUrl.TrimEnd('/')}{SearchPath}?q={Uri.EscapeDataString(query)}&limit=5";
+        var url = $"{cfg.BaseUrl.TrimEnd('/')}{SearchPath}?q={Uri.EscapeDataString(query)}&limit=15";
 
-        _logger.LogInformation("WineApiService: searching for '{Query}'", query);
+        _logger.LogInformation("WineApiService: searching for q='{Query}'", query);
 
+        var sw = Stopwatch.StartNew();
         try
         {
             var client = _httpClientFactory.CreateClient("wineApi");
@@ -143,10 +167,12 @@ public sealed class WineApiService : IWineApiService
                 cfg.AuthHeader,
                 $"{cfg.AuthPrefix}{apiKey}");
 
-            var sw = Stopwatch.StartNew();
             using var response = await client.SendAsync(request, ct);
             sw.Stop();
-            _ = _apiUsage.LogAsync("wineapi", SearchPath, (int)response.StatusCode, (int)sw.ElapsedMilliseconds, null, ct);
+            var body = await response.Content.ReadAsStringAsync(ct);
+            _ = _apiUsage.LogAsync("wineapi", SearchPath, (int)response.StatusCode, (int)sw.ElapsedMilliseconds,
+                userId, ct, requestBody: url, responseBody: body, correlationId: correlationId);
+            ApiQuotaGuard.EvictCache("wineapi", _cache);
 
             if (!response.IsSuccessStatusCode)
             {
@@ -155,13 +181,12 @@ public sealed class WineApiService : IWineApiService
                 return null;
             }
 
-            var body = await response.Content.ReadAsStringAsync(ct);
             var result = JsonSerializer.Deserialize<SearchResponse>(body, JsonOpts);
 
-            var hit = FindBestMatch(result?.Wines, producer, name, vintage);
+            var hit = FindBestMatch(result?.Results, producer, name, vintage);
             if (hit is null)
             {
-                _logger.LogInformation("WineApiService: no match for '{Query}'", query);
+                _logger.LogInformation("WineApiService: no match for q='{Query}'", query);
                 _cache.Set(cacheKey, (WineEnrichment?)null, CacheTtl);
                 return null;
             }
@@ -169,20 +194,17 @@ public sealed class WineApiService : IWineApiService
             _logger.LogInformation(
                 "WineApiService: matched '{Name}' (id={Id})", hit.Name, hit.Id);
 
-            // Normalise the two possible food-pairing field names
-            var foodPairings = (hit.FoodPairings ?? hit.FoodPairing)
-                              ?.Where(s => !string.IsNullOrWhiteSpace(s))
-                              .ToArray();
-
+            // Search endpoint returns identification data only — no description/pairings/notes.
+            // Those will be filled by the enrichment fallback (AI) if needed.
             var enrichment = new WineEnrichment(
                 ExternalId:    hit.Id,
-                Description:   hit.Description,
-                FoodPairings:  foodPairings?.Length > 0 ? foodPairings : null,
-                TechnicalNotes: hit.TechnicalNotes,
-                AlcoholContent: hit.AlcoholContent,
-                Grapes:        hit.Grapes,
+                Description:   null,
+                FoodPairings:  null,
+                TechnicalNotes: null,
+                AlcoholContent: null,
+                Grapes:        null,
                 SuggestedName:     hit.Name,
-                SuggestedProducer: hit.Producer
+                SuggestedProducer: hit.Winery
             );
 
             _cache.Set(cacheKey, (WineEnrichment?)enrichment, CacheTtl);
@@ -190,7 +212,10 @@ public sealed class WineApiService : IWineApiService
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            _logger.LogError(ex, "WineApiService: request failed for '{Query}'", query);
+            sw.Stop();
+            _logger.LogError(ex, "WineApiService: request failed for q='{Query}'", query);
+            _ = _apiUsage.LogAsync("wineapi", SearchPath, null, (int)sw.ElapsedMilliseconds,
+                userId, CancellationToken.None, requestBody: url, responseBody: ex.Message, correlationId: correlationId);
             return null;
         }
     }
@@ -224,13 +249,225 @@ public sealed class WineApiService : IWineApiService
     internal static int Score(WineApiHit h, string lp, string ln, int? vintage)
     {
         int score = 0;
-        var hp = (h.Producer ?? "").Trim().ToLowerInvariant();
+        var hp = (h.Winery ?? "").Trim().ToLowerInvariant();
         var hn = (h.Name     ?? "").Trim().ToLowerInvariant();
 
         if (hn.Contains(ln) || ln.Contains(hn)) score += 2;
         if (hp.Contains(lp) || lp.Contains(hp)) score += 2;
-        if (vintage.HasValue && h.Vintage == vintage)            score += 1;
+        if (score > 0 && vintage.HasValue && h.Vintage == vintage) score += 1;
 
         return score;
+    }
+
+    // ── Text-based identification ────────────────────────────────────────────
+
+    /// <summary>Wrapper for POST /identify/text (actual wineapi.io response).</summary>
+    private sealed record IdentifyTextResponse(
+        [property: JsonPropertyName("wine")]       IdentifyWineHit? Wine,
+        [property: JsonPropertyName("suggestions")] List<IdentifyWineHit>? Suggestions,
+        [property: JsonPropertyName("confidence")]  double? Confidence
+    );
+
+    private sealed record IdentifyWineHit(
+        [property: JsonPropertyName("id")]            string?  Id,
+        [property: JsonPropertyName("name")]          string?  Name,
+        [property: JsonPropertyName("vintage")]       int?     Vintage,
+        [property: JsonPropertyName("type")]          string?  Type,
+        [property: JsonPropertyName("region")]        string?  Region,
+        [property: JsonPropertyName("country")]       string?  Country,
+        [property: JsonPropertyName("averageRating")] double?  AverageRating,
+        [property: JsonPropertyName("ratingsCount")]  int?     RatingsCount
+    );
+
+    /// <inheritdoc />
+    public async Task<WineIdentification?> IdentifyByTextAsync(
+        string query, CancellationToken ct,
+        Guid?  userId        = null,
+        Guid?  correlationId = null)
+    {
+        if (!_settings.EnableWineApi)
+        {
+            _logger.LogDebug("WineApiService.IdentifyByText: disabled by configuration");
+            return null;
+        }
+
+        if (await ApiQuotaGuard.IsDailyQuotaExceededAsync("wineapi", _settings.WineApiMaxDailyRequests, _cache, _dataSource, _logger, ct))
+            return null;
+
+        var apiKey = _configuration["WINE_API_KEY"];
+        if (string.IsNullOrWhiteSpace(apiKey))
+        {
+            _logger.LogDebug("WineApiService.IdentifyByText: WINE_API_KEY not configured");
+            return null;
+        }
+
+        var cfg = _settings.WineApi;
+        var url = $"{cfg.BaseUrl.TrimEnd('/')}/identify/text";
+
+        _logger.LogInformation("WineApiService.IdentifyByText: query='{Query}'", query);
+
+        var sw = Stopwatch.StartNew();
+        try
+        {
+            var client = _httpClientFactory.CreateClient("wineApi");
+
+            using var request = new HttpRequestMessage(HttpMethod.Post, url)
+            {
+                Content = JsonContent.Create(new { query })
+            };
+            request.Headers.TryAddWithoutValidation(cfg.AuthHeader, $"{cfg.AuthPrefix}{apiKey}");
+
+            using var response = await client.SendAsync(request, ct);
+            sw.Stop();
+            var body = await response.Content.ReadAsStringAsync(ct);
+            _ = _apiUsage.LogAsync("wineapi", "/identify/text", (int)response.StatusCode,
+                (int)sw.ElapsedMilliseconds, userId, ct,
+                requestBody: $"{{\"query\":\"{query}\"}}",
+                responseBody: body, correlationId: correlationId);
+            ApiQuotaGuard.EvictCache("wineapi", _cache);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning("WineApiService.IdentifyByText: HTTP {Status}", response.StatusCode);
+                return null;
+            }
+
+            var result = JsonSerializer.Deserialize<IdentifyTextResponse>(body, JsonOpts);
+            var wine = result?.Wine;
+
+            if (wine?.Id is null || wine.Name is null)
+            {
+                _logger.LogInformation("WineApiService.IdentifyByText: no match for '{Query}'", query);
+                return null;
+            }
+
+            _logger.LogInformation(
+                "WineApiService.IdentifyByText: matched '{Name}' (id={Id}, rating={Rating})",
+                wine.Name, wine.Id, wine.AverageRating);
+
+            return new WineIdentification(
+                Id:              wine.Id,
+                Name:            wine.Name,
+                Winery:          null,       // search/identify endpoints don't return winery
+                Vintage:         wine.Vintage,
+                Type:            wine.Type,
+                Region:          wine.Region,
+                Country:         wine.Country,
+                Description:     null,       // not returned by identify/text
+                FoodPairings:    null,        // not returned by identify/text
+                TechnicalNotes:  null,        // not returned by identify/text
+                AlcoholContent:  null,        // not returned by identify/text
+                AverageRating:   wine.AverageRating,
+                RatingsCount:    wine.RatingsCount);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            sw.Stop();
+            _logger.LogError(ex, "WineApiService.IdentifyByText: request failed for '{Query}'", query);
+            _ = _apiUsage.LogAsync("wineapi", "/identify/text", null, (int)sw.ElapsedMilliseconds,
+                userId, CancellationToken.None, requestBody: $"{{\"query\":\"{query}\"}}",
+                responseBody: ex.Message, correlationId: correlationId);
+            return null;
+        }
+    }
+
+    // ── Wine details by ID ─────────────────────────────────────────────────
+
+    /// <summary>Deserialization DTO for GET /wines/{id}.</summary>
+    private sealed record WineDetailsResponse(
+        [property: JsonPropertyName("id")]              string?   Id,
+        [property: JsonPropertyName("name")]            string?   Name,
+        [property: JsonPropertyName("winery")]          string?   Winery,
+        [property: JsonPropertyName("vintage")]         int?      Vintage,
+        [property: JsonPropertyName("type")]            string?   Type,
+        [property: JsonPropertyName("region")]          string?   Region,
+        [property: JsonPropertyName("country")]         string?   Country,
+        [property: JsonPropertyName("description")]     string?   Description,
+        [property: JsonPropertyName("foodPairings")]    string[]? FoodPairings,
+        [property: JsonPropertyName("technicalNotes")]  string?   TechnicalNotes,
+        [property: JsonPropertyName("alcoholContent")]  double?   AlcoholContent,
+        [property: JsonPropertyName("grapes")]          string[]? Grapes,
+        [property: JsonPropertyName("averageRating")]   double?   AverageRating,
+        [property: JsonPropertyName("ratingsCount")]    int?      RatingsCount
+    );
+
+    /// <inheritdoc />
+    public async Task<WineEnrichment?> GetDetailsAsync(string wineId, CancellationToken ct,
+        Guid?  userId        = null,
+        Guid?  correlationId = null)
+    {
+        if (!_settings.EnableWineApi)
+        {
+            _logger.LogDebug("WineApiService.GetDetails: disabled by configuration");
+            return null;
+        }
+
+        if (await ApiQuotaGuard.IsDailyQuotaExceededAsync("wineapi", _settings.WineApiMaxDailyRequests, _cache, _dataSource, _logger, ct))
+            return null;
+
+        var apiKey = _configuration["WINE_API_KEY"];
+        if (string.IsNullOrWhiteSpace(apiKey))
+        {
+            _logger.LogDebug("WineApiService.GetDetails: WINE_API_KEY not configured");
+            return null;
+        }
+
+        var cfg = _settings.WineApi;
+        var url = $"{cfg.BaseUrl.TrimEnd('/')}/wines/{Uri.EscapeDataString(wineId)}";
+
+        _logger.LogInformation("WineApiService.GetDetails: fetching details for wine id={WineId}", wineId);
+
+        var sw = Stopwatch.StartNew();
+        try
+        {
+            var client = _httpClientFactory.CreateClient("wineApi");
+
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.TryAddWithoutValidation(cfg.AuthHeader, $"{cfg.AuthPrefix}{apiKey}");
+
+            using var response = await client.SendAsync(request, ct);
+            sw.Stop();
+            var body = await response.Content.ReadAsStringAsync(ct);
+            _ = _apiUsage.LogAsync("wineapi", $"/wines/{wineId}", (int)response.StatusCode,
+                (int)sw.ElapsedMilliseconds, userId, ct,
+                requestBody: url, responseBody: body, correlationId: correlationId);
+            ApiQuotaGuard.EvictCache("wineapi", _cache);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning("WineApiService.GetDetails: HTTP {Status} for wine {WineId}", response.StatusCode, wineId);
+                return null;
+            }
+
+            var detail = JsonSerializer.Deserialize<WineDetailsResponse>(body, JsonOpts);
+
+            if (detail is null)
+            {
+                _logger.LogInformation("WineApiService.GetDetails: empty response for wine {WineId}", wineId);
+                return null;
+            }
+
+            _logger.LogInformation(
+                "WineApiService.GetDetails: got details for '{Name}' (alcohol={Alcohol}, grapes={GrapeCount})",
+                detail.Name, detail.AlcoholContent, detail.Grapes?.Length);
+
+            return new WineEnrichment(
+                ExternalId:     detail.Id,
+                Description:    detail.Description,
+                FoodPairings:   detail.FoodPairings,
+                TechnicalNotes: detail.TechnicalNotes,
+                AlcoholContent: detail.AlcoholContent,
+                Grapes:         detail.Grapes,
+                SuggestedName:     detail.Name,
+                SuggestedProducer: detail.Winery);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            sw.Stop();
+            _logger.LogError(ex, "WineApiService.GetDetails: request failed for wine {WineId}", wineId);
+            _ = _apiUsage.LogAsync("wineapi", $"/wines/{wineId}", null, (int)sw.ElapsedMilliseconds,
+                userId, CancellationToken.None, requestBody: url, responseBody: ex.Message, correlationId: correlationId);
+            return null;
+        }
     }
 }

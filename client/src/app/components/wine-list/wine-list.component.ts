@@ -10,19 +10,21 @@ import {
   afterNextRender,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { WineService, Wine } from '../../services/wine.service';
 import { SharePreviewComponent } from '../share-preview/share-preview.component';
 import { WineMapComponent } from '../wine-map/wine-map.component';
+import { WineCardComponent } from '../wine-card/wine-card.component';
 
 @Component({
   selector: 'app-wine-list',
   standalone: true,
-  imports: [FormsModule, RouterLink, SharePreviewComponent, WineMapComponent],
+  imports: [FormsModule, RouterLink, SharePreviewComponent, WineMapComponent, WineCardComponent],
   templateUrl: './wine-list.component.html',
 })
 export class WineListComponent implements OnInit, OnDestroy {
   private readonly wineService = inject(WineService);
+  private readonly route = inject(ActivatedRoute);
 
   protected readonly sentinelRef = viewChild<ElementRef<HTMLDivElement>>('sentinel');
 
@@ -30,6 +32,7 @@ export class WineListComponent implements OnInit, OnDestroy {
   protected readonly typeFilter = signal<string | null>(null);
   protected readonly displayCount = signal(20);
   protected readonly viewMode = signal<'list' | 'map'>('list');
+  protected readonly flyToTarget = signal<{ lng: number; lat: number } | null>(null);
   protected readonly loading = this.wineService.loading;
   protected readonly error = this.wineService.error;
   protected readonly sharingWine = signal<Wine | null>(null);
@@ -80,6 +83,16 @@ export class WineListComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.wineService.loadWines();
+
+    const params = this.route.snapshot.queryParams;
+    if (params['view'] === 'map') {
+      this.viewMode.set('map');
+      const lat = parseFloat(params['lat']);
+      const lng = parseFloat(params['lng']);
+      if (!isNaN(lat) && !isNaN(lng)) {
+        this.flyToTarget.set({ lat, lng });
+      }
+    }
   }
 
   private setupIntersectionObserver(): void {
@@ -108,24 +121,18 @@ export class WineListComponent implements OnInit, OnDestroy {
     this.displayCount.set(20);
   }
 
-  protected getTypeColor(type: string): string {
-    switch (type) {
-      case 'Rød': return 'bg-red-900/40 text-red-300 border-red-500/20';
-      case 'Hvit': return 'bg-yellow-900/30 text-yellow-300 border-yellow-500/20';
-      case 'Rosé': return 'bg-pink-900/30 text-pink-300 border-pink-500/20';
-      case 'Musserende': return 'bg-amber-900/30 text-amber-300 border-amber-500/20';
-      case 'Oransje': return 'bg-orange-900/30 text-orange-300 border-orange-500/20';
-      case 'Dessert': return 'bg-purple-900/30 text-purple-300 border-purple-500/20';
-      default: return 'bg-white/5 text-cream-dark border-white/10';
-    }
-  }
-
   protected openSharePreview(wine: Wine): void {
     this.sharingWine.set(wine);
   }
 
   protected closeSharePreview(): void {
     this.sharingWine.set(null);
+  }
+
+  protected showOnMap(wine: Wine): void {
+    if (wine.location_lat == null || wine.location_lng == null) return;
+    this.flyToTarget.set({ lng: wine.location_lng, lat: wine.location_lat });
+    this.viewMode.set('map');
   }
 
   ngOnDestroy(): void {

@@ -1,0 +1,589 @@
+<div class="animate-fade-in max-w-lg mx-auto px-4 py-6 flex flex-col" style="height: calc(100dvh - 4rem)">
+
+  <!-- ── Header: Greeting ──────────────────────────────────── -->
+  <section class="mb-4">
+    <div class="flex items-center gap-3">
+      <!-- Sparkles icon -->
+      <div class="w-10 h-10 rounded-full bg-burgundy/30 flex items-center justify-center flex-shrink-0">
+        <svg class="w-5 h-5 text-gold" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round"
+            d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 0 0-2.455 2.456ZM16.894 20.567 16.5 21.75l-.394-1.183a2.25 2.25 0 0 0-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 0 0 1.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 0 0 1.423 1.423l1.183.394-1.183.394a2.25 2.25 0 0 0-1.423 1.423Z" />
+        </svg>
+      </div>
+      <div class="flex-1">
+        <h1 class="font-serif text-xl font-bold text-cream">Din personlige vinekspert</h1>
+      </div>
+      <!-- History toggle -->
+      <button
+        (click)="toggleHistory()"
+        class="w-9 h-9 rounded-full flex items-center justify-center transition-colors"
+        [class]="showHistory() ? 'bg-gold/20 text-gold' : 'bg-white/5 text-cream-dark hover:bg-white/10'"
+        aria-label="Samtalehistorikk"
+      >
+        <svg class="w-4.5 h-4.5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round"
+            d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+        </svg>
+      </button>
+    </div>
+  </section>
+
+  <!-- ── History Panel (overlay) ─────────────────────────────── -->
+  @if (showHistory()) {
+    <section class="flex-1 overflow-y-auto mb-3 scrollbar-thin">
+      <div class="flex items-center justify-between mb-3">
+        <p class="text-xs text-cream-dark uppercase tracking-wider font-medium">Samtalehistorikk</p>
+        <button
+          (click)="startNew()"
+          class="text-xs text-gold hover:text-gold/80 transition-colors font-medium"
+        >
+          + Ny samtale
+        </button>
+      </div>
+
+      @if (expert.sessionsLoading()) {
+        <div class="flex justify-center py-8">
+          <div class="flex gap-1.5">
+            <div class="w-2 h-2 bg-cream-dark rounded-full animate-bounce" style="animation-delay: 0ms"></div>
+            <div class="w-2 h-2 bg-cream-dark rounded-full animate-bounce" style="animation-delay: 150ms"></div>
+            <div class="w-2 h-2 bg-cream-dark rounded-full animate-bounce" style="animation-delay: 300ms"></div>
+          </div>
+        </div>
+      } @else if (expert.sessions().length === 0) {
+        <div class="flex items-center justify-center py-8">
+          <p class="text-cream-dark text-sm">Ingen tidligere samtaler</p>
+        </div>
+      } @else {
+        <div class="space-y-2">
+          @for (session of expert.sessions(); track session.id) {
+            <button
+              (click)="openSession(session.id)"
+              class="w-full glass rounded-xl px-3 py-2.5 border border-white/10
+                     hover:bg-white/[0.08] transition-colors text-left group"
+            >
+              <div class="flex items-center gap-2">
+                <div class="flex-1 min-w-0">
+                  <p class="text-xs font-medium text-cream truncate">
+                    {{ session.title ?? 'Uten tittel' }}
+                  </p>
+                  <div class="flex items-center gap-2 mt-0.5">
+                    <span class="text-[10px] text-cream-dark">
+                      {{ session.updatedAt | date:'d. MMM, HH:mm' }}
+                    </span>
+                    <span class="text-[10px] text-cream-dark/60">
+                      {{ session.messageCount }} meldinger
+                    </span>
+                  </div>
+                </div>
+                <button
+                  (click)="deleteSession(session.id, $event)"
+                  class="w-7 h-7 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100
+                         hover:bg-red-500/20 text-cream-dark hover:text-red-400 transition-all flex-shrink-0"
+                  aria-label="Slett samtale"
+                >
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                      d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
+                  </svg>
+                </button>
+              </div>
+            </button>
+          }
+        </div>
+      }
+    </section>
+  } @else {
+
+    <!-- ── Scan CTA ──────────────────────────────────────────────── -->
+    @if (!isViewingPastSession()) {
+      <section class="mb-4">
+        <button
+          (click)="openScanner()"
+          class="w-full py-3 rounded-2xl bg-burgundy text-cream text-center font-semibold
+                 shadow-lg shadow-burgundy/25 border border-burgundy-light/30
+                 transition-transform duration-200 active:scale-[0.98] hover:bg-burgundy-light"
+        >
+          <div class="flex items-center justify-center gap-2">
+            <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round"
+                d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z" />
+              <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0Z" />
+            </svg>
+            <span>Skann flaske</span>
+          </div>
+        </button>
+      </section>
+    }
+
+    <!-- ── Past session banner ────────────────────────────────── -->
+    @if (isViewingPastSession()) {
+      <section class="mb-3">
+        <div class="glass rounded-xl px-3 py-2 border border-gold/20 flex items-center gap-2">
+          <svg class="w-4 h-4 text-gold flex-shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round"
+              d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+          </svg>
+          <p class="text-xs text-cream-dark flex-1">Du ser på en tidligere samtale</p>
+          <button
+            (click)="startNew()"
+            class="text-xs text-gold font-medium hover:text-gold/80 transition-colors flex-shrink-0"
+          >
+            Start ny
+          </button>
+        </div>
+      </section>
+    }
+
+    <!-- ── Quick Actions ─────────────────────────────────────────── -->
+    @if (expert.messages().length === 0 && !isViewingPastSession()) {
+      <section class="mb-4">
+        <p class="text-xs text-cream-dark mb-2 font-medium text-center">Hurtigvalg</p>
+        <div class="flex flex-wrap gap-2 justify-center">
+          <button
+            (click)="onQuickAction('Hvilken type vin passer til lam?')"
+            class="glass px-3 py-1.5 rounded-full text-xs text-cream-dark border border-white/10
+                   hover:bg-white/[0.08] hover:text-cream transition-colors"
+          >
+            Vintype til lam
+          </button>
+          <button
+            (click)="onQuickAction('Hva er en god hvitvin til skalldyr?')"
+            class="glass px-3 py-1.5 rounded-full text-xs text-cream-dark border border-white/10
+                   hover:bg-white/[0.08] hover:text-cream transition-colors"
+          >
+            Hvitvin til skalldyr
+          </button>
+          <button
+            (click)="onQuickAction('Hvilken type vin passer til kjøtt?')"
+            class="glass px-3 py-1.5 rounded-full text-xs text-cream-dark border border-white/10
+                   hover:bg-white/[0.08] hover:text-cream transition-colors"
+          >
+            Vintype til kjøtt
+          </button>
+        </div>
+      </section>
+    }
+
+    <!-- ── Chat Area ─────────────────────────────────────────────── -->
+    <section #chatScroll class="flex-1 overflow-y-auto space-y-3 mb-3 scrollbar-thin">
+      @for (msg of expert.messages(); track $index) {
+        @if (msg.role === 'user') {
+          <!-- User message -->
+          <div class="flex justify-end">
+            <div class="glass rounded-2xl rounded-br-md px-4 py-2.5 max-w-[85%] border border-burgundy/30">
+              <p class="text-sm text-cream whitespace-pre-wrap">{{ msg.content }}</p>
+            </div>
+          </div>
+        } @else {
+          <!-- Assistant message -->
+          <div class="flex justify-start">
+            <div class="max-w-[90%]">
+              <div class="glass rounded-2xl rounded-bl-md px-4 py-2.5 border border-white/10">
+                <div class="text-sm text-cream leading-relaxed prose-chat" [innerHTML]="msg.content | markdown"></div>
+                @if (msg.modelUsed) {
+                  <div class="mt-1.5 flex justify-end">
+                    <span class="text-[9px] px-1.5 py-0.5 rounded bg-white/10 text-cream-dark font-mono uppercase tracking-wider">
+                      {{ msg.modelUsed === 'DeepSeek' ? 'DS' : msg.modelUsed === 'Gemini' ? 'GEM' : msg.modelUsed }}
+                    </span>
+                  </div>
+                }
+              </div>
+
+              <!-- Referenced wines (classic mode) -->
+              @if (msg.wines && msg.wines.length > 0) {
+                <div class="mt-2 space-y-1.5">
+                  <p class="text-[10px] text-cream-dark uppercase tracking-wider font-medium px-1">Anbefalte viner</p>
+                  @for (wine of msg.wines; track wine.id + '-' + wine.name) {
+                    @if (isLinkable(wine)) {
+                      <a
+                        [routerLink]="['/wines', wine.id]"
+                        class="glass flex flex-col gap-1.5 px-3 py-2 rounded-xl border border-white/10
+                               hover:bg-white/[0.08] transition-colors cursor-pointer"
+                      >
+                        <ng-container *ngTemplateOutlet="wineCardContent; context: { $implicit: wine }"></ng-container>
+                      </a>
+                    } @else {
+                      <div class="glass flex flex-col gap-1.5 px-3 py-2 rounded-xl border border-white/10">
+                        <ng-container *ngTemplateOutlet="wineCardContent; context: { $implicit: wine }"></ng-container>
+                      </div>
+                    }
+                  }
+                </div>
+              }
+
+              <!-- Type suggestions (new mode) -->
+              @if (msg.typeSuggestions && msg.typeSuggestions.length > 0) {
+                <div class="mt-2 space-y-2">
+                  <p class="text-[10px] text-cream-dark uppercase tracking-wider font-medium px-1">Anbefalte vintyper</p>
+                  @for (ts of msg.typeSuggestions; track ts.category + '-' + (ts.subType ?? $index)) {
+                    <div class="glass rounded-xl border border-white/10 overflow-hidden">
+                      <!-- Header -->
+                      <div class="px-3 py-2.5 flex items-center gap-2.5">
+                        <div class="w-8 h-8 bg-burgundy/20 rounded-lg flex items-center justify-center flex-shrink-0 text-sm" aria-hidden="true">
+                          {{ getCategoryIcon(ts.category) }}
+                        </div>
+                        <div class="min-w-0 flex-1">
+                          <p class="text-xs font-medium text-cream truncate">
+                            {{ ts.category }}
+                            @if (ts.subType) { &rsaquo; {{ ts.subType }} }
+                            @if (ts.grapes && ts.grapes.length > 0) {
+                              <span class="text-cream-dark font-normal"> / {{ ts.grapes.join(', ') }}</span>
+                            }
+                          </p>
+                          <p class="text-[10px] text-cream-dark truncate">
+                            @if (ts.country) { {{ ts.country }} }
+                            @if (ts.region) { · {{ ts.region }} }
+                          </p>
+                        </div>
+                        <span class="text-[9px] px-1.5 py-0.5 rounded-full border flex-shrink-0" [class]="getCategoryBadgeClass(ts.category)">
+                          {{ ts.category }}
+                        </span>
+                      </div>
+
+                      <!-- Characteristics -->
+                      @if (ts.characteristics) {
+                        <div class="px-3 pb-2">
+                          <p class="text-[10px] text-cream-dark/80 italic leading-tight line-clamp-2">{{ ts.characteristics }}</p>
+                        </div>
+                      }
+
+                      <!-- Why recommended -->
+                      @if (ts.whyRecommended) {
+                        <div class="px-3 pb-2">
+                          <p class="text-[10px] text-cream-dark leading-tight">{{ ts.whyRecommended }}</p>
+                        </div>
+                      }
+
+                      <!-- Food pairings -->
+                      @if (ts.foodPairings && ts.foodPairings.length > 0) {
+                        <div class="flex flex-wrap gap-1 px-3 pb-2">
+                          @for (pairing of ts.foodPairings.slice(0, 4); track pairing) {
+                            <span class="text-[9px] px-1.5 py-0.5 rounded-full bg-white/5 text-cream-dark border border-white/10">
+                              {{ pairing }}
+                            </span>
+                          }
+                          @if (ts.foodPairings.length > 4) {
+                            <span class="text-[9px] px-1.5 py-0.5 text-cream-dark/60">+{{ ts.foodPairings.length - 4 }}</span>
+                          }
+                        </div>
+                      }
+
+                      <!-- Catalog matches -->
+                      @if (ts.catalogMatches && ts.catalogMatches.length > 0) {
+                        <div class="border-t border-white/5 px-3 py-2 space-y-1">
+                          <p class="text-[9px] text-cream-dark/50 uppercase tracking-wider">Fra katalogen</p>
+                          @for (match of ts.catalogMatches; track match.id) {
+                            <a [routerLink]="['/wines', match.id]"
+                               class="flex items-center gap-2 py-0.5 text-[10px] text-cream hover:text-gold transition-colors">
+                              <span class="truncate">{{ match.name }}</span>
+                              @if (match.vintage) {
+                                <span class="text-cream-dark flex-shrink-0">{{ match.vintage }}</span>
+                              }
+                            </a>
+                          }
+                        </div>
+                      }
+
+                      <!-- Actions: feedback + links -->
+                      <div class="border-t border-white/5 px-3 py-2 flex items-center">
+                        <!-- Feedback -->
+                        @if (ts.suggestionId) {
+                          <div class="flex gap-1.5">
+                            <button
+                              (click)="onTypeFeedback(ts, 1)"
+                              class="w-6 h-6 rounded-full flex items-center justify-center transition-all"
+                              [class]="ts.feedback === 1
+                                ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                                : 'bg-white/5 text-cream-dark/40 hover:bg-green-500/10 hover:text-green-400 border border-transparent'"
+                              aria-label="Tommel opp"
+                            >
+                              <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round"
+                                  d="M6.633 10.25c.806 0 1.533-.446 2.031-1.08a9.041 9.041 0 0 1 2.861-2.4c.723-.384 1.35-.956 1.653-1.715a4.498 4.498 0 0 0 .322-1.672V3a.75.75 0 0 1 .75-.75 2.25 2.25 0 0 1 2.25 2.25c0 1.152-.26 2.243-.723 3.218-.266.558.107 1.282.725 1.282m0 0h3.126c1.026 0 1.945.694 2.054 1.715.045.422.068.85.068 1.285a11.95 11.95 0 0 1-2.649 7.521c-.388.482-.987.729-1.605.729H13.48c-.483 0-.964-.078-1.423-.23l-3.114-1.04a4.501 4.501 0 0 0-1.423-.23H5.904m7.848 0c.065.21.1.433.1.664 0 .414-.336.75-.75.75H4.5a2.25 2.25 0 0 1-2.25-2.25V9a2.25 2.25 0 0 1 2.25-2.25h1.404" />
+                              </svg>
+                            </button>
+                            <button
+                              (click)="onTypeFeedback(ts, -1)"
+                              class="w-6 h-6 rounded-full flex items-center justify-center transition-all"
+                              [class]="ts.feedback === -1
+                                ? 'bg-red-500/20 text-red-400 border border-red-500/30'
+                                : 'bg-white/5 text-cream-dark/40 hover:bg-red-500/10 hover:text-red-400 border border-transparent'"
+                              aria-label="Tommel ned"
+                            >
+                              <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round"
+                                  d="M7.498 15.25H4.372c-1.026 0-1.945-.694-2.054-1.715A12.137 12.137 0 0 1 2.25 12c0-2.848.992-5.464 2.649-7.521C5.287 3.997 5.886 3.75 6.504 3.75h4.369a4.5 4.5 0 0 1 1.423.23l3.114 1.04a4.5 4.5 0 0 0 1.423.23h1.294M7.498 15.25c.618 0 .991.724.725 1.282A7.471 7.471 0 0 0 7.5 19.5a2.25 2.25 0 0 0 2.25 2.25.75.75 0 0 0 .75-.75v-.633c0-.573.11-1.14.322-1.672.304-.76.93-1.33 1.653-1.715a9.04 9.04 0 0 0 2.86-2.4c.498-.634 1.226-1.08 2.032-1.08h.384" />
+                              </svg>
+                            </button>
+                          </div>
+                        }
+
+                        <!-- Explore button -->
+                        <button
+                          (click)="exploreType(ts)"
+                          class="ml-2 flex items-center gap-1 px-2.5 py-1 rounded-full border border-gold/25
+                                 bg-gold/5 hover:bg-gold/15 hover:border-gold/50 transition-all
+                                 text-[10px] text-gold/70 hover:text-gold active:scale-95"
+                          title="Spør eksperten om mer om denne vintypen"
+                        >
+                          <svg class="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round"
+                              d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09Z" />
+                          </svg>
+                          Spør om mer
+                        </button>
+
+                        <!-- Links: Vinmonopolet + Google -->
+                        <div class="ml-auto flex items-center gap-1.5">
+                          @if (ts.vinmonopoletUrl) {
+                            <a class="w-6 h-6 rounded-full flex items-center justify-center
+                                      bg-white/5 hover:bg-white/10 transition-all border border-transparent hover:border-white/10"
+                               [href]="ts.vinmonopoletUrl"
+                               target="_blank"
+                               rel="noopener noreferrer"
+                               aria-label="Søk på Vinmonopolet"
+                               title="Søk på Vinmonopolet"
+                            >
+                              <img src="icons/vinmonopolet-crest-iron.c7fa286a.svg" alt="" class="w-3.5 h-3.5 opacity-40 hover:opacity-70 transition-opacity">
+                            </a>
+                          }
+                          @if (ts.googleSearchUrl) {
+                            <a class="w-6 h-6 rounded-full flex items-center justify-center
+                                      bg-white/5 hover:bg-white/10 transition-all border border-transparent hover:border-white/10"
+                               [href]="ts.googleSearchUrl"
+                               target="_blank"
+                               rel="noopener noreferrer"
+                               aria-label="Søk på Google"
+                               title="Søk på Google"
+                            >
+                              <svg class="w-3 h-3 text-cream-dark/40 hover:text-cream-dark/70 transition-opacity" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round"
+                                  d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+                              </svg>
+                            </a>
+                          }
+                        </div>
+                      </div>
+                    </div>
+                  }
+                </div>
+              }
+            </div>
+          </div>
+        }
+      }
+
+      <!-- Wine card template -->
+      <ng-template #wineCardContent let-wine>
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 bg-burgundy/20 rounded-lg flex items-center justify-center flex-shrink-0 text-sm" aria-hidden="true">
+            🍷
+          </div>
+          <div class="min-w-0 flex-1">
+            <p class="text-xs font-medium text-cream truncate">{{ wine.name }}</p>
+            <p class="text-[10px] text-cream-dark truncate">{{ wine.producer }}
+              @if (wine.vintage) { · {{ wine.vintage }} }
+              @if (wine.region) { · {{ wine.region }} }
+            </p>
+          </div>
+          <div class="flex items-center gap-1 flex-shrink-0">
+            @if (wine.source) {
+              <span class="text-[9px] px-1.5 py-0.5 rounded-full border" [class]="getSourceStyle(wine.source)">
+                {{ getSourceLabel(wine.source) }}
+              </span>
+            }
+            @if (wine.type) {
+              <span class="text-[10px] px-1.5 py-0.5 rounded-full border" [class]="getTypeColor(wine.type)">
+                {{ wine.type }}
+              </span>
+            }
+          </div>
+        </div>
+        @if (wine.whyRecommended) {
+          <p class="text-[10px] text-cream-dark/80 italic pl-[42px] leading-tight">{{ wine.whyRecommended }}</p>
+        }
+        @if (wine.description) {
+          <p class="text-[10px] text-cream-dark pl-[42px] leading-tight line-clamp-2">{{ wine.description }}</p>
+        }
+        @if (wine.foodPairings && wine.foodPairings.length > 0) {
+          <div class="flex flex-wrap gap-1 pl-[42px]">
+            @for (pairing of wine.foodPairings.slice(0, 3); track pairing) {
+              <span class="text-[9px] px-1.5 py-0.5 rounded-full bg-white/5 text-cream-dark border border-white/10">
+                {{ pairing }}
+              </span>
+            }
+            @if (wine.foodPairings.length > 3) {
+              <span class="text-[9px] px-1.5 py-0.5 text-cream-dark/60">+{{ wine.foodPairings.length - 3 }}</span>
+            }
+          </div>
+        }
+        <!-- Feedback & Vinmonopolet & Google -->
+        @if (wine.suggestionId) {
+          <div class="flex items-center pl-[42px] mt-0.5">
+            <div class="flex gap-1.5">
+              <button
+                (click)="onFeedback(wine, 1); $event.stopPropagation(); $event.preventDefault()"
+                class="w-6 h-6 rounded-full flex items-center justify-center transition-all"
+                [class]="wine.feedback === 1
+                  ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                  : 'bg-white/5 text-cream-dark/40 hover:bg-green-500/10 hover:text-green-400 border border-transparent'"
+                aria-label="Tommel opp"
+              >
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round"
+                    d="M6.633 10.25c.806 0 1.533-.446 2.031-1.08a9.041 9.041 0 0 1 2.861-2.4c.723-.384 1.35-.956 1.653-1.715a4.498 4.498 0 0 0 .322-1.672V3a.75.75 0 0 1 .75-.75 2.25 2.25 0 0 1 2.25 2.25c0 1.152-.26 2.243-.723 3.218-.266.558.107 1.282.725 1.282m0 0h3.126c1.026 0 1.945.694 2.054 1.715.045.422.068.85.068 1.285a11.95 11.95 0 0 1-2.649 7.521c-.388.482-.987.729-1.605.729H13.48c-.483 0-.964-.078-1.423-.23l-3.114-1.04a4.501 4.501 0 0 0-1.423-.23H5.904m7.848 0c.065.21.1.433.1.664 0 .414-.336.75-.75.75H4.5a2.25 2.25 0 0 1-2.25-2.25V9a2.25 2.25 0 0 1 2.25-2.25h1.404" />
+                </svg>
+              </button>
+              <button
+                (click)="onFeedback(wine, -1); $event.stopPropagation(); $event.preventDefault()"
+                class="w-6 h-6 rounded-full flex items-center justify-center transition-all"
+                [class]="wine.feedback === -1
+                  ? 'bg-red-500/20 text-red-400 border border-red-500/30'
+                  : 'bg-white/5 text-cream-dark/40 hover:bg-red-500/10 hover:text-red-400 border border-transparent'"
+                aria-label="Tommel ned"
+              >
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round"
+                    d="M7.498 15.25H4.372c-1.026 0-1.945-.694-2.054-1.715A12.137 12.137 0 0 1 2.25 12c0-2.848.992-5.464 2.649-7.521C5.287 3.997 5.886 3.75 6.504 3.75h4.369a4.5 4.5 0 0 1 1.423.23l3.114 1.04a4.5 4.5 0 0 0 1.423.23h1.294M7.498 15.25c.618 0 .991.724.725 1.282A7.471 7.471 0 0 0 7.5 19.5a2.25 2.25 0 0 0 2.25 2.25.75.75 0 0 0 .75-.75v-.633c0-.573.11-1.14.322-1.672.304-.76.93-1.33 1.653-1.715a9.04 9.04 0 0 0 2.86-2.4c.498-.634 1.226-1.08 2.032-1.08h.384" />
+                </svg>
+              </button>
+            </div>
+            <div class="ml-auto flex items-center gap-1.5">
+              <a class="w-6 h-6 rounded-full flex items-center justify-center
+                        bg-white/5 hover:bg-white/10 transition-all border border-transparent hover:border-white/10"
+                 [href]="vinmonopoletSearchUrl(wine)"
+                 target="_blank"
+                 rel="noopener noreferrer"
+                 (click)="$event.stopPropagation()"
+                 aria-label="Søk på Vinmonopolet"
+                 title="Søk på Vinmonopolet"
+              >
+                <img src="icons/vinmonopolet-crest-iron.c7fa286a.svg" alt="" class="w-3.5 h-3.5 opacity-40 hover:opacity-70 transition-opacity">
+              </a>
+              <a class="w-6 h-6 rounded-full flex items-center justify-center
+                        bg-white/5 hover:bg-white/10 transition-all border border-transparent hover:border-white/10"
+                 [href]="googleSearchUrl(wine)"
+                 target="_blank"
+                 rel="noopener noreferrer"
+                 (click)="$event.stopPropagation()"
+                 aria-label="Søk på Google"
+                 title="Søk på Google"
+              >
+                <svg class="w-3 h-3 text-cream-dark/40 hover:text-cream-dark/70 transition-opacity" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round"
+                    d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+                </svg>
+              </a>
+            </div>
+          </div>
+        }
+        @if (!wine.suggestionId) {
+          <div class="flex justify-end pl-[42px] mt-0.5 gap-1.5">
+            <a class="w-6 h-6 rounded-full flex items-center justify-center
+                      bg-white/5 hover:bg-white/10 transition-all border border-transparent hover:border-white/10"
+               [href]="vinmonopoletSearchUrl(wine)"
+               target="_blank"
+               rel="noopener noreferrer"
+               (click)="$event.stopPropagation()"
+               aria-label="Søk på Vinmonopolet"
+               title="Søk på Vinmonopolet"
+            >
+              <img src="icons/vinmonopolet-crest-iron.c7fa286a.svg" alt="" class="w-3.5 h-3.5 opacity-40 hover:opacity-70 transition-opacity">
+            </a>
+            <a class="w-6 h-6 rounded-full flex items-center justify-center
+                      bg-white/5 hover:bg-white/10 transition-all border border-transparent hover:border-white/10"
+               [href]="googleSearchUrl(wine)"
+               target="_blank"
+               rel="noopener noreferrer"
+               (click)="$event.stopPropagation()"
+               aria-label="Søk på Google"
+               title="Søk på Google"
+            >
+              <svg class="w-3 h-3 text-cream-dark/40 hover:text-cream-dark/70 transition-opacity" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round"
+                  d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+              </svg>
+            </a>
+          </div>
+        }
+      </ng-template>
+
+      <!-- Loading indicator -->
+      @if (expert.loading()) {
+        <div class="flex justify-start">
+          <div class="glass rounded-2xl rounded-bl-md px-4 py-3 border border-white/10">
+            <div class="flex items-center gap-2.5">
+              <div class="flex gap-1.5">
+                <div class="w-1.5 h-1.5 bg-gold/70 rounded-full animate-bounce" style="animation-delay: 0ms"></div>
+                <div class="w-1.5 h-1.5 bg-gold/70 rounded-full animate-bounce" style="animation-delay: 150ms"></div>
+                <div class="w-1.5 h-1.5 bg-gold/70 rounded-full animate-bounce" style="animation-delay: 300ms"></div>
+              </div>
+              @if (expert.statusText()) {
+                <span class="text-xs text-cream-dark animate-fade-in">{{ expert.statusText() }}</span>
+              }
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- Empty state -->
+      @if (expert.messages().length === 0 && !expert.loading()) {
+        <div class="flex-1 flex items-center justify-center py-8">
+          <div class="text-center">
+            <div class="text-4xl mb-3" aria-hidden="true">🍷</div>
+            <p class="text-cream-dark text-sm">Still et spørsmål, så hjelper jeg deg!</p>
+            <p class="text-cream-muted text-xs mt-1">F.eks. «Hva passer til lam?»</p>
+          </div>
+        </div>
+      }
+    </section>
+
+    <!-- ── Chat Input ────────────────────────────────────────────── -->
+    @if (!isViewingPastSession()) {
+      <section class="flex-shrink-0" style="padding-bottom: env(safe-area-inset-bottom)">
+        <div class="glass rounded-2xl border border-white/10 flex items-end gap-2 px-3 py-2">
+          <textarea
+            #chatTextarea
+            [value]="chatInput()"
+            (input)="onInput($event)"
+            (keydown)="onKeyDown($event)"
+            placeholder="Spør eksperten..."
+            rows="1"
+            class="flex-1 bg-transparent text-sm text-cream placeholder-cream-dark/50 resize-none
+                   !outline-none !ring-0 !border-none max-h-24 py-1"
+            style="outline: none !important"
+            [disabled]="profile.proScansRemaining() === 0"
+          ></textarea>
+          <button
+            (click)="sendMessage()"
+            [disabled]="!chatInput().trim() || expert.loading() || profile.proScansRemaining() === 0"
+            class="w-8 h-8 rounded-full bg-burgundy text-cream flex items-center justify-center flex-shrink-0
+                   hover:bg-burgundy-light transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            aria-label="Send melding"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 12 3.269 3.125A59.769 59.769 0 0 1 21.485 12 59.768 59.768 0 0 1 3.27 20.875L5.999 12Zm0 0h7.5" />
+            </svg>
+          </button>
+        </div>
+        @if (profile.proScansRemaining() === 0) {
+          <p class="text-xs text-red-400 text-center mt-1.5">Dagens kvote er brukt opp. Prøv igjen i morgen.</p>
+        }
+        <p class="text-[10px] text-cream-dark/40 text-center mt-1.5">Eksperten kan gjøre feil. Viktig informasjon må kvalitetssikres.</p>
+      </section>
+    } @else {
+      <section class="flex-shrink-0 py-3 text-center" style="padding-bottom: env(safe-area-inset-bottom)">
+        <button
+          (click)="startNew()"
+          class="px-6 py-2.5 rounded-2xl bg-burgundy text-cream text-sm font-semibold
+                 shadow-lg shadow-burgundy/25 border border-burgundy-light/30
+                 transition-transform duration-200 active:scale-[0.98] hover:bg-burgundy-light"
+        >
+          Start ny samtale
+        </button>
+      </section>
+    }
+
+  } <!-- end @else (not showHistory) -->
+
+</div>

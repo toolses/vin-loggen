@@ -190,24 +190,25 @@ export class ScannerComponent implements OnDestroy {
     this.step.set('processing');
 
     try {
-      // Upload to Supabase and send to AI in parallel
-      const [uploadResult] = await Promise.all([
-        this.wineService.uploadLabelImages(
-          this.frontImages.full,
-          this.frontImages.thumbnail,
-          this.backImages?.full ?? null,
-          this.backImages?.thumbnail ?? null,
-        ),
-        this.wineService.analyzeLabel(
-          this.frontImages.full,
-          this.backImages?.full ?? null,
-        ),
-      ]);
+      // Upload to Supabase first to get public URLs, then send to AI with the URLs
+      const uploadResult = await this.wineService.uploadLabelImages(
+        this.frontImages.full,
+        this.frontImages.thumbnail,
+        this.backImages?.full ?? null,
+        this.backImages?.thumbnail ?? null,
+      );
 
       if (uploadResult) {
         this.wineService.setScanImageUrl(uploadResult.imageUrl);
         this.wineService.setScanThumbnailUrl(uploadResult.thumbnailUrl);
       }
+
+      await this.wineService.analyzeLabel(
+        this.frontImages.full,
+        this.backImages?.full ?? null,
+        uploadResult?.imageUrl ?? null,
+        uploadResult?.backImageUrl ?? null,
+      );
 
       const loc = await this.locationPromise;
       if (loc) {

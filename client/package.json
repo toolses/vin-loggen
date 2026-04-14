@@ -5,7 +5,7 @@
   "scripts": {
     "ng": "ng",
     "start": "node scripts/set-env-dev.mjs && ng serve",
-    "start:docker": "ng serve --host 0.0.0.0 --port 4200 --proxy-config proxy.conf.docker.json",
+    "start:docker": "ng serve --host 0.0.0.0 --port 4300 --proxy-config proxy.conf.docker.json",
     "build": "ng build",
     "build:prod": "node scripts/set-env.mjs && ng build --configuration production",
     "watch": "ng build --watch --configuration development",
@@ -27,6 +27,7 @@
     "@supabase/supabase-js": "^2.50.0",
     "html-to-image": "^1.11.13",
     "mapbox-gl": "^3.21.0",
+    "marked": "^18.0.0",
     "rxjs": "~7.8.0"
   },
   "devDependencies": {

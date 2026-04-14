@@ -21,6 +21,7 @@ export class WineMapComponent implements OnDestroy {
   private readonly mapContainerRef = viewChild<ElementRef<HTMLDivElement>>('mapContainer');
 
   readonly wines = input.required<Wine[]>();
+  readonly flyTo = input<{ lng: number; lat: number } | null>(null);
 
   private map: mapboxgl.Map | null = null;
   private popup: mapboxgl.Popup | null = null;
@@ -35,6 +36,15 @@ export class WineMapComponent implements OnDestroy {
       const ready = this.mapReady();
       if (ready) {
         this.updateSource(wines);
+      }
+    });
+
+    // Fly to a specific location when flyTo input changes
+    effect(() => {
+      const target = this.flyTo();
+      const ready = this.mapReady();
+      if (ready && target) {
+        this.map?.flyTo({ center: [target.lng, target.lat], zoom: 14, duration: 1500 });
       }
     });
   }
@@ -188,9 +198,7 @@ export class WineMapComponent implements OnDestroy {
   }
 
   private updateSource(wines: Wine[]): void {
-    if (!this.map?.isStyleLoaded()) return;
-
-    const source = this.map.getSource('wines') as mapboxgl.GeoJSONSource | undefined;
+    const source = this.map?.getSource('wines') as mapboxgl.GeoJSONSource | undefined;
     if (!source) return;
 
     const features: GeoJSON.Feature[] = wines
@@ -221,7 +229,7 @@ export class WineMapComponent implements OnDestroy {
         const coords = (f.geometry as GeoJSON.Point).coordinates as [number, number];
         bounds.extend(coords);
       });
-      this.map.fitBounds(bounds, { padding: 60, maxZoom: 14 });
+      this.map?.fitBounds(bounds, { padding: 60, maxZoom: 14 });
     }
   }
 

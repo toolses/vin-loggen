@@ -57,7 +57,7 @@
                 <td class="px-5 py-3 text-cream/70 max-w-[150px] truncate">{{ wine.producer }}</td>
                 <td class="px-5 py-3 text-cream/50">{{ wine.vintage ?? '–' }}</td>
                 <td class="px-5 py-3">
-                  <span class="px-2 py-0.5 rounded-full text-xs bg-burgundy/20 text-burgundy border border-burgundy/30">
+                  <span class="px-2 py-0.5 rounded-full text-xs border" [class]="typeClass(wine.type)">
                     {{ wine.type }}
                   </span>
                 </td>

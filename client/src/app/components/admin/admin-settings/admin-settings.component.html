@@ -1,0 +1,28 @@
+<div class="p-8 max-w-2xl">
+  <h2 class="text-2xl font-serif text-gold mb-6">Innstillinger</h2>
+
+  @if (settingsService.loading()) {
+    <p class="text-cream/50">Laster innstillinger…</p>
+  } @else {
+    <div class="bg-cellar-surface border border-white/10 rounded-xl p-6 space-y-6">
+      <!-- Expert mode -->
+      <div>
+        <label for="expertMode" class="block text-sm font-medium text-cream/80 mb-2">
+          Ekspertmodus
+        </label>
+        <p class="text-xs text-cream/40 mb-3">
+          Velg om AI-eksperten skal foreslå vintyper (ny) eller spesifikke viner (klassisk).
+        </p>
+        <select
+          id="expertMode"
+          [value]="settingsService.expertMode()"
+          (change)="onExpertModeChange($event)"
+          [disabled]="saving()"
+          class="w-full bg-cellar-bg border border-white/10 rounded-lg px-4 py-2.5 text-cream focus:border-gold/50 focus:ring-1 focus:ring-gold/30 outline-none transition-colors">
+          <option value="type">Typeforslag (ny)</option>
+          <option value="classic">Klassisk vinforslag</option>
+        </select>
+      </div>
+    </div>
+  }
+</div>

@@ -3,6 +3,7 @@
         "npx ng": true,
         "docker run": true,
         "npx vitest": true,
-        "npm test": true
+        "npm test": true,
+        "mv": true
     }
 }

@@ -371,6 +371,183 @@ public sealed class WineApiService : IWineApiService
         }
     }
 
+    // ── Admin test: raw search results ──────────────────────────────────────
+
+    /// <inheritdoc />
+    public async Task<List<WineApiSearchHitDto>?> SearchRawAsync(
+        string producer, string name, int? vintage,
+        CancellationToken ct,
+        Guid? userId = null, Guid? correlationId = null)
+    {
+        if (!_settings.EnableWineApi)
+            return null;
+
+        var apiKey = _configuration["WINE_API_KEY"];
+        if (string.IsNullOrWhiteSpace(apiKey))
+            return null;
+
+        var query = $"{producer.Trim()} {name.Trim()}{(vintage.HasValue ? $" {vintage.Value}" : "")}".Trim();
+        var cfg = _settings.WineApi;
+        var url = $"{cfg.BaseUrl.TrimEnd('/')}{SearchPath}?q={Uri.EscapeDataString(query)}&limit=15";
+
+        _logger.LogInformation("WineApiService.SearchRaw: q='{Query}'", query);
+
+        var sw = Stopwatch.StartNew();
+        try
+        {
+            var client = _httpClientFactory.CreateClient("wineApi");
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.TryAddWithoutValidation(cfg.AuthHeader, $"{cfg.AuthPrefix}{apiKey}");
+
+            using var response = await client.SendAsync(request, ct);
+            sw.Stop();
+            var body = await response.Content.ReadAsStringAsync(ct);
+            _ = _apiUsage.LogAsync("wineapi", SearchPath, (int)response.StatusCode, (int)sw.ElapsedMilliseconds,
+                userId, ct, requestBody: url, responseBody: body, correlationId: correlationId);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning("WineApiService.SearchRaw: HTTP {Status}", response.StatusCode);
+                return null;
+            }
+
+            var result = JsonSerializer.Deserialize<SearchResponse>(body, JsonOpts);
+            return result?.Results?.Select(h => new WineApiSearchHitDto(
+                h.Id, h.Name, h.Winery, h.Vintage, h.Type, h.Region, h.Country,
+                h.AverageRating, h.RatingsCount, h.Confidence)).ToList() ?? [];
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            sw.Stop();
+            _logger.LogError(ex, "WineApiService.SearchRaw: request failed for q='{Query}'", query);
+            _ = _apiUsage.LogAsync("wineapi", SearchPath, null, (int)sw.ElapsedMilliseconds,
+                userId, CancellationToken.None, requestBody: url, responseBody: ex.Message, correlationId: correlationId);
+            return null;
+        }
+    }
+
+    // ── Admin test: raw details by ID ────────────────────────────────────────
+
+    /// <inheritdoc />
+    public async Task<WineApiDetailDto?> GetDetailsRawAsync(
+        string wineId, CancellationToken ct,
+        Guid? userId = null, Guid? correlationId = null)
+    {
+        if (!_settings.EnableWineApi)
+            return null;
+
+        var apiKey = _configuration["WINE_API_KEY"];
+        if (string.IsNullOrWhiteSpace(apiKey))
+            return null;
+
+        var cfg = _settings.WineApi;
+        var url = $"{cfg.BaseUrl.TrimEnd('/')}/wines/{Uri.EscapeDataString(wineId)}";
+
+        _logger.LogInformation("WineApiService.GetDetailsRaw: wineId={WineId}", wineId);
+
+        var sw = Stopwatch.StartNew();
+        try
+        {
+            var client = _httpClientFactory.CreateClient("wineApi");
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.TryAddWithoutValidation(cfg.AuthHeader, $"{cfg.AuthPrefix}{apiKey}");
+
+            using var response = await client.SendAsync(request, ct);
+            sw.Stop();
+            var body = await response.Content.ReadAsStringAsync(ct);
+            _ = _apiUsage.LogAsync("wineapi", $"/wines/{wineId}", (int)response.StatusCode,
+                (int)sw.ElapsedMilliseconds, userId, ct,
+                requestBody: url, responseBody: body, correlationId: correlationId);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning("WineApiService.GetDetailsRaw: HTTP {Status} for {WineId}", response.StatusCode, wineId);
+                return null;
+            }
+
+            var d = JsonSerializer.Deserialize<WineDetailsResponse>(body, JsonOpts);
+            if (d is null) return null;
+
+            return new WineApiDetailDto(
+                d.Id, d.Name, d.Winery, d.Vintage, d.Type, d.Region, d.Country,
+                d.Description, d.FoodPairings, d.TechnicalNotes, d.AlcoholContent,
+                d.Grapes, d.AverageRating, d.RatingsCount);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            sw.Stop();
+            _logger.LogError(ex, "WineApiService.GetDetailsRaw: failed for {WineId}", wineId);
+            _ = _apiUsage.LogAsync("wineapi", $"/wines/{wineId}", null, (int)sw.ElapsedMilliseconds,
+                userId, CancellationToken.None, requestBody: url, responseBody: ex.Message, correlationId: correlationId);
+            return null;
+        }
+    }
+
+    // ── Admin test: raw identify by text ─────────────────────────────────────
+
+    /// <inheritdoc />
+    public async Task<WineApiIdentifyResultDto?> IdentifyByTextRawAsync(
+        string query, CancellationToken ct,
+        Guid? userId = null, Guid? correlationId = null)
+    {
+        if (!_settings.EnableWineApi)
+            return null;
+
+        var apiKey = _configuration["WINE_API_KEY"];
+        if (string.IsNullOrWhiteSpace(apiKey))
+            return null;
+
+        var cfg = _settings.WineApi;
+        var url = $"{cfg.BaseUrl.TrimEnd('/')}/identify/text";
+
+        _logger.LogInformation("WineApiService.IdentifyByTextRaw: query='{Query}'", query);
+
+        var sw = Stopwatch.StartNew();
+        try
+        {
+            var client = _httpClientFactory.CreateClient("wineApi");
+            using var request = new HttpRequestMessage(HttpMethod.Post, url)
+            {
+                Content = JsonContent.Create(new { query })
+            };
+            request.Headers.TryAddWithoutValidation(cfg.AuthHeader, $"{cfg.AuthPrefix}{apiKey}");
+
+            using var response = await client.SendAsync(request, ct);
+            sw.Stop();
+            var body = await response.Content.ReadAsStringAsync(ct);
+            _ = _apiUsage.LogAsync("wineapi", "/identify/text", (int)response.StatusCode,
+                (int)sw.ElapsedMilliseconds, userId, ct,
+                requestBody: $"{{\"query\":\"{query}\"}}",
+                responseBody: body, correlationId: correlationId);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning("WineApiService.IdentifyByTextRaw: HTTP {Status}", response.StatusCode);
+                return null;
+            }
+
+            var result = JsonSerializer.Deserialize<IdentifyTextResponse>(body, JsonOpts);
+            if (result is null) return null;
+
+            return new WineApiIdentifyResultDto(
+                Wine: result.Wine is { } w
+                    ? new WineApiIdentifyHitDto(w.Id, w.Name, w.Vintage, w.Type, w.Region, w.Country, w.AverageRating, w.RatingsCount)
+                    : null,
+                Suggestions: result.Suggestions?.Select(s =>
+                    new WineApiIdentifyHitDto(s.Id, s.Name, s.Vintage, s.Type, s.Region, s.Country, s.AverageRating, s.RatingsCount)).ToList(),
+                Confidence: result.Confidence);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            sw.Stop();
+            _logger.LogError(ex, "WineApiService.IdentifyByTextRaw: failed for '{Query}'", query);
+            _ = _apiUsage.LogAsync("wineapi", "/identify/text", null, (int)sw.ElapsedMilliseconds,
+                userId, CancellationToken.None, requestBody: $"{{\"query\":\"{query}\"}}",
+                responseBody: ex.Message, correlationId: correlationId);
+            return null;
+        }
+    }
+
     // ── Wine details by ID ─────────────────────────────────────────────────
 
     /// <summary>Deserialization DTO for GET /wines/{id}.</summary>

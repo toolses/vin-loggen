@@ -750,8 +750,9 @@ public sealed class ExpertService : IExpertService
             }
 
             // Step a: Try WineAPI enrichment
-            var enrichment = await _wineApi.FindAsync(
+            var findResult = await _wineApi.FindAsync(
                 wine.Producer ?? "", wine.Name, wine.Vintage, ct, userId, correlationId);
+            var enrichment = findResult?.Enrichment;
 
             // Step b: AI fallback if WineAPI has gaps (missing food pairings OR description)
             if (enrichment?.FoodPairings is not { Length: > 0 } || string.IsNullOrWhiteSpace(enrichment?.Description))

@@ -39,7 +39,9 @@ public record WineAnalysisResponse(
     bool      ProLimitReached = false,
     int       ProScansToday   = 0,
     int       DailyProLimit   = 10,
-    bool      IsPro           = false
+    bool      IsPro           = false,
+    // ── Candidate wines from WineAPI search ──────────────────────────────────
+    List<WineApiSearchHitDto>? CandidateWines = null
 );
 
 /// <summary>

@@ -128,6 +128,7 @@ builder.Services.AddScoped<WineApiService>();
 builder.Services.AddScoped<ProUsageService>();
 builder.Services.AddScoped<WineOrchestratorService>();
 builder.Services.AddScoped<WineMatchingService>();
+builder.Services.AddScoped<WineCatalogueService>();
 builder.Services.AddScoped<IGooglePlacesService, GooglePlacesService>();
 builder.Services.AddScoped<IAppSettingsService, AppSettingsService>();
 builder.Services.AddScoped<IExpertService, ExpertService>();

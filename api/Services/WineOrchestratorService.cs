@@ -31,19 +31,24 @@ public sealed class WineOrchestratorService
     private readonly IWineApiService     _wineApi;
     private readonly IProUsageService    _proUsage;
     private readonly AiProviderChain     _aiChain;
+    private readonly WineCatalogueService _catalogue;
     private readonly NpgsqlDataSource    _dataSource;
     private readonly IntegrationSettings _settings;
     private readonly ILogger<WineOrchestratorService> _logger;
 
     // Internal Dapper projection for the dedup query.
     // Types must match what Npgsql/Dapper returns: COUNT(*)→long, date→DateTime.
-    private record DedupMatch(Guid WineId, long UserLogCount, decimal? LastRating, DateTime? LastTastedAt);
+    private record DedupMatch(
+        Guid WineId, long UserLogCount, decimal? LastRating, DateTime? LastTastedAt,
+        string? WineName, string? Producer, int? Vintage,
+        string? Type, string? Region, string? Country);
 
     public WineOrchestratorService(
         ILabelScanService                   labelScan,
         IWineApiService                     wineApi,
         IProUsageService                    proUsage,
         AiProviderChain                     aiChain,
+        WineCatalogueService                catalogue,
         NpgsqlDataSource                    dataSource,
         IntegrationSettings                 settings,
         ILogger<WineOrchestratorService>    logger)
@@ -52,6 +57,7 @@ public sealed class WineOrchestratorService
         _wineApi    = wineApi;
         _proUsage   = proUsage;
         _aiChain    = aiChain;
+        _catalogue  = catalogue;
         _dataSource = dataSource;
         _settings   = settings;
         _logger     = logger;
@@ -129,16 +135,23 @@ public sealed class WineOrchestratorService
 
         // ── Step 4: Enrichment (Pro quota available) ──────────────────────────
         WineApiService.WineEnrichment? enrichment = null;
+        List<WineApiSearchHitDto>? candidateWines = null;
         bool quotaCharged = false;
 
         if (proStatus?.CanUsePro == true && labelReadable)
         {
-            enrichment = await _wineApi.FindAsync(
+            var findResult = await _wineApi.FindAsync(
                 analysis.Producer ?? "",
                 analysis.WineName!,
                 analysis.Vintage,
                 ct,
-                userId, correlationId);
+                userId, correlationId,
+                region: analysis.Region,
+                country: analysis.Country,
+                grapes: analysis.Grapes);
+
+            enrichment     = findResult?.Enrichment;
+            candidateWines = findResult?.Candidates;
 
             // Fallback: ask AI provider chain (DeepSeek → Gemini) for enrichment if wineapi.io had gaps
             if (enrichment?.FoodPairings is not { Length: > 0 } || string.IsNullOrWhiteSpace(enrichment?.Description))
@@ -183,37 +196,44 @@ public sealed class WineOrchestratorService
 
         _ = quotaCharged; // explicit use to suppress warning
 
-        // ── Step 5: Assemble response ─────────────────────────────────────────
+        // ── Step 5: Prepend local catalogue match to candidates ─────────────
+        if (dedup is not null)
+        {
+            var localHit = new WineApiSearchHitDto(
+                Id:            dedup.WineId.ToString(),
+                Name:          dedup.WineName,
+                Winery:        dedup.Producer,
+                Vintage:       dedup.Vintage,
+                Type:          dedup.Type,
+                Region:        dedup.Region,
+                Country:       dedup.Country,
+                AverageRating: dedup.LastRating is decimal r ? (double)r : null,
+                RatingsCount:  dedup.UserLogCount > 0 ? (int)dedup.UserLogCount : null,
+                Confidence:    1.0,
+                IsLocalMatch:  true);
+
+            candidateWines = candidateWines is not null
+                ? new List<WineApiSearchHitDto> { localHit }.Concat(candidateWines).ToList()
+                : [localHit];
+        }
+
+        // ── Step 5b: Background-save candidates to local catalogue ──────────
+        if (candidateWines is { Count: > 0 })
+        {
+            var winesToSave = candidateWines.Where(w => !w.IsLocalMatch).ToList();
+            if (winesToSave.Count > 0)
+                _ = Task.Run(async () =>
+                {
+                    try { await _catalogue.UpsertFromSearchHitsAsync(winesToSave, CancellationToken.None); }
+                    catch (Exception ex) { _logger.LogWarning(ex, "Background catalogue save failed"); }
+                });
+        }
+
+        // ── Step 6: Assemble response ─────────────────────────────────────────
         bool proLimitReached = proStatus is { CanUsePro: false };
-
-        // Auto-prefer catalogue name when WineAPI suggests a different spelling
-        var catalogueName     = enrichment?.SuggestedName?.Trim();
-        var catalogueProducer = enrichment?.SuggestedProducer?.Trim();
-        var ocrName           = analysis.WineName?.Trim();
-        var ocrProducer       = analysis.Producer?.Trim();
-
-        bool nameFromCatalogue = false;
-        string? finalName      = ocrName;
-        string? finalProducer  = ocrProducer;
-
-        if (!string.IsNullOrWhiteSpace(catalogueName)
-            && !string.Equals(catalogueName, ocrName, StringComparison.OrdinalIgnoreCase))
-        {
-            finalName = catalogueName;
-            nameFromCatalogue = true;
-        }
-        if (!string.IsNullOrWhiteSpace(catalogueProducer)
-            && !string.Equals(catalogueProducer, ocrProducer, StringComparison.OrdinalIgnoreCase))
-        {
-            finalProducer = catalogueProducer;
-            nameFromCatalogue = true;
-        }
 
         return ApiResult<WineAnalysisResponse>.Ok(analysis with
         {
-            // Catalogue name override
-            WineName  = finalName,
-            Producer  = finalProducer,
             // Dedup
             AlreadyTasted  = dedup is not null && dedup.UserLogCount > 0,
             ExistingWineId = dedup?.WineId,
@@ -227,15 +247,13 @@ public sealed class WineOrchestratorService
                               ?? (dedup is not null
                                   ? await GetExistingExternalIdAsync(dedup.WineId, ct)
                                   : null),
-            // Name suggestions (cleared when auto-applied)
-            SuggestedName      = nameFromCatalogue ? null : enrichment?.SuggestedName,
-            SuggestedProducer  = nameFromCatalogue ? null : enrichment?.SuggestedProducer,
-            NameFromCatalogue  = nameFromCatalogue,
             // Quota
             ProLimitReached = proLimitReached,
             ProScansToday   = proStatus?.ScansToday   ?? 0,
             DailyProLimit   = proStatus?.DailyLimit   ?? _settings.DailyProLimit,
             IsPro           = proStatus?.IsPro        ?? false,
+            // Candidate wines (local match prepended, then WineAPI hits)
+            CandidateWines  = candidateWines,
         });
     }
 
@@ -332,8 +350,15 @@ public sealed class WineOrchestratorService
                     c.id AS WineId,
                     (SELECT COUNT(*) FROM wine_logs WHERE wine_id = c.id AND user_id = @UserId) AS UserLogCount,
                     (SELECT rating    FROM wine_logs WHERE wine_id = c.id AND user_id = @UserId ORDER BY created_at DESC LIMIT 1) AS LastRating,
-                    (SELECT tasted_at FROM wine_logs WHERE wine_id = c.id AND user_id = @UserId ORDER BY created_at DESC LIMIT 1) AS LastTastedAt
+                    (SELECT tasted_at FROM wine_logs WHERE wine_id = c.id AND user_id = @UserId ORDER BY created_at DESC LIMIT 1) AS LastTastedAt,
+                    w.name     AS WineName,
+                    w.producer AS Producer,
+                    w.vintage  AS Vintage,
+                    w.type     AS Type,
+                    w.region   AS Region,
+                    w.country  AS Country
                 FROM candidates c
+                JOIN wines w ON w.id = c.id
                 ORDER BY c.match_score DESC
                 LIMIT 1
                 """,

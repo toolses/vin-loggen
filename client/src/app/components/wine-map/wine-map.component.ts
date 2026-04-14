@@ -155,39 +155,25 @@ export class WineMapComponent implements OnDestroy {
       });
     });
 
-    // Click wine pin → show popup
+    // Click wine pin → show popup (with pagination for co-located wines)
     map.on('click', 'wine-points', (e) => {
       const feature = e.features?.[0];
       if (!feature) return;
       const coords = (feature.geometry as GeoJSON.Point).coordinates.slice() as [number, number];
-      const props = feature.properties!;
+
+      // Find all wines at this exact location
+      const allFeatures = map.queryRenderedFeatures(e.point, { layers: ['wine-points'] });
+      // Deduplicate by wine id (queryRenderedFeatures can return duplicates across tiles)
+      const seen = new Set<string>();
+      const uniqueFeatures = allFeatures.filter(f => {
+        const id = f.properties?.['id'];
+        if (seen.has(id)) return false;
+        seen.add(id);
+        return true;
+      });
 
       this.popup?.remove();
-
-      const imageHtml = props['imageUrl']
-        ? `<img src="${props['imageUrl']}" class="w-full h-24 object-cover rounded-t-lg" />`
-        : `<div class="w-full h-24 bg-burgundy/20 rounded-t-lg flex items-center justify-center text-3xl">🍷</div>`;
-
-      const ratingHtml = props['rating']
-        ? `<span class="text-gold font-bold">${props['rating']}</span><span class="text-cream-dark text-[10px]"> / 6</span>`
-        : '';
-
-      this.popup = new mapboxgl.Popup({ offset: 15, maxWidth: '220px', closeButton: true })
-        .setLngLat(coords)
-        .setHTML(`
-          <div style="font-family: 'Inter', system-ui, sans-serif;">
-            ${imageHtml}
-            <div class="p-3">
-              <p class="font-semibold text-sm text-cream leading-tight">${props['name']}</p>
-              <p class="text-xs text-cream-dark mt-0.5">${props['producer']}</p>
-              <div class="flex items-center justify-between mt-2">
-                <span class="text-[10px] text-cream-dark">${props['locationName'] ?? ''}</span>
-                ${ratingHtml}
-              </div>
-            </div>
-          </div>
-        `)
-        .addTo(map);
+      this.showPaginatedPopup(map, coords, uniqueFeatures.length > 0 ? uniqueFeatures : [feature]);
     });
 
     // Cursor styles
@@ -195,6 +181,80 @@ export class WineMapComponent implements OnDestroy {
     map.on('mouseleave', 'clusters', () => { map.getCanvas().style.cursor = ''; });
     map.on('mouseenter', 'wine-points', () => { map.getCanvas().style.cursor = 'pointer'; });
     map.on('mouseleave', 'wine-points', () => { map.getCanvas().style.cursor = ''; });
+  }
+
+  private buildWineCardHtml(props: Record<string, unknown>): string {
+    const imageHtml = props['imageUrl']
+      ? `<img src="${props['imageUrl']}" class="w-full h-24 object-cover rounded-t-lg" />`
+      : `<div class="w-full h-24 bg-burgundy/20 rounded-t-lg flex items-center justify-center text-3xl">&#127863;</div>`;
+
+    const ratingHtml = props['rating']
+      ? `<span class="text-gold font-bold">${props['rating']}</span><span class="text-cream-dark text-[10px]"> / 6</span>`
+      : '';
+
+    return `
+      <div class="popup-wine-card">
+        ${imageHtml}
+        <div class="p-3">
+          <p class="font-semibold text-sm text-cream leading-tight">${props['name']}</p>
+          <p class="text-xs text-cream-dark mt-0.5">${props['producer']}</p>
+          <div class="flex items-center justify-between mt-2">
+            <span class="text-[10px] text-cream-dark">${props['locationName'] ?? ''}</span>
+            ${ratingHtml}
+          </div>
+        </div>
+      </div>`;
+  }
+
+  private showPaginatedPopup(
+    map: mapboxgl.Map,
+    coords: [number, number],
+    features: mapboxgl.GeoJSONFeature[] | GeoJSON.Feature[],
+  ): void {
+    const total = features.length;
+    let currentIndex = 0;
+
+    const renderPopup = () => {
+      const props = features[currentIndex].properties!;
+
+      const paginationHtml = total > 1
+        ? `<div class="popup-pagination">
+            <button class="popup-nav-btn" id="popup-prev" ${currentIndex === 0 ? 'disabled' : ''}>&#8249;</button>
+            <span class="popup-page-info">${currentIndex + 1} / ${total}</span>
+            <button class="popup-nav-btn" id="popup-next" ${currentIndex === total - 1 ? 'disabled' : ''}>&#8250;</button>
+          </div>`
+        : '';
+
+      const html = `
+        <div style="font-family: 'Inter', system-ui, sans-serif;">
+          ${this.buildWineCardHtml(props as Record<string, unknown>)}
+          ${paginationHtml}
+        </div>`;
+
+      if (!this.popup) {
+        this.popup = new mapboxgl.Popup({ offset: 15, maxWidth: '220px', closeButton: true })
+          .setLngLat(coords)
+          .setHTML(html)
+          .addTo(map);
+      } else {
+        this.popup.setHTML(html);
+      }
+
+      // Attach navigation event listeners
+      if (total > 1) {
+        const popupEl = this.popup.getElement();
+        popupEl?.querySelector('#popup-prev')?.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (currentIndex > 0) { currentIndex--; renderPopup(); }
+        });
+        popupEl?.querySelector('#popup-next')?.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (currentIndex < total - 1) { currentIndex++; renderPopup(); }
+        });
+      }
+    };
+
+    renderPopup();
   }
 
   private updateSource(wines: Wine[]): void {

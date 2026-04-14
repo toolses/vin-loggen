@@ -1,11 +1,14 @@
-<div class="p-6 max-w-4xl">
-  <h1 class="text-2xl font-serif text-cream mb-6">API-testing</h1>
+<div class="p-6 max-w-5xl space-y-6">
+  <h1 class="text-2xl font-serif text-cream">API-testing</h1>
 
-  <!-- WineAPI section -->
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       Section 1: WineAPI – Søk
+       ═══════════════════════════════════════════════════════════════════════ -->
   <section class="bg-cellar-surface rounded-xl border border-white/10 overflow-hidden">
     <div class="px-5 py-4 border-b border-white/10 flex items-center gap-3">
-      <span class="text-[10px] px-1.5 py-0.5 rounded font-mono uppercase tracking-wider bg-emerald-500/20 text-emerald-300">API</span>
+      <span class="text-[10px] px-1.5 py-0.5 rounded font-mono uppercase tracking-wider bg-emerald-500/20 text-emerald-300">GET</span>
       <h2 class="text-lg font-serif text-cream">WineAPI – Søk</h2>
+      <code class="text-[10px] text-cream/30 font-mono ml-auto">/wines/search?q=…</code>
     </div>
 
     <!-- Search form -->
@@ -13,155 +16,328 @@
       <div class="grid grid-cols-[1fr_1fr_auto] gap-3">
         <div>
           <label class="block text-xs text-cream/40 mb-1">Produsent</label>
-          <input
-            type="text"
-            [ngModel]="producer()"
-            (ngModelChange)="producer.set($event)"
-            (keydown.enter)="search()"
+          <input type="text"
+            [ngModel]="producer()" (ngModelChange)="producer.set($event)" (keydown.enter)="search()"
             placeholder="f.eks. Markus Molitor"
             class="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-cream placeholder:text-cream/20 text-sm focus:outline-none focus:border-gold/40" />
         </div>
         <div>
           <label class="block text-xs text-cream/40 mb-1">Vinnavn</label>
-          <input
-            type="text"
-            [ngModel]="name()"
-            (ngModelChange)="name.set($event)"
-            (keydown.enter)="search()"
+          <input type="text"
+            [ngModel]="wineName()" (ngModelChange)="wineName.set($event)" (keydown.enter)="search()"
             placeholder="f.eks. Riesling Spätlese"
             class="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-cream placeholder:text-cream/20 text-sm focus:outline-none focus:border-gold/40" />
         </div>
         <div>
           <label class="block text-xs text-cream/40 mb-1">Årgang</label>
-          <input
-            type="text"
-            [ngModel]="vintage()"
-            (ngModelChange)="vintage.set($event)"
-            (keydown.enter)="search()"
+          <input type="text"
+            [ngModel]="vintage()" (ngModelChange)="vintage.set($event)" (keydown.enter)="search()"
             placeholder="2020"
             class="w-20 px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-cream placeholder:text-cream/20 text-sm focus:outline-none focus:border-gold/40" />
         </div>
       </div>
       <div class="flex items-center gap-3">
-        <button
-          (click)="search()"
-          [disabled]="loading() || (!producer().trim() && !name().trim())"
+        <button (click)="search()"
+          [disabled]="searchLoading() || (!producer().trim() && !wineName().trim())"
           class="px-4 py-2 rounded-lg text-sm font-medium transition-colors bg-burgundy/40 text-gold border border-gold/30 hover:bg-burgundy/60 disabled:opacity-40 disabled:cursor-not-allowed">
-          @if (loading()) {
-            Søker...
-          } @else {
-            Søk i WineAPI
-          }
+          @if (searchLoading()) { Søker… } @else { Søk i WineAPI }
         </button>
-        @if (result()?.correlationId) {
-          <a [routerLink]="['/admin/traces']"
-             class="text-xs text-cream/40 hover:text-gold transition-colors">
-            Vis i API-sporing
-          </a>
+        @if (searchResult()?.correlationId) {
+          <a [routerLink]="['/admin/traces']" class="text-xs text-cream/40 hover:text-gold transition-colors">Vis i API-sporing</a>
         }
       </div>
     </div>
 
-    <!-- Error -->
-    @if (error()) {
-      <div class="mx-5 mb-5 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-300 text-sm">
-        {{ error() }}
-      </div>
+    <!-- Search error -->
+    @if (searchError()) {
+      <div class="mx-5 mb-5 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-300 text-sm">{{ searchError() }}</div>
     }
 
-    <!-- Result -->
-    @if (result(); as r) {
+    <!-- Search results -->
+    @if (searchResult(); as sr) {
       <div class="border-t border-white/5">
-        <!-- Summary -->
-        <div class="px-5 py-4 flex items-center gap-4">
-          @if (r.found) {
-            <span class="inline-flex items-center gap-1.5 text-sm text-green-400">
-              <span class="w-2 h-2 rounded-full bg-green-400"></span>
-              Treff
-            </span>
-          } @else {
-            <span class="inline-flex items-center gap-1.5 text-sm text-cream/40">
-              <span class="w-2 h-2 rounded-full bg-cream/20"></span>
-              Ingen treff
-            </span>
-          }
-          @if (r.externalId) {
-            <code class="text-[11px] px-2 py-1 rounded bg-white/5 text-cream/50 font-mono">{{ r.externalId }}</code>
-          }
-          <code class="text-[10px] px-2 py-0.5 rounded bg-white/5 text-cream/30 font-mono">
-            {{ r.correlationId.substring(0, 8) }}
-          </code>
+        <div class="px-5 py-3 flex items-center gap-3 text-xs text-cream/40">
+          <span>{{ sr.hitCount }} treff</span>
+          <code class="px-2 py-0.5 rounded bg-white/5 text-cream/30 font-mono">{{ sr.correlationId.substring(0, 8) }}</code>
         </div>
 
-        @if (r.found) {
-          <!-- Wine details -->
-          <div class="px-5 pb-5 grid grid-cols-2 gap-4">
-            @if (r.suggestedName || r.suggestedProducer) {
-              <div class="col-span-2 rounded-lg border border-white/5 p-4">
-                <div class="text-[10px] text-cream/30 uppercase tracking-wider mb-2">Katalogmatch</div>
-                <div class="text-cream text-sm">
-                  @if (r.suggestedProducer) {
-                    <span class="text-cream/60">{{ r.suggestedProducer }}</span>
-                    <span class="text-cream/20 mx-1">–</span>
+        @if (sr.hits.length > 0) {
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm text-left">
+              <thead>
+                <tr class="border-t border-white/5 text-[10px] text-cream/30 uppercase tracking-wider">
+                  <th class="px-5 py-2 font-medium">Navn</th>
+                  <th class="px-3 py-2 font-medium">Produsent</th>
+                  <th class="px-3 py-2 font-medium">Årgang</th>
+                  <th class="px-3 py-2 font-medium">Type</th>
+                  <th class="px-3 py-2 font-medium">Region</th>
+                  <th class="px-3 py-2 font-medium text-right">Rating</th>
+                  <th class="px-3 py-2 font-medium text-right">Confidence</th>
+                  <th class="px-3 py-2 font-medium"></th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-white/5">
+                @for (hit of sr.hits; track hit.id ?? $index) {
+                  <tr class="hover:bg-white/[0.03] transition-colors"
+                      [class.bg-white/5]="expandedDetailId() === hit.id">
+                    <td class="px-5 py-2.5 text-cream/80">{{ hit.name ?? '–' }}</td>
+                    <td class="px-3 py-2.5 text-cream/50">{{ hit.winery ?? '–' }}</td>
+                    <td class="px-3 py-2.5 text-cream/50">{{ hit.vintage ?? '–' }}</td>
+                    <td class="px-3 py-2.5 text-cream/50">{{ hit.type ?? '–' }}</td>
+                    <td class="px-3 py-2.5 text-cream/50">{{ hit.region ?? '–' }}</td>
+                    <td class="px-3 py-2.5 text-cream/50 text-right">{{ formatRating(hit.averageRating) }}</td>
+                    <td class="px-3 py-2.5 text-cream/50 text-right">{{ formatConfidence(hit.confidence) }}</td>
+                    <td class="px-3 py-2.5 text-right">
+                      @if (hit.id) {
+                        <button (click)="fetchDetails(hit.id!)"
+                          [disabled]="detailLoadingId() === hit.id"
+                          class="text-xs px-2.5 py-1 rounded-md bg-white/5 text-cream/50 hover:text-gold hover:bg-white/10 border border-white/10 transition-colors disabled:opacity-40">
+                          @if (detailLoadingId() === hit.id) { Henter… } @else if (expandedDetailId() === hit.id) { Lukk } @else { Hent detaljer }
+                        </button>
+                      }
+                    </td>
+                  </tr>
+                  <!-- Inline detail panel -->
+                  @if (expandedDetailId() === hit.id && hit.id) {
+                    <tr>
+                      <td colspan="8" class="px-5 py-4 bg-white/[0.02]">
+                        @if (getDetail(hit.id!); as d) {
+                          <div class="grid grid-cols-2 gap-4 max-w-3xl">
+                            @if (d.description) {
+                              <div class="col-span-2 rounded-lg border border-white/5 p-4">
+                                <div class="text-[10px] text-cream/30 uppercase tracking-wider mb-2">Beskrivelse</div>
+                                <p class="text-cream/70 text-sm">{{ d.description }}</p>
+                              </div>
+                            }
+                            @if (d.foodPairings && d.foodPairings.length > 0) {
+                              <div class="rounded-lg border border-white/5 p-4">
+                                <div class="text-[10px] text-cream/30 uppercase tracking-wider mb-2">Matkombinasjoner</div>
+                                <ul class="space-y-1">
+                                  @for (fp of d.foodPairings; track fp) {
+                                    <li class="text-cream/60 text-sm">{{ fp }}</li>
+                                  }
+                                </ul>
+                              </div>
+                            }
+                            @if (d.grapes && d.grapes.length > 0) {
+                              <div class="rounded-lg border border-white/5 p-4">
+                                <div class="text-[10px] text-cream/30 uppercase tracking-wider mb-2">Druer</div>
+                                <div class="flex flex-wrap gap-1.5">
+                                  @for (g of d.grapes; track g) {
+                                    <span class="text-xs px-2 py-0.5 rounded-full bg-white/5 text-cream/50">{{ g }}</span>
+                                  }
+                                </div>
+                              </div>
+                            }
+                            @if (d.alcoholContent) {
+                              <div class="rounded-lg border border-white/5 p-4">
+                                <div class="text-[10px] text-cream/30 uppercase tracking-wider mb-2">Alkohol</div>
+                                <span class="text-cream/60 text-sm">{{ d.alcoholContent }}%</span>
+                              </div>
+                            }
+                            @if (d.technicalNotes) {
+                              <div class="rounded-lg border border-white/5 p-4">
+                                <div class="text-[10px] text-cream/30 uppercase tracking-wider mb-2">Tekniske notater</div>
+                                <p class="text-cream/60 text-sm">{{ d.technicalNotes }}</p>
+                              </div>
+                            }
+                            <div class="col-span-2 flex gap-4 text-xs text-cream/30">
+                              @if (d.averageRating != null) {
+                                <span>Rating: {{ formatRating(d.averageRating) }} ({{ d.ratingsCount ?? 0 }})</span>
+                              }
+                              @if (d.country) { <span>{{ d.country }}</span> }
+                              @if (d.region) { <span>{{ d.region }}</span> }
+                            </div>
+                          </div>
+                        } @else {
+                          <div class="text-cream/30 text-sm">Laster detaljer…</div>
+                        }
+                      </td>
+                    </tr>
                   }
-                  {{ r.suggestedName ?? '—' }}
-                </div>
-              </div>
-            }
+                }
+              </tbody>
+            </table>
+          </div>
+        } @else {
+          <div class="px-5 py-4 text-cream/40 text-sm">Ingen treff fra WineAPI</div>
+        }
 
-            @if (r.description) {
-              <div class="col-span-2 rounded-lg border border-white/5 p-4">
-                <div class="text-[10px] text-cream/30 uppercase tracking-wider mb-2">Beskrivelse</div>
-                <p class="text-cream/70 text-sm">{{ r.description }}</p>
-              </div>
-            }
+        <!-- Raw JSON -->
+        @if (searchRawJson()) {
+          <div class="border-t border-white/5">
+            <details class="group">
+              <summary class="px-5 py-3 text-xs text-cream/30 cursor-pointer hover:text-cream/50 transition-colors">Rå JSON-respons</summary>
+              <pre class="px-5 pb-4 text-xs text-cream/40 font-mono whitespace-pre-wrap break-all overflow-x-auto max-h-80 overflow-y-auto">{{ searchRawJson() }}</pre>
+            </details>
+          </div>
+        }
+      </div>
+    }
+  </section>
 
-            @if (r.foodPairings && r.foodPairings.length > 0) {
-              <div class="rounded-lg border border-white/5 p-4">
-                <div class="text-[10px] text-cream/30 uppercase tracking-wider mb-2">Matkombinasjoner</div>
-                <ul class="space-y-1">
-                  @for (fp of r.foodPairings; track fp) {
-                    <li class="text-cream/60 text-sm">{{ fp }}</li>
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       Section 2: WineAPI – Identifiser via tekst
+       ═══════════════════════════════════════════════════════════════════════ -->
+  <section class="bg-cellar-surface rounded-xl border border-white/10 overflow-hidden">
+    <div class="px-5 py-4 border-b border-white/10 flex items-center gap-3">
+      <span class="text-[10px] px-1.5 py-0.5 rounded font-mono uppercase tracking-wider bg-blue-500/20 text-blue-300">POST</span>
+      <h2 class="text-lg font-serif text-cream">WineAPI – Identifiser via tekst</h2>
+      <code class="text-[10px] text-cream/30 font-mono ml-auto">/identify/text</code>
+    </div>
+
+    <!-- Identify form -->
+    <div class="p-5 space-y-4">
+      <div>
+        <label class="block text-xs text-cream/40 mb-1">Fritekst-søk</label>
+        <input type="text"
+          [ngModel]="identifyQuery()" (ngModelChange)="identifyQuery.set($event)" (keydown.enter)="identifyByText()"
+          placeholder="f.eks. Italian Barolo 2018 Giacomo Conterno"
+          class="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-cream placeholder:text-cream/20 text-sm focus:outline-none focus:border-gold/40" />
+      </div>
+      <div class="flex items-center gap-3">
+        <button (click)="identifyByText()"
+          [disabled]="identifyLoading() || !identifyQuery().trim()"
+          class="px-4 py-2 rounded-lg text-sm font-medium transition-colors bg-burgundy/40 text-gold border border-gold/30 hover:bg-burgundy/60 disabled:opacity-40 disabled:cursor-not-allowed">
+          @if (identifyLoading()) { Identifiserer… } @else { Identifiser }
+        </button>
+        @if (identifyResult()?.correlationId) {
+          <a [routerLink]="['/admin/traces']" class="text-xs text-cream/40 hover:text-gold transition-colors">Vis i API-sporing</a>
+        }
+      </div>
+    </div>
+
+    <!-- Identify error -->
+    @if (identifyError()) {
+      <div class="mx-5 mb-5 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-300 text-sm">{{ identifyError() }}</div>
+    }
+
+    <!-- Identify result -->
+    @if (identifyResult(); as ir) {
+      <div class="border-t border-white/5">
+        <div class="px-5 py-3 flex items-center gap-3 text-xs text-cream/40">
+          @if (ir.found) {
+            <span class="inline-flex items-center gap-1.5 text-green-400">
+              <span class="w-2 h-2 rounded-full bg-green-400"></span> Treff
+            </span>
+          } @else {
+            <span class="inline-flex items-center gap-1.5 text-cream/40">
+              <span class="w-2 h-2 rounded-full bg-cream/20"></span> Ingen treff
+            </span>
+          }
+          @if (ir.result?.confidence != null) {
+            <span>Confidence: {{ formatConfidence(ir.result!.confidence) }}</span>
+          }
+          <code class="px-2 py-0.5 rounded bg-white/5 text-cream/30 font-mono">{{ ir.correlationId.substring(0, 8) }}</code>
+        </div>
+
+        <!-- Primary wine match -->
+        @if (ir.result?.wine; as wine) {
+          <div class="px-5 pb-4">
+            <div class="text-[10px] text-cream/30 uppercase tracking-wider mb-2">Primærtreff</div>
+            <div class="rounded-lg border border-white/5 p-4 space-y-2">
+              <div class="text-cream text-sm font-medium">{{ wine.name ?? '–' }}</div>
+              <div class="flex flex-wrap gap-3 text-xs text-cream/50">
+                @if (wine.vintage) { <span>{{ wine.vintage }}</span> }
+                @if (wine.type) { <span>{{ wine.type }}</span> }
+                @if (wine.region) { <span>{{ wine.region }}</span> }
+                @if (wine.country) { <span>{{ wine.country }}</span> }
+                @if (wine.averageRating != null) { <span>Rating: {{ formatRating(wine.averageRating) }}</span> }
+              </div>
+              @if (wine.id) {
+                <button (click)="fetchDetails(wine.id!)"
+                  [disabled]="detailLoadingId() === wine.id"
+                  class="mt-2 text-xs px-2.5 py-1 rounded-md bg-white/5 text-cream/50 hover:text-gold hover:bg-white/10 border border-white/10 transition-colors disabled:opacity-40">
+                  @if (detailLoadingId() === wine.id) { Henter… } @else { Hent detaljer }
+                </button>
+                @if (expandedDetailId() === wine.id && getDetail(wine.id!); as d) {
+                  <div class="mt-3 grid grid-cols-2 gap-4">
+                    @if (d.description) {
+                      <div class="col-span-2 rounded-lg border border-white/5 p-4">
+                        <div class="text-[10px] text-cream/30 uppercase tracking-wider mb-2">Beskrivelse</div>
+                        <p class="text-cream/70 text-sm">{{ d.description }}</p>
+                      </div>
+                    }
+                    @if (d.foodPairings && d.foodPairings.length > 0) {
+                      <div class="rounded-lg border border-white/5 p-4">
+                        <div class="text-[10px] text-cream/30 uppercase tracking-wider mb-2">Matkombinasjoner</div>
+                        <ul class="space-y-1">
+                          @for (fp of d.foodPairings; track fp) {
+                            <li class="text-cream/60 text-sm">{{ fp }}</li>
+                          }
+                        </ul>
+                      </div>
+                    }
+                    @if (d.grapes && d.grapes.length > 0) {
+                      <div class="rounded-lg border border-white/5 p-4">
+                        <div class="text-[10px] text-cream/30 uppercase tracking-wider mb-2">Druer</div>
+                        <div class="flex flex-wrap gap-1.5">
+                          @for (g of d.grapes; track g) {
+                            <span class="text-xs px-2 py-0.5 rounded-full bg-white/5 text-cream/50">{{ g }}</span>
+                          }
+                        </div>
+                      </div>
+                    }
+                    @if (d.alcoholContent) {
+                      <div class="rounded-lg border border-white/5 p-4">
+                        <div class="text-[10px] text-cream/30 uppercase tracking-wider mb-2">Alkohol</div>
+                        <span class="text-cream/60 text-sm">{{ d.alcoholContent }}%</span>
+                      </div>
+                    }
+                  </div>
+                }
+              }
+            </div>
+          </div>
+        }
+
+        <!-- Suggestions -->
+        @if (ir.result?.suggestions && ir.result!.suggestions!.length > 0) {
+          <div class="px-5 pb-4">
+            <div class="text-[10px] text-cream/30 uppercase tracking-wider mb-2">Forslag ({{ ir.result!.suggestions!.length }})</div>
+            <div class="overflow-x-auto rounded-lg border border-white/5">
+              <table class="w-full text-sm text-left">
+                <thead>
+                  <tr class="text-[10px] text-cream/30 uppercase tracking-wider border-b border-white/5">
+                    <th class="px-4 py-2 font-medium">Navn</th>
+                    <th class="px-3 py-2 font-medium">Årgang</th>
+                    <th class="px-3 py-2 font-medium">Type</th>
+                    <th class="px-3 py-2 font-medium">Region</th>
+                    <th class="px-3 py-2 font-medium text-right">Rating</th>
+                    <th class="px-3 py-2 font-medium"></th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-white/5">
+                  @for (s of ir.result!.suggestions!; track s.id ?? $index) {
+                    <tr class="hover:bg-white/[0.03] transition-colors">
+                      <td class="px-4 py-2.5 text-cream/80">{{ s.name ?? '–' }}</td>
+                      <td class="px-3 py-2.5 text-cream/50">{{ s.vintage ?? '–' }}</td>
+                      <td class="px-3 py-2.5 text-cream/50">{{ s.type ?? '–' }}</td>
+                      <td class="px-3 py-2.5 text-cream/50">{{ s.region ?? '–' }}</td>
+                      <td class="px-3 py-2.5 text-cream/50 text-right">{{ formatRating(s.averageRating) }}</td>
+                      <td class="px-3 py-2.5 text-right">
+                        @if (s.id) {
+                          <button (click)="fetchDetails(s.id!)"
+                            [disabled]="detailLoadingId() === s.id"
+                            class="text-xs px-2.5 py-1 rounded-md bg-white/5 text-cream/50 hover:text-gold hover:bg-white/10 border border-white/10 transition-colors disabled:opacity-40">
+                            Hent detaljer
+                          </button>
+                        }
+                      </td>
+                    </tr>
                   }
-                </ul>
-              </div>
-            }
-
-            @if (r.grapes && r.grapes.length > 0) {
-              <div class="rounded-lg border border-white/5 p-4">
-                <div class="text-[10px] text-cream/30 uppercase tracking-wider mb-2">Druer</div>
-                <div class="flex flex-wrap gap-1.5">
-                  @for (g of r.grapes; track g) {
-                    <span class="text-xs px-2 py-0.5 rounded-full bg-white/5 text-cream/50">{{ g }}</span>
-                  }
-                </div>
-              </div>
-            }
-
-            @if (r.alcoholContent) {
-              <div class="rounded-lg border border-white/5 p-4">
-                <div class="text-[10px] text-cream/30 uppercase tracking-wider mb-2">Alkohol</div>
-                <span class="text-cream/60 text-sm">{{ r.alcoholContent }}%</span>
-              </div>
-            }
-
-            @if (r.technicalNotes) {
-              <div class="rounded-lg border border-white/5 p-4">
-                <div class="text-[10px] text-cream/30 uppercase tracking-wider mb-2">Tekniske notater</div>
-                <p class="text-cream/60 text-sm">{{ r.technicalNotes }}</p>
-              </div>
-            }
+                </tbody>
+              </table>
+            </div>
           </div>
         }
 
         <!-- Raw JSON -->
-        @if (rawJson()) {
+        @if (identifyRawJson()) {
           <div class="border-t border-white/5">
             <details class="group">
-              <summary class="px-5 py-3 text-xs text-cream/30 cursor-pointer hover:text-cream/50 transition-colors">
-                Rå JSON-respons
-              </summary>
-              <pre class="px-5 pb-4 text-xs text-cream/40 font-mono whitespace-pre-wrap break-all overflow-x-auto max-h-80 overflow-y-auto">{{ rawJson() }}</pre>
+              <summary class="px-5 py-3 text-xs text-cream/30 cursor-pointer hover:text-cream/50 transition-colors">Rå JSON-respons</summary>
+              <pre class="px-5 pb-4 text-xs text-cream/40 font-mono whitespace-pre-wrap break-all overflow-x-auto max-h-80 overflow-y-auto">{{ identifyRawJson() }}</pre>
             </details>
           </div>
         }

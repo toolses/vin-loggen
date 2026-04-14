@@ -121,7 +121,9 @@ public sealed class WineApiService : IWineApiService
         string  producer,
         string  name,
         int?    vintage,
-        CancellationToken ct)
+        CancellationToken ct,
+        Guid?   userId        = null,
+        Guid?   correlationId = null)
     {
         if (!_settings.EnableWineApi)
         {
@@ -147,16 +149,14 @@ public sealed class WineApiService : IWineApiService
             return cached;
         }
 
-        // Build query string: free-text search combining key identifiers
-        var query = vintage.HasValue
-            ? $"{producer} {name} {vintage}"
-            : $"{producer} {name}";
-
+        // Build free-text query: "producer name vintage"
+        var query = $"{producer.Trim()} {name.Trim()}{(vintage.HasValue ? $" {vintage.Value}" : "")}".Trim();
         var cfg = _settings.WineApi;
         var url = $"{cfg.BaseUrl.TrimEnd('/')}{SearchPath}?q={Uri.EscapeDataString(query)}&limit=5";
 
-        _logger.LogInformation("WineApiService: searching for '{Query}'", query);
+        _logger.LogInformation("WineApiService: searching for q='{Query}'", query);
 
+        var sw = Stopwatch.StartNew();
         try
         {
             var client = _httpClientFactory.CreateClient("wineApi");
@@ -167,10 +167,11 @@ public sealed class WineApiService : IWineApiService
                 cfg.AuthHeader,
                 $"{cfg.AuthPrefix}{apiKey}");
 
-            var sw = Stopwatch.StartNew();
             using var response = await client.SendAsync(request, ct);
             sw.Stop();
-            _ = _apiUsage.LogAsync("wineapi", SearchPath, (int)response.StatusCode, (int)sw.ElapsedMilliseconds, null, ct);
+            var body = await response.Content.ReadAsStringAsync(ct);
+            _ = _apiUsage.LogAsync("wineapi", SearchPath, (int)response.StatusCode, (int)sw.ElapsedMilliseconds,
+                userId, ct, requestBody: url, responseBody: body, correlationId: correlationId);
             ApiQuotaGuard.EvictCache("wineapi", _cache);
 
             if (!response.IsSuccessStatusCode)
@@ -180,13 +181,12 @@ public sealed class WineApiService : IWineApiService
                 return null;
             }
 
-            var body = await response.Content.ReadAsStringAsync(ct);
             var result = JsonSerializer.Deserialize<SearchResponse>(body, JsonOpts);
 
             var hit = FindBestMatch(result?.Results, producer, name, vintage);
             if (hit is null)
             {
-                _logger.LogInformation("WineApiService: no match for '{Query}'", query);
+                _logger.LogInformation("WineApiService: no match for q='{Query}'", query);
                 _cache.Set(cacheKey, (WineEnrichment?)null, CacheTtl);
                 return null;
             }
@@ -212,7 +212,10 @@ public sealed class WineApiService : IWineApiService
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            _logger.LogError(ex, "WineApiService: request failed for '{Query}'", query);
+            sw.Stop();
+            _logger.LogError(ex, "WineApiService: request failed for q='{Query}'", query);
+            _ = _apiUsage.LogAsync("wineapi", SearchPath, null, (int)sw.ElapsedMilliseconds,
+                userId, CancellationToken.None, requestBody: url, responseBody: ex.Message, correlationId: correlationId);
             return null;
         }
     }
@@ -251,7 +254,7 @@ public sealed class WineApiService : IWineApiService
 
         if (hn.Contains(ln) || ln.Contains(hn)) score += 2;
         if (hp.Contains(lp) || lp.Contains(hp)) score += 2;
-        if (vintage.HasValue && h.Vintage == vintage)            score += 1;
+        if (score > 0 && vintage.HasValue && h.Vintage == vintage) score += 1;
 
         return score;
     }
@@ -278,7 +281,9 @@ public sealed class WineApiService : IWineApiService
 
     /// <inheritdoc />
     public async Task<WineIdentification?> IdentifyByTextAsync(
-        string query, CancellationToken ct)
+        string query, CancellationToken ct,
+        Guid?  userId        = null,
+        Guid?  correlationId = null)
     {
         if (!_settings.EnableWineApi)
         {
@@ -301,6 +306,7 @@ public sealed class WineApiService : IWineApiService
 
         _logger.LogInformation("WineApiService.IdentifyByText: query='{Query}'", query);
 
+        var sw = Stopwatch.StartNew();
         try
         {
             var client = _httpClientFactory.CreateClient("wineApi");
@@ -311,11 +317,13 @@ public sealed class WineApiService : IWineApiService
             };
             request.Headers.TryAddWithoutValidation(cfg.AuthHeader, $"{cfg.AuthPrefix}{apiKey}");
 
-            var sw = Stopwatch.StartNew();
             using var response = await client.SendAsync(request, ct);
             sw.Stop();
+            var body = await response.Content.ReadAsStringAsync(ct);
             _ = _apiUsage.LogAsync("wineapi", "/identify/text", (int)response.StatusCode,
-                (int)sw.ElapsedMilliseconds, null, ct);
+                (int)sw.ElapsedMilliseconds, userId, ct,
+                requestBody: $"{{\"query\":\"{query}\"}}",
+                responseBody: body, correlationId: correlationId);
             ApiQuotaGuard.EvictCache("wineapi", _cache);
 
             if (!response.IsSuccessStatusCode)
@@ -324,7 +332,6 @@ public sealed class WineApiService : IWineApiService
                 return null;
             }
 
-            var body = await response.Content.ReadAsStringAsync(ct);
             var result = JsonSerializer.Deserialize<IdentifyTextResponse>(body, JsonOpts);
             var wine = result?.Wine;
 
@@ -355,7 +362,11 @@ public sealed class WineApiService : IWineApiService
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
+            sw.Stop();
             _logger.LogError(ex, "WineApiService.IdentifyByText: request failed for '{Query}'", query);
+            _ = _apiUsage.LogAsync("wineapi", "/identify/text", null, (int)sw.ElapsedMilliseconds,
+                userId, CancellationToken.None, requestBody: $"{{\"query\":\"{query}\"}}",
+                responseBody: ex.Message, correlationId: correlationId);
             return null;
         }
     }
@@ -381,7 +392,9 @@ public sealed class WineApiService : IWineApiService
     );
 
     /// <inheritdoc />
-    public async Task<WineEnrichment?> GetDetailsAsync(string wineId, CancellationToken ct)
+    public async Task<WineEnrichment?> GetDetailsAsync(string wineId, CancellationToken ct,
+        Guid?  userId        = null,
+        Guid?  correlationId = null)
     {
         if (!_settings.EnableWineApi)
         {
@@ -404,6 +417,7 @@ public sealed class WineApiService : IWineApiService
 
         _logger.LogInformation("WineApiService.GetDetails: fetching details for wine id={WineId}", wineId);
 
+        var sw = Stopwatch.StartNew();
         try
         {
             var client = _httpClientFactory.CreateClient("wineApi");
@@ -411,11 +425,12 @@ public sealed class WineApiService : IWineApiService
             using var request = new HttpRequestMessage(HttpMethod.Get, url);
             request.Headers.TryAddWithoutValidation(cfg.AuthHeader, $"{cfg.AuthPrefix}{apiKey}");
 
-            var sw = Stopwatch.StartNew();
             using var response = await client.SendAsync(request, ct);
             sw.Stop();
+            var body = await response.Content.ReadAsStringAsync(ct);
             _ = _apiUsage.LogAsync("wineapi", $"/wines/{wineId}", (int)response.StatusCode,
-                (int)sw.ElapsedMilliseconds, null, ct);
+                (int)sw.ElapsedMilliseconds, userId, ct,
+                requestBody: url, responseBody: body, correlationId: correlationId);
             ApiQuotaGuard.EvictCache("wineapi", _cache);
 
             if (!response.IsSuccessStatusCode)
@@ -424,7 +439,6 @@ public sealed class WineApiService : IWineApiService
                 return null;
             }
 
-            var body = await response.Content.ReadAsStringAsync(ct);
             var detail = JsonSerializer.Deserialize<WineDetailsResponse>(body, JsonOpts);
 
             if (detail is null)
@@ -449,7 +463,10 @@ public sealed class WineApiService : IWineApiService
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
+            sw.Stop();
             _logger.LogError(ex, "WineApiService.GetDetails: request failed for wine {WineId}", wineId);
+            _ = _apiUsage.LogAsync("wineapi", $"/wines/{wineId}", null, (int)sw.ElapsedMilliseconds,
+                userId, CancellationToken.None, requestBody: url, responseBody: ex.Message, correlationId: correlationId);
             return null;
         }
     }

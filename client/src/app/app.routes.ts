@@ -106,6 +106,27 @@ export const routes: Routes = [
             m => m.AdminCorrectionDetailComponent,
           ),
       },
+      {
+        path: 'settings',
+        loadComponent: () =>
+          import('./components/admin/admin-settings/admin-settings.component').then(
+            m => m.AdminSettingsComponent,
+          ),
+      },
+      {
+        path: 'traces',
+        loadComponent: () =>
+          import('./components/admin/admin-traces/admin-traces.component').then(
+            m => m.AdminTracesComponent,
+          ),
+      },
+      {
+        path: 'api-test',
+        loadComponent: () =>
+          import('./components/admin/admin-api-test/admin-api-test.component').then(
+            m => m.AdminApiTestComponent,
+          ),
+      },
     ],
   },
   { path: '**', redirectTo: '' },

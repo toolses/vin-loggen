@@ -7,16 +7,13 @@ namespace VinLoggen.Api.Services.AiProviders;
 public sealed class AiProviderChain
 {
     private readonly IEnumerable<IAiChatProvider> _chatProviders;
-    private readonly IEnumerable<IAiVisionProvider> _visionProviders;
     private readonly ILogger<AiProviderChain> _logger;
 
     public AiProviderChain(
         IEnumerable<IAiChatProvider> chatProviders,
-        IEnumerable<IAiVisionProvider> visionProviders,
         ILogger<AiProviderChain> logger)
     {
         _chatProviders = chatProviders;
-        _visionProviders = visionProviders;
         _logger = logger;
     }
 
@@ -25,13 +22,15 @@ public sealed class AiProviderChain
     /// any provider, the next provider in the list is tried.
     /// </summary>
     public async Task<AiChatResult> ChatAsync(
-        string[] priority, string systemPrompt, string userContent, CancellationToken ct)
+        string[] priority, string systemPrompt, string userContent, CancellationToken ct,
+        Guid? userId        = null,
+        Guid? correlationId = null)
     {
         var providers = ResolveChat(priority);
 
         foreach (var provider in providers)
         {
-            var result = await provider.ChatAsync(systemPrompt, userContent, ct);
+            var result = await provider.ChatAsync(systemPrompt, userContent, ct, userId, correlationId);
 
             if (result.IsSuccess)
                 return result;
@@ -48,43 +47,6 @@ public sealed class AiProviderChain
 
         _logger.LogError("AiProviderChain: all chat providers exhausted");
         return new AiChatResult(null, "none", false);
-    }
-
-    /// <summary>
-    /// Runs through the vision provider priority list with fallback.
-    /// </summary>
-    public async Task<AiVisionResult> AnalyzeImageAsync(
-        string[] priority, string systemPrompt, byte[] imageBytes, string mimeType, CancellationToken ct)
-    {
-        var providers = ResolveVision(priority);
-
-        foreach (var provider in providers)
-        {
-            var result = await provider.AnalyzeImageAsync(systemPrompt, imageBytes, mimeType, ct);
-            if (result.IsSuccess) return result;
-
-            _logger.LogWarning("AiProviderChain: vision provider {Provider} failed, trying next", provider.Name);
-        }
-
-        return new AiVisionResult(null, "none", false);
-    }
-
-    public async Task<AiVisionResult> AnalyzeImagesAsync(
-        string[] priority, string systemPrompt,
-        byte[] frontBytes, string frontMime, byte[]? backBytes, string? backMime,
-        CancellationToken ct)
-    {
-        var providers = ResolveVision(priority);
-
-        foreach (var provider in providers)
-        {
-            var result = await provider.AnalyzeImagesAsync(systemPrompt, frontBytes, frontMime, backBytes, backMime, ct);
-            if (result.IsSuccess) return result;
-
-            _logger.LogWarning("AiProviderChain: vision provider {Provider} failed (multi), trying next", provider.Name);
-        }
-
-        return new AiVisionResult(null, "none", false);
     }
 
     private List<IAiChatProvider> ResolveChat(string[] priority)
@@ -106,22 +68,6 @@ public sealed class AiProviderChain
                 _logger.LogDebug("AiProviderChain: chat provider '{Name}' not available (no API key?), skipping", name);
                 continue;
             }
-
-            ordered.Add(provider);
-        }
-        return ordered;
-    }
-
-    private List<IAiVisionProvider> ResolveVision(string[] priority)
-    {
-        var ordered = new List<IAiVisionProvider>();
-        foreach (var name in priority)
-        {
-            var provider = _visionProviders.FirstOrDefault(
-                p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
-
-            if (provider is null || !provider.IsAvailable)
-                continue;
 
             ordered.Add(provider);
         }

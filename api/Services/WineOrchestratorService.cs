@@ -27,7 +27,7 @@ namespace VinLoggen.Api.Services;
 /// </summary>
 public sealed class WineOrchestratorService
 {
-    private readonly IGeminiService      _gemini;
+    private readonly ILabelScanService   _labelScan;
     private readonly IWineApiService     _wineApi;
     private readonly IProUsageService    _proUsage;
     private readonly AiProviderChain     _aiChain;
@@ -40,7 +40,7 @@ public sealed class WineOrchestratorService
     private record DedupMatch(Guid WineId, long UserLogCount, decimal? LastRating, DateTime? LastTastedAt);
 
     public WineOrchestratorService(
-        IGeminiService                      gemini,
+        ILabelScanService                   labelScan,
         IWineApiService                     wineApi,
         IProUsageService                    proUsage,
         AiProviderChain                     aiChain,
@@ -48,7 +48,7 @@ public sealed class WineOrchestratorService
         IntegrationSettings                 settings,
         ILogger<WineOrchestratorService>    logger)
     {
-        _gemini     = gemini;
+        _labelScan  = labelScan;
         _wineApi    = wineApi;
         _proUsage   = proUsage;
         _aiChain    = aiChain;
@@ -70,7 +70,9 @@ public sealed class WineOrchestratorService
         Guid?   userId,
         CancellationToken ct,
         byte[]? backImageBytes = null,
-        string? backMimeType   = null)
+        string? backMimeType   = null,
+        string? frontImageUrl  = null,
+        string? backImageUrl   = null)
     {
         // ── Step 1: Gemini OCR ────────────────────────────────────────────────
         if (!_settings.EnableGemini)
@@ -80,9 +82,12 @@ public sealed class WineOrchestratorService
                 ApiErrorCode.ExternalServiceDown, "AI-analyse er deaktivert");
         }
 
-        var geminiResult = backImageBytes is { Length: > 0 }
-            ? await _gemini.AnalyzeLabelsAsync(imageBytes, mimeType, backImageBytes, backMimeType, ct)
-            : await _gemini.AnalyzeLabelAsync(imageBytes, mimeType, ct);
+        // Correlation ID ties all API calls for this scan flow together in api_usage_logs
+        var correlationId = Guid.NewGuid();
+
+        var geminiResult = await _labelScan.AnalyzeLabelsAsync(
+            imageBytes, mimeType, backImageBytes, backMimeType, ct, userId, correlationId,
+            frontImageUrl, backImageUrl);
         if (!geminiResult.IsSuccess)
         {
             _logger.LogError("OrchestratorService: Gemini OCR failed: {Error}", geminiResult.Error);
@@ -132,14 +137,15 @@ public sealed class WineOrchestratorService
                 analysis.Producer ?? "",
                 analysis.WineName!,
                 analysis.Vintage,
-                ct);
+                ct,
+                userId, correlationId);
 
             // Fallback: ask AI provider chain (DeepSeek → Gemini) for enrichment if wineapi.io had gaps
             if (enrichment?.FoodPairings is not { Length: > 0 } || string.IsNullOrWhiteSpace(enrichment?.Description))
             {
                 var aiFoodResult = await GetFoodPairingsViaChainAsync(
                     analysis.WineName, analysis.Producer,
-                    analysis.Vintage, analysis.Type, analysis.Country, ct);
+                    analysis.Vintage, analysis.Type, analysis.Country, ct, userId, correlationId);
 
                 if (aiFoodResult is not null)
                 {
@@ -253,7 +259,7 @@ public sealed class WineOrchestratorService
 
     private async Task<FoodPairingResult?> GetFoodPairingsViaChainAsync(
         string? wineName, string? producer, int? vintage, string? type, string? country,
-        CancellationToken ct)
+        CancellationToken ct, Guid? userId = null, Guid? correlationId = null)
     {
         var userContent = $"Vin: {producer ?? ""} {wineName ?? ""}, {vintage?.ToString() ?? "ukjent årgang"}, {type ?? ""} {country ?? ""}";
 
@@ -261,7 +267,8 @@ public sealed class WineOrchestratorService
             _settings.AiFallback.ExpertChatPriority,
             FoodPairingPrompt,
             userContent,
-            ct);
+            ct,
+            userId, correlationId);
 
         if (!chatResult.IsSuccess || chatResult.Answer is null)
         {

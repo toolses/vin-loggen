@@ -25,6 +25,25 @@ export interface ExpertWineRef {
   feedback?: number | null; // 1 | -1 | null
 }
 
+// ── Type-based suggestion (new mode) ─────────────────────────────────
+
+export interface ExpertTypeSuggestionRef {
+  category: string;
+  subType: string | null;
+  country: string | null;
+  region: string | null;
+  grapes: string[] | null;
+  characteristics: string | null;
+  foodPairings: string[] | null;
+  whyRecommended: string | null;
+  vinmonopoletUrl: string | null;
+  googleSearchUrl: string | null;
+  catalogMatches: ExpertWineRef[] | null;
+  source: string;
+  suggestionId?: string | null;
+  feedback?: number | null;
+}
+
 // ── API response ─────────────────────────────────────────────────────────
 
 export interface ExpertAskResponse {
@@ -36,6 +55,7 @@ export interface ExpertAskResponse {
   modelUsed: string | null;
   sessionId: string | null;
   wineSuggestionIds: string[] | null;
+  typeSuggestions: ExpertTypeSuggestionRef[] | null;
 }
 
 // ── Chat message ─────────────────────────────────────────────────────────
@@ -44,6 +64,7 @@ export interface ExpertMessage {
   role: 'user' | 'assistant';
   content: string;
   wines?: ExpertWineRef[];
+  typeSuggestions?: ExpertTypeSuggestionRef[];
   modelUsed?: string | null;
 }
 
@@ -133,6 +154,16 @@ export class ExpertService {
         feedback: null as number | null,
       })) ?? undefined;
 
+      // Build type suggestions with suggestion IDs for feedback
+      const typeSuggestions = result.typeSuggestions?.map((ts, i) => {
+        const baseIndex = (result.referencedWines?.length ?? 0) + i;
+        return {
+          ...ts,
+          suggestionId: result.wineSuggestionIds?.[baseIndex] ?? null,
+          feedback: null as number | null,
+        };
+      }) ?? undefined;
+
       // Add assistant response
       this._messages.update(msgs => [
         ...msgs,
@@ -140,6 +171,7 @@ export class ExpertService {
           role: 'assistant' as const,
           content: result.answer,
           wines,
+          typeSuggestions,
           modelUsed: result.modelUsed,
         },
       ]);
@@ -254,15 +286,23 @@ export class ExpertService {
 
       // Convert to ExpertMessage array
       const messages: ExpertMessage[] = detail.messages.map(m => {
-        const wines = m.wines?.map(s => {
-          const data = JSON.parse(s.wineDataJson) as ExpertWineRef;
-          return { ...data, suggestionId: s.id, feedback: s.feedback };
-        });
+        const wineList: ExpertWineRef[] = [];
+        const typeList: ExpertTypeSuggestionRef[] = [];
+
+        for (const s of m.wines ?? []) {
+          const data = JSON.parse(s.wineDataJson);
+          if (data.source === 'ai-type') {
+            typeList.push({ ...data, suggestionId: s.id, feedback: s.feedback });
+          } else {
+            wineList.push({ ...data, suggestionId: s.id, feedback: s.feedback } as ExpertWineRef);
+          }
+        }
 
         return {
           role: m.role,
           content: m.content,
-          wines: wines?.length ? wines : undefined,
+          wines: wineList.length ? wineList : undefined,
+          typeSuggestions: typeList.length ? typeList : undefined,
           modelUsed: m.modelUsed,
         };
       });
@@ -304,12 +344,15 @@ export class ExpertService {
         ),
       );
 
-      // Update the wine ref in messages
+      // Update the wine ref or type suggestion in messages
       this._messages.update(msgs =>
         msgs.map(m => ({
           ...m,
           wines: m.wines?.map(w =>
             w.suggestionId === suggestionId ? { ...w, feedback } : w,
+          ),
+          typeSuggestions: m.typeSuggestions?.map(ts =>
+            ts.suggestionId === suggestionId ? { ...ts, feedback } : ts,
           ),
         })),
       );

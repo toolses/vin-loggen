@@ -1,8 +1,8 @@
 <div class="animate-fade-in max-w-lg mx-auto px-4 py-6 flex flex-col" style="height: calc(100dvh - 4rem)">
 
-  <!-- ── Header: Greeting + Quota ──────────────────────────────── -->
+  <!-- ── Header: Greeting ──────────────────────────────────── -->
   <section class="mb-4">
-    <div class="flex items-center gap-3 mb-3">
+    <div class="flex items-center gap-3">
       <!-- Sparkles icon -->
       <div class="w-10 h-10 rounded-full bg-burgundy/30 flex items-center justify-center flex-shrink-0">
         <svg class="w-5 h-5 text-gold" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" aria-hidden="true">
@@ -25,23 +25,6 @@
             d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
         </svg>
       </button>
-    </div>
-
-    <!-- Quota bar -->
-    <div class="glass rounded-xl px-3 py-2">
-      <div class="flex items-center justify-between text-xs mb-1">
-        <span class="text-cream-dark">Dagens AI-kvote</span>
-        <span class="font-medium" [class]="profile.proScansRemaining() === 0 ? 'text-red-400' : 'text-gold'">
-          {{ profile.proScansRemaining() }} / {{ profile.dailyProLimit() }} igjen
-        </span>
-      </div>
-      <div class="h-1.5 bg-white/10 rounded-full overflow-hidden">
-        <div
-          class="h-full rounded-full transition-all duration-500"
-          [class]="profile.proScansRemaining() === 0 ? 'bg-red-500' : 'bg-gold'"
-          [style.width.%]="quotaPercent()"
-        ></div>
-      </div>
     </div>
   </section>
 
@@ -154,28 +137,28 @@
     <!-- ── Quick Actions ─────────────────────────────────────────── -->
     @if (expert.messages().length === 0 && !isViewingPastSession()) {
       <section class="mb-4">
-        <p class="text-xs text-cream-dark mb-2 font-medium">Hurtigvalg</p>
-        <div class="flex flex-wrap gap-2">
+        <p class="text-xs text-cream-dark mb-2 font-medium text-center">Hurtigvalg</p>
+        <div class="flex flex-wrap gap-2 justify-center">
           <button
-            (click)="onQuickAction('Finn en vin som passer til maten min')"
+            (click)="onQuickAction('Hvilken type vin passer til lam?')"
             class="glass px-3 py-1.5 rounded-full text-xs text-cream-dark border border-white/10
                    hover:bg-white/[0.08] hover:text-cream transition-colors"
           >
-            Finn en match til maten
+            Vintype til lam
           </button>
           <button
-            (click)="onQuickAction('Anbefal en ny vin jeg ikke har prøvd før')"
+            (click)="onQuickAction('Hva er en god hvitvin til skalldyr?')"
             class="glass px-3 py-1.5 rounded-full text-xs text-cream-dark border border-white/10
                    hover:bg-white/[0.08] hover:text-cream transition-colors"
           >
-            Anbefal noe nytt
+            Hvitvin til skalldyr
           </button>
           <button
-            (click)="onQuickAction('Foreslå viner som ligner de jeg har likt best')"
+            (click)="onQuickAction('Hvilken type vin passer til kjøtt?')"
             class="glass px-3 py-1.5 rounded-full text-xs text-cream-dark border border-white/10
                    hover:bg-white/[0.08] hover:text-cream transition-colors"
           >
-            Lignende viner jeg har likt
+            Vintype til kjøtt
           </button>
         </div>
       </section>
@@ -206,7 +189,7 @@
                 }
               </div>
 
-              <!-- Referenced wines -->
+              <!-- Referenced wines (classic mode) -->
               @if (msg.wines && msg.wines.length > 0) {
                 <div class="mt-2 space-y-1.5">
                   <p class="text-[10px] text-cream-dark uppercase tracking-wider font-medium px-1">Anbefalte viner</p>
@@ -224,6 +207,164 @@
                         <ng-container *ngTemplateOutlet="wineCardContent; context: { $implicit: wine }"></ng-container>
                       </div>
                     }
+                  }
+                </div>
+              }
+
+              <!-- Type suggestions (new mode) -->
+              @if (msg.typeSuggestions && msg.typeSuggestions.length > 0) {
+                <div class="mt-2 space-y-2">
+                  <p class="text-[10px] text-cream-dark uppercase tracking-wider font-medium px-1">Anbefalte vintyper</p>
+                  @for (ts of msg.typeSuggestions; track ts.category + '-' + (ts.subType ?? $index)) {
+                    <div class="glass rounded-xl border border-white/10 overflow-hidden">
+                      <!-- Header -->
+                      <div class="px-3 py-2.5 flex items-center gap-2.5">
+                        <div class="w-8 h-8 bg-burgundy/20 rounded-lg flex items-center justify-center flex-shrink-0 text-sm" aria-hidden="true">
+                          {{ getCategoryIcon(ts.category) }}
+                        </div>
+                        <div class="min-w-0 flex-1">
+                          <p class="text-xs font-medium text-cream truncate">
+                            {{ ts.category }}
+                            @if (ts.subType) { &rsaquo; {{ ts.subType }} }
+                            @if (ts.grapes && ts.grapes.length > 0) {
+                              <span class="text-cream-dark font-normal"> / {{ ts.grapes.join(', ') }}</span>
+                            }
+                          </p>
+                          <p class="text-[10px] text-cream-dark truncate">
+                            @if (ts.country) { {{ ts.country }} }
+                            @if (ts.region) { · {{ ts.region }} }
+                          </p>
+                        </div>
+                        <span class="text-[9px] px-1.5 py-0.5 rounded-full border flex-shrink-0" [class]="getCategoryBadgeClass(ts.category)">
+                          {{ ts.category }}
+                        </span>
+                      </div>
+
+                      <!-- Characteristics -->
+                      @if (ts.characteristics) {
+                        <div class="px-3 pb-2">
+                          <p class="text-[10px] text-cream-dark/80 italic leading-tight line-clamp-2">{{ ts.characteristics }}</p>
+                        </div>
+                      }
+
+                      <!-- Why recommended -->
+                      @if (ts.whyRecommended) {
+                        <div class="px-3 pb-2">
+                          <p class="text-[10px] text-cream-dark leading-tight">{{ ts.whyRecommended }}</p>
+                        </div>
+                      }
+
+                      <!-- Food pairings -->
+                      @if (ts.foodPairings && ts.foodPairings.length > 0) {
+                        <div class="flex flex-wrap gap-1 px-3 pb-2">
+                          @for (pairing of ts.foodPairings.slice(0, 4); track pairing) {
+                            <span class="text-[9px] px-1.5 py-0.5 rounded-full bg-white/5 text-cream-dark border border-white/10">
+                              {{ pairing }}
+                            </span>
+                          }
+                          @if (ts.foodPairings.length > 4) {
+                            <span class="text-[9px] px-1.5 py-0.5 text-cream-dark/60">+{{ ts.foodPairings.length - 4 }}</span>
+                          }
+                        </div>
+                      }
+
+                      <!-- Catalog matches -->
+                      @if (ts.catalogMatches && ts.catalogMatches.length > 0) {
+                        <div class="border-t border-white/5 px-3 py-2 space-y-1">
+                          <p class="text-[9px] text-cream-dark/50 uppercase tracking-wider">Fra katalogen</p>
+                          @for (match of ts.catalogMatches; track match.id) {
+                            <a [routerLink]="['/wines', match.id]"
+                               class="flex items-center gap-2 py-0.5 text-[10px] text-cream hover:text-gold transition-colors">
+                              <span class="truncate">{{ match.name }}</span>
+                              @if (match.vintage) {
+                                <span class="text-cream-dark flex-shrink-0">{{ match.vintage }}</span>
+                              }
+                            </a>
+                          }
+                        </div>
+                      }
+
+                      <!-- Actions: feedback + links -->
+                      <div class="border-t border-white/5 px-3 py-2 flex items-center">
+                        <!-- Feedback -->
+                        @if (ts.suggestionId) {
+                          <div class="flex gap-1.5">
+                            <button
+                              (click)="onTypeFeedback(ts, 1)"
+                              class="w-6 h-6 rounded-full flex items-center justify-center transition-all"
+                              [class]="ts.feedback === 1
+                                ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                                : 'bg-white/5 text-cream-dark/40 hover:bg-green-500/10 hover:text-green-400 border border-transparent'"
+                              aria-label="Tommel opp"
+                            >
+                              <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round"
+                                  d="M6.633 10.25c.806 0 1.533-.446 2.031-1.08a9.041 9.041 0 0 1 2.861-2.4c.723-.384 1.35-.956 1.653-1.715a4.498 4.498 0 0 0 .322-1.672V3a.75.75 0 0 1 .75-.75 2.25 2.25 0 0 1 2.25 2.25c0 1.152-.26 2.243-.723 3.218-.266.558.107 1.282.725 1.282m0 0h3.126c1.026 0 1.945.694 2.054 1.715.045.422.068.85.068 1.285a11.95 11.95 0 0 1-2.649 7.521c-.388.482-.987.729-1.605.729H13.48c-.483 0-.964-.078-1.423-.23l-3.114-1.04a4.501 4.501 0 0 0-1.423-.23H5.904m7.848 0c.065.21.1.433.1.664 0 .414-.336.75-.75.75H4.5a2.25 2.25 0 0 1-2.25-2.25V9a2.25 2.25 0 0 1 2.25-2.25h1.404" />
+                              </svg>
+                            </button>
+                            <button
+                              (click)="onTypeFeedback(ts, -1)"
+                              class="w-6 h-6 rounded-full flex items-center justify-center transition-all"
+                              [class]="ts.feedback === -1
+                                ? 'bg-red-500/20 text-red-400 border border-red-500/30'
+                                : 'bg-white/5 text-cream-dark/40 hover:bg-red-500/10 hover:text-red-400 border border-transparent'"
+                              aria-label="Tommel ned"
+                            >
+                              <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round"
+                                  d="M7.498 15.25H4.372c-1.026 0-1.945-.694-2.054-1.715A12.137 12.137 0 0 1 2.25 12c0-2.848.992-5.464 2.649-7.521C5.287 3.997 5.886 3.75 6.504 3.75h4.369a4.5 4.5 0 0 1 1.423.23l3.114 1.04a4.5 4.5 0 0 0 1.423.23h1.294M7.498 15.25c.618 0 .991.724.725 1.282A7.471 7.471 0 0 0 7.5 19.5a2.25 2.25 0 0 0 2.25 2.25.75.75 0 0 0 .75-.75v-.633c0-.573.11-1.14.322-1.672.304-.76.93-1.33 1.653-1.715a9.04 9.04 0 0 0 2.86-2.4c.498-.634 1.226-1.08 2.032-1.08h.384" />
+                              </svg>
+                            </button>
+                          </div>
+                        }
+
+                        <!-- Explore button -->
+                        <button
+                          (click)="exploreType(ts)"
+                          class="ml-2 flex items-center gap-1 px-2.5 py-1 rounded-full border border-gold/25
+                                 bg-gold/5 hover:bg-gold/15 hover:border-gold/50 transition-all
+                                 text-[10px] text-gold/70 hover:text-gold active:scale-95"
+                          title="Spør eksperten om mer om denne vintypen"
+                        >
+                          <svg class="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round"
+                              d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09Z" />
+                          </svg>
+                          Spør om mer
+                        </button>
+
+                        <!-- Links: Vinmonopolet + Google -->
+                        <div class="ml-auto flex items-center gap-1.5">
+                          @if (ts.vinmonopoletUrl) {
+                            <a class="w-6 h-6 rounded-full flex items-center justify-center
+                                      bg-white/5 hover:bg-white/10 transition-all border border-transparent hover:border-white/10"
+                               [href]="ts.vinmonopoletUrl"
+                               target="_blank"
+                               rel="noopener noreferrer"
+                               aria-label="Søk på Vinmonopolet"
+                               title="Søk på Vinmonopolet"
+                            >
+                              <img src="icons/vinmonopolet-crest-iron.c7fa286a.svg" alt="" class="w-3.5 h-3.5 opacity-40 hover:opacity-70 transition-opacity">
+                            </a>
+                          }
+                          @if (ts.googleSearchUrl) {
+                            <a class="w-6 h-6 rounded-full flex items-center justify-center
+                                      bg-white/5 hover:bg-white/10 transition-all border border-transparent hover:border-white/10"
+                               [href]="ts.googleSearchUrl"
+                               target="_blank"
+                               rel="noopener noreferrer"
+                               aria-label="Søk på Google"
+                               title="Søk på Google"
+                            >
+                              <svg class="w-3 h-3 text-cream-dark/40 hover:text-cream-dark/70 transition-opacity" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round"
+                                  d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+                              </svg>
+                            </a>
+                          }
+                        </div>
+                      </div>
+                    </div>
                   }
                 </div>
               }
@@ -276,7 +417,7 @@
             }
           </div>
         }
-        <!-- Feedback & Vinmonopolet -->
+        <!-- Feedback & Vinmonopolet & Google -->
         @if (wine.suggestionId) {
           <div class="flex items-center pl-[42px] mt-0.5">
             <div class="flex gap-1.5">
@@ -307,21 +448,37 @@
                 </svg>
               </button>
             </div>
-            <a class="ml-auto w-6 h-6 rounded-full flex items-center justify-center
-                      bg-white/5 hover:bg-white/10 transition-all border border-transparent hover:border-white/10"
-               [href]="vinmonopoletSearchUrl(wine)"
-               target="_blank"
-               rel="noopener noreferrer"
-               (click)="$event.stopPropagation()"
-               aria-label="Søk på Vinmonopolet"
-               title="Søk på Vinmonopolet"
-            >
-              <img src="icons/vinmonopolet-crest-iron.c7fa286a.svg" alt="" class="w-3.5 h-3.5 opacity-40 hover:opacity-70 transition-opacity">
-            </a>
+            <div class="ml-auto flex items-center gap-1.5">
+              <a class="w-6 h-6 rounded-full flex items-center justify-center
+                        bg-white/5 hover:bg-white/10 transition-all border border-transparent hover:border-white/10"
+                 [href]="vinmonopoletSearchUrl(wine)"
+                 target="_blank"
+                 rel="noopener noreferrer"
+                 (click)="$event.stopPropagation()"
+                 aria-label="Søk på Vinmonopolet"
+                 title="Søk på Vinmonopolet"
+              >
+                <img src="icons/vinmonopolet-crest-iron.c7fa286a.svg" alt="" class="w-3.5 h-3.5 opacity-40 hover:opacity-70 transition-opacity">
+              </a>
+              <a class="w-6 h-6 rounded-full flex items-center justify-center
+                        bg-white/5 hover:bg-white/10 transition-all border border-transparent hover:border-white/10"
+                 [href]="googleSearchUrl(wine)"
+                 target="_blank"
+                 rel="noopener noreferrer"
+                 (click)="$event.stopPropagation()"
+                 aria-label="Søk på Google"
+                 title="Søk på Google"
+              >
+                <svg class="w-3 h-3 text-cream-dark/40 hover:text-cream-dark/70 transition-opacity" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round"
+                    d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+                </svg>
+              </a>
+            </div>
           </div>
         }
         @if (!wine.suggestionId) {
-          <div class="flex justify-end pl-[42px] mt-0.5">
+          <div class="flex justify-end pl-[42px] mt-0.5 gap-1.5">
             <a class="w-6 h-6 rounded-full flex items-center justify-center
                       bg-white/5 hover:bg-white/10 transition-all border border-transparent hover:border-white/10"
                [href]="vinmonopoletSearchUrl(wine)"
@@ -332,6 +489,20 @@
                title="Søk på Vinmonopolet"
             >
               <img src="icons/vinmonopolet-crest-iron.c7fa286a.svg" alt="" class="w-3.5 h-3.5 opacity-40 hover:opacity-70 transition-opacity">
+            </a>
+            <a class="w-6 h-6 rounded-full flex items-center justify-center
+                      bg-white/5 hover:bg-white/10 transition-all border border-transparent hover:border-white/10"
+               [href]="googleSearchUrl(wine)"
+               target="_blank"
+               rel="noopener noreferrer"
+               (click)="$event.stopPropagation()"
+               aria-label="Søk på Google"
+               title="Søk på Google"
+            >
+              <svg class="w-3 h-3 text-cream-dark/40 hover:text-cream-dark/70 transition-opacity" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round"
+                  d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+              </svg>
             </a>
           </div>
         }

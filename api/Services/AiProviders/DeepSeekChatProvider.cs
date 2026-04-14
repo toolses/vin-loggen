@@ -36,7 +36,12 @@ public sealed class DeepSeekChatProvider : IAiChatProvider
 
     public bool IsAvailable => !string.IsNullOrWhiteSpace(_configuration["DEEPSEEK_API_KEY"]);
 
-    public async Task<AiChatResult> ChatAsync(string systemPrompt, string userContent, CancellationToken ct)
+    public async Task<AiChatResult> ChatAsync(
+        string systemPrompt,
+        string userContent,
+        CancellationToken ct,
+        Guid? userId        = null,
+        Guid? correlationId = null)
     {
         var apiKey = _configuration["DEEPSEEK_API_KEY"];
         if (string.IsNullOrWhiteSpace(apiKey))
@@ -70,21 +75,22 @@ public sealed class DeepSeekChatProvider : IAiChatProvider
 
             response = await client.SendAsync(request, ct);
             sw.Stop();
-            _ = _apiUsage.LogAsync("deepseek", "ExpertChat", (int)response.StatusCode, (int)sw.ElapsedMilliseconds, null, ct);
         }
         catch (TaskCanceledException ex) when (!ct.IsCancellationRequested)
         {
             sw.Stop();
-            _ = _apiUsage.LogAsync("deepseek", "ExpertChat", null, (int)sw.ElapsedMilliseconds, null, ct);
+            _ = _apiUsage.LogAsync("deepseek", "ExpertChat", null, (int)sw.ElapsedMilliseconds,
+                userId, ct, requestBody: userContent, correlationId: correlationId, usedModel: "DS");
             _logger.LogWarning(ex, "DeepSeekChatProvider: request timed out");
-            return new AiChatResult(null, Name, false) { IsTransient = true };
+            return new AiChatResult(null, Name, false) { IsTransient = true, UsedModel = "DS" };
         }
         catch (Exception ex)
         {
             sw.Stop();
-            _ = _apiUsage.LogAsync("deepseek", "ExpertChat", null, (int)sw.ElapsedMilliseconds, null, ct);
+            _ = _apiUsage.LogAsync("deepseek", "ExpertChat", null, (int)sw.ElapsedMilliseconds,
+                userId, ct, requestBody: userContent, correlationId: correlationId, usedModel: "DS");
             _logger.LogWarning(ex, "DeepSeekChatProvider: request failed");
-            return new AiChatResult(null, Name, false) { IsTransient = true };
+            return new AiChatResult(null, Name, false) { IsTransient = true, UsedModel = "DS" };
         }
 
         if (response.StatusCode is HttpStatusCode.ServiceUnavailable
@@ -93,36 +99,50 @@ public sealed class DeepSeekChatProvider : IAiChatProvider
             or HttpStatusCode.BadGateway)
         {
             var body = await response.Content.ReadAsStringAsync(ct);
+            _ = _apiUsage.LogAsync("deepseek", "ExpertChat", (int)response.StatusCode, (int)sw.ElapsedMilliseconds,
+                userId, ct, requestBody: userContent, responseBody: body, correlationId: correlationId, usedModel: "DS");
             _logger.LogWarning("DeepSeekChatProvider: transient {Status}: {Body}", response.StatusCode, body);
-            return new AiChatResult(null, Name, false) { IsTransient = true };
+            return new AiChatResult(null, Name, false) { IsTransient = true, UsedModel = "DS" };
         }
 
         if (!response.IsSuccessStatusCode)
         {
             var body = await response.Content.ReadAsStringAsync(ct);
+            _ = _apiUsage.LogAsync("deepseek", "ExpertChat", (int)response.StatusCode, (int)sw.ElapsedMilliseconds,
+                userId, ct, requestBody: userContent, responseBody: body, correlationId: correlationId, usedModel: "DS");
             _logger.LogError("DeepSeekChatProvider: {Status}: {Body}", response.StatusCode, body);
-            return new AiChatResult(null, Name, false);
+            return new AiChatResult(null, Name, false) { UsedModel = "DS" };
         }
 
         try
         {
             var result = await response.Content.ReadFromJsonAsync<DeepSeekResponse>(JsonOpts, ct);
             var text = result?.Choices?.FirstOrDefault()?.Message?.Content?.Trim();
+            var totalTokens = result?.Usage?.TotalTokens;
 
             if (string.IsNullOrWhiteSpace(text))
             {
+                _ = _apiUsage.LogAsync("deepseek", "ExpertChat", (int)response.StatusCode, (int)sw.ElapsedMilliseconds,
+                    userId, ct, requestBody: userContent, correlationId: correlationId, usedModel: "DS",
+                    totalTokensUsed: totalTokens);
                 _logger.LogWarning("DeepSeekChatProvider: empty response");
-                return new AiChatResult(null, Name, false);
+                return new AiChatResult(null, Name, false) { UsedModel = "DS", TotalTokensUsed = totalTokens };
             }
 
+            _ = _apiUsage.LogAsync("deepseek", "ExpertChat", (int)response.StatusCode, (int)sw.ElapsedMilliseconds,
+                userId, ct, requestBody: userContent, responseBody: text, correlationId: correlationId,
+                usedModel: "DS", totalTokensUsed: totalTokens);
+
             _logger.LogInformation("DeepSeekChatProvider: success ({Ms}ms, {Tokens} tokens)",
-                sw.ElapsedMilliseconds, result?.Usage?.TotalTokens);
-            return new AiChatResult(text, Name, true);
+                sw.ElapsedMilliseconds, totalTokens);
+            return new AiChatResult(text, Name, true) { UsedModel = "DS", TotalTokensUsed = totalTokens };
         }
         catch (Exception ex)
         {
+            _ = _apiUsage.LogAsync("deepseek", "ExpertChat", (int)response.StatusCode, (int)sw.ElapsedMilliseconds,
+                userId, ct, requestBody: userContent, correlationId: correlationId, usedModel: "DS");
             _logger.LogError(ex, "DeepSeekChatProvider: failed to parse response");
-            return new AiChatResult(null, Name, false);
+            return new AiChatResult(null, Name, false) { UsedModel = "DS" };
         }
     }
 

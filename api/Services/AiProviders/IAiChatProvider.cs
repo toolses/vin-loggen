@@ -7,6 +7,12 @@ public record AiChatResult(string? Answer, string ProviderName, bool IsSuccess)
 {
     /// <summary>True when the failure is transient (503, 429, timeout) and the next provider should be tried.</summary>
     public bool IsTransient { get; init; }
+
+    /// <summary>Short model code for observability (e.g. "Q3", "L4S", "DS", "GEM").</summary>
+    public string? UsedModel { get; init; }
+
+    /// <summary>Total tokens consumed by the request (prompt + completion), when reported by the provider.</summary>
+    public int? TotalTokensUsed { get; init; }
 }
 
 /// <summary>
@@ -21,5 +27,10 @@ public interface IAiChatProvider
     bool IsAvailable { get; }
 
     /// <summary>Send a chat completion request with a system instruction and user context.</summary>
-    Task<AiChatResult> ChatAsync(string systemPrompt, string userContent, CancellationToken ct);
+    Task<AiChatResult> ChatAsync(
+        string systemPrompt,
+        string userContent,
+        CancellationToken ct,
+        Guid? userId        = null,
+        Guid? correlationId = null);
 }

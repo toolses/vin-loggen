@@ -6,17 +6,21 @@ import { environment } from '../../environments/environment';
 export interface ProviderUsageToday {
   provider: string;
   endpoint: string;
+  usedModel: string | null;
   totalCalls: number;
   avgResponseMs: number;
   errorCount: number;
+  totalTokens: number;
 }
 
 export interface DailyUsageRow {
   date: string;
   provider: string;
   endpoint: string;
+  usedModel: string | null;
   totalCalls: number;
   avgResponseMs: number;
+  totalTokens: number;
 }
 
 @Injectable({ providedIn: 'root' })

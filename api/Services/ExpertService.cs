@@ -13,7 +13,7 @@ public sealed class ExpertService : IExpertService
 {
     private const string WineDelimiter = "---WINES---";
 
-    private const string SystemInstructionTemplate = """
+    private const string ClassicSystemInstructionTemplate = """
         Du er VinSomm-eksperten — en personlig og profesjonell AI-vinkelner.
         Dagens dato er {DATE}.
         Bruk vedlagte data fra vår lokale vinkatalog og brukerens smaksprofil
@@ -53,6 +53,51 @@ public sealed class ExpertService : IExpertService
         - Hvis spørsmålet ikke handler om viner, sett en tom array: []
         """;
 
+    private const string TypeSystemInstructionTemplate = """
+        Du er VinSomm-eksperten — en personlig og profesjonell AI-vinkelner.
+        Dagens dato er {DATE}.
+        Bruk vedlagte data fra vår lokale vinkatalog og brukerens smaksprofil
+        for å gi skreddersydde anbefalinger.
+
+        VIKTIG:
+        - Du skal IKKE foreslå spesifikke viner med mindre de finnes i den vedlagte katalogen.
+        - I stedet skal du foreslå VINTYPER og UNDERSTILER (f.eks. «tysk Riesling», «fyldig rødvin fra Rhône»).
+        - Beskriv karakteristikker, druesorter, regioner og hva som gjør denne typen vin passende.
+        - Hvis katalogen inneholder viner som matcher typen, nevn dem ved navn i «catalogWineNames».
+
+        Regler:
+        - Svar alltid på norsk.
+        - Vær vennlig, konsis og kompetent.
+        - Hvis brukerens smaksprofil er tilgjengelig, bruk den til å gi personlige råd.
+        - Hvis du ikke har nok informasjon til å svare, si det ærlig.
+        - Bruk brukerens fornavn når det passer.
+
+        VIKTIG — Etter ditt svar SKAL du legge til en seksjon med vintypene du anbefaler.
+        Bruk nøyaktig dette formatet:
+
+        [ditt markdown-svar her]
+
+        ---WINES---
+        [{"category":"Rødvin","subType":"Barolo/Nebbiolo","country":"Italia","region":"Piemonte","grapes":["Nebbiolo"],"characteristics":"Kraftig, tanninrik rødvin med toner av tjære, roser og kirsebær. Lang lagringsevne.","foodPairings":["Storfe","Lam","Ost"],"whyRecommended":"Passer din preferanse for kraftige rødviner","searchHints":{"isGoodFor":["E","F","L"],"fylde":"9-10","friskhet":"5-6"},"dessertCategory":null,"catalogWineNames":[]}]
+
+        Regler for ---WINES---:
+        - Plasser «---WINES---» på en egen linje etter svaret ditt.
+        - Etter delimiteren: en JSON-array (ingen markdown-formatering, ingen code fences).
+        - «category» skal være en av: «Rødvin», «Hvitvin», «Rosévin», «Musserende», «Oransje», «Dessert».
+          Champagne, Cava, Prosecco og Crémant er «Musserende».
+          Portvin, Sherry og Madeira er «Dessert».
+        - «subType»: druesort eller stilbeskrivelse (f.eks. «Riesling», «Chablis-stil», «Amarone»).
+        - «grapes»: en liste med relevante druesorter.
+        - «characteristics»: 1-2 setninger som beskriver vintypen (stil, smak, aroma).
+        - «foodPairings»: bruk norske navn (f.eks. «Storfe», «Fisk», «Skalldyr»).
+        - «searchHints.isGoodFor»: Vinmonopolet-koder: A=Aperitif, B=Skalldyr, C=Fisk, D=Lyst kjøtt, E=Storfe, F=Lam, G=Småvilt, H=Storvilt, L=Ost, N=Dessert, Q=Svin, R=Grønnsaker.
+        - Karakteristikk-ranger: «1-2», «3-4», «5-6», «7-8», «9-10», «11-12» for fylde, friskhet, soedme, tannin, bitterhet.
+        - «dessertCategory»: kun for Dessert-viner — sett til «sterkvin» for portvin/sherry/madeira, «dessertvin» for søte dessertviner. Null for andre kategorier.
+        - «catalogWineNames»: KUN vinnavn som finnes i den vedlagte katalogdataen. Tom array hvis ingen matcher.
+        - Foreslå alltid minst 2–3 vintyper når spørsmålet handler om vin.
+        - Hvis spørsmålet ikke handler om viner, sett en tom array: []
+        """;
+
     private const string EnrichmentPrompt = """
         Du er en sommelier-ekspert. Basert på vinen nedenfor, generer en kort vinbeskrivelse, matanbefalinger og tekniske smaksnotater.
         Returner KUN rå JSON (uten markdown-formatering).
@@ -74,6 +119,7 @@ public sealed class ExpertService : IExpertService
     private readonly IProUsageService _proUsage;
     private readonly IWineApiService _wineApi;
     private readonly IApiUsageService _apiUsage;
+    private readonly IAppSettingsService _appSettings;
     private readonly IMemoryCache _cache;
     private readonly ILogger<ExpertService> _logger;
 
@@ -85,6 +131,7 @@ public sealed class ExpertService : IExpertService
         IWineApiService         wineApi,
         IApiUsageService        apiUsage,
         IntegrationSettings     settings,
+        IAppSettingsService     appSettings,
         IMemoryCache            cache,
         ILogger<ExpertService>  logger)
     {
@@ -95,6 +142,7 @@ public sealed class ExpertService : IExpertService
         _wineApi       = wineApi;
         _apiUsage      = apiUsage;
         _settings      = settings;
+        _appSettings   = appSettings;
         _cache         = cache;
         _logger        = logger;
     }
@@ -118,18 +166,24 @@ public sealed class ExpertService : IExpertService
                 proStatus.ScansToday, proStatus.DailyLimit, proStatus.ScansRemaining);
         }
 
+        // Correlation ID ties all API calls in this expert flow together in api_usage_logs
+        var correlationId = Guid.NewGuid();
+
+        // 2. Determine expert mode
+        var expertMode = await _appSettings.GetAsync("expert_mode", ct) ?? "type";
+
         await using var conn = await _dataSource.OpenConnectionAsync(ct);
 
-        // 2. Search local wines DB for context
+        // 3. Search local wines DB for context
         await Progress("Søker i vinkatalogen …");
         var catalogWines = await SearchCatalogWinesAsync(conn, request.Question, ct);
 
-        // 3. Fetch user's taste profile
+        // 4. Fetch user's taste profile
         var tasteProfileJson = await conn.QuerySingleOrDefaultAsync<string?>(
             "SELECT taste_profile_json::text FROM user_profiles WHERE user_id = @UserId",
             new { UserId = userId });
 
-        // 4. Fetch 3 most recent tasting logs
+        // 5. Fetch 3 most recent tasting logs
         var recentTastings = await conn.QueryAsync<RecentTasting>(
             """
             SELECT w.name     AS WineName,
@@ -147,25 +201,41 @@ public sealed class ExpertService : IExpertService
             """,
             new { UserId = userId });
 
-        // 5. Build prompt context (no globalMatch — WineAPI is now used for enrichment)
+        // 6. Build prompt context
+        //    Apply aggressive truncation when the primary provider is Groq (Qwen 3 has 6K TPM limit).
+        var primaryProvider = _settings.AiFallback.ExpertChatPriority.FirstOrDefault() ?? "";
+        var isGroqPrimary = primaryProvider.Equals("Groq", StringComparison.OrdinalIgnoreCase);
+
+        var contextCatalog  = isGroqPrimary ? catalogWines.Take(3).ToList()  : (IEnumerable<CatalogWineRow>)catalogWines;
+        var contextTastings = isGroqPrimary ? recentTastings.Take(2).ToList() : (IEnumerable<RecentTasting>)recentTastings;
+
         var contextJson = JsonSerializer.Serialize(new
         {
             question       = request.Question,
-            catalogWines   = catalogWines,
+            catalogWines   = contextCatalog,
             tasteProfile   = tasteProfileJson is not null
                 ? JsonSerializer.Deserialize<object>(tasteProfileJson)
                 : null,
-            recentTastings = recentTastings,
+            recentTastings = contextTastings,
         }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
 
-        // 6. Call AI via provider chain (DeepSeek → Gemini fallback)
+        // Hard truncation: keep context under ~3000 tokens (~12000 chars) for Groq
+        if (isGroqPrimary && contextJson.Length > 12_000)
+            contextJson = contextJson[..12_000];
+
+        // 7. Call AI with mode-appropriate prompt
         await Progress("Spør AI-sommelieren …");
-        var systemInstruction = SystemInstructionTemplate.Replace("{DATE}", DateTime.UtcNow.ToString("yyyy-MM-dd"));
+        var promptTemplate = expertMode == "classic"
+            ? ClassicSystemInstructionTemplate
+            : TypeSystemInstructionTemplate;
+        var systemInstruction = promptTemplate.Replace("{DATE}", DateTime.UtcNow.ToString("yyyy-MM-dd"));
+
         var chatResult = await _aiChain.ChatAsync(
             _settings.AiFallback.ExpertChatPriority,
             systemInstruction,
             contextJson,
-            ct);
+            ct,
+            userId, correlationId);
 
         if (!chatResult.IsSuccess || chatResult.Answer is null)
         {
@@ -177,35 +247,47 @@ public sealed class ExpertService : IExpertService
                 proStatus.ScansRemaining);
         }
 
-        _logger.LogInformation("ExpertService: answered via {Provider}", chatResult.ProviderName);
+        _logger.LogInformation("ExpertService: answered via {Provider} in {Mode} mode",
+            chatResult.ProviderName, expertMode);
 
-        // 7. Parse AI response: extract answer text + wine suggestions
-        var parsed = ParseAiResponse(chatResult.Answer);
-
-        // 8. Enrich AI-suggested wines via WineAPI, with AI fallback for gaps
-        if (parsed.Wines.Length > 0)
+        // 8. Branch by mode
+        if (expertMode == "classic")
         {
-            await Progress("Henter vindetaljer fra WineAPI …");
+            return await ProcessClassicResponseAsync(
+                conn, userId, request, chatResult, catalogWines, proStatus, onProgress, ct, correlationId);
         }
-        var enrichedSuggestions = await EnrichWinesAsync(parsed.Wines, onProgress, ct);
 
-        // 9. Build merged wine references (catalog + enriched AI suggestions)
+        return await ProcessTypeResponseAsync(
+            conn, userId, request, chatResult, catalogWines, proStatus, onProgress, ct, correlationId);
+    }
+
+    // ── Classic mode pipeline (original behavior) ──────────────────────────────
+
+    private async Task<ExpertResponse> ProcessClassicResponseAsync(
+        NpgsqlConnection conn, Guid userId, ExpertRequest request,
+        AiChatResult chatResult, IReadOnlyList<CatalogWineRow> catalogWines,
+        ProUsageService.ProStatus proStatus, Func<string, Task>? onProgress, CancellationToken ct,
+        Guid? correlationId = null)
+    {
+        async Task Progress(string status) { if (onProgress is not null) await onProgress(status); }
+
+        var parsed = ParseClassicAiResponse(chatResult.Answer!);
+
+        if (parsed.Wines.Length > 0)
+            await Progress("Henter vindetaljer fra WineAPI …");
+
+        var enrichedSuggestions = await EnrichWinesAsync(parsed.Wines, onProgress, ct, userId, correlationId);
         var refs = BuildEnrichedReferences(catalogWines, parsed.Wines, enrichedSuggestions);
 
-        // 10. Charge quota (only on success)
         await _proUsage.IncrementAsync(userId, ct);
         var updatedStatus = await _proUsage.GetStatusAsync(userId, ct);
 
-        // 11. Background catalogue upsert for WineAPI-enriched wines
         foreach (var (suggestion, enrichment) in parsed.Wines.Zip(enrichedSuggestions))
         {
             if (enrichment?.ExternalId is not null)
-            {
-                _ = TryUpsertEnrichedWineAsync(suggestion, enrichment);
-            }
+                _ = TryUpsertEnrichedWineAsync(suggestion, enrichment, userId, correlationId);
         }
 
-        // 12. Persist conversation (best-effort — failures don't break the response)
         Guid? sessionId = null;
         Guid[]? suggestionIds = null;
         var wineRefs = refs.Count > 0 ? refs.ToArray() : null;
@@ -213,7 +295,7 @@ public sealed class ExpertService : IExpertService
         try
         {
             (sessionId, suggestionIds) = await PersistConversationAsync(
-                conn, userId, request, parsed.Answer, chatResult.ProviderName, wineRefs, ct);
+                conn, userId, request, parsed.Answer, chatResult.ProviderName, wineRefs, null, ct);
         }
         catch (Exception ex)
         {
@@ -221,21 +303,164 @@ public sealed class ExpertService : IExpertService
         }
 
         return new ExpertResponse(
-            parsed.Answer,
-            wineRefs,
-            updatedStatus.ScansToday,
-            updatedStatus.DailyLimit,
-            updatedStatus.ScansRemaining,
-            chatResult.ProviderName,
-            sessionId,
-            suggestionIds);
+            parsed.Answer, wineRefs,
+            updatedStatus.ScansToday, updatedStatus.DailyLimit, updatedStatus.ScansRemaining,
+            chatResult.ProviderName, sessionId, suggestionIds);
+    }
+
+    // ── Type mode pipeline (new behavior) ──────────────────────────────────────
+
+    private async Task<ExpertResponse> ProcessTypeResponseAsync(
+        NpgsqlConnection conn, Guid userId, ExpertRequest request,
+        AiChatResult chatResult, IReadOnlyList<CatalogWineRow> catalogWines,
+        ProUsageService.ProStatus proStatus, Func<string, Task>? onProgress, CancellationToken ct,
+        Guid? correlationId = null)
+    {
+        async Task Progress(string status) { if (onProgress is not null) await onProgress(status); }
+
+        var parsed = ParseTypeAiResponse(chatResult.Answer!);
+
+        // Match catalogue wines for each type suggestion
+        await Progress("Matcher vintyper med katalogen …");
+        var typeSuggestions = new List<ExpertTypeSuggestion>();
+
+        foreach (var aiType in parsed.TypeSuggestions)
+        {
+            // Find catalogue matches by type/country/region/grapes
+            var matches = await MatchCatalogWinesForTypeAsync(conn, aiType, catalogWines, ct);
+
+            // Build Vinmonopolet URL
+            var vinmonopoletUrl = VinmonopoletQueryBuilder.BuildSearchUrl(
+                aiType.Category,
+                aiType.DessertCategory,
+                aiType.Country,
+                aiType.Grapes?.FirstOrDefault(),
+                aiType.SearchHints is not null
+                    ? new SearchHints(
+                        aiType.SearchHints.IsGoodFor,
+                        aiType.SearchHints.Fylde,
+                        aiType.SearchHints.Friskhet,
+                        aiType.SearchHints.Soedme,
+                        aiType.SearchHints.Bitterhet)
+                    : null);
+
+            var googleUrl = VinmonopoletQueryBuilder.BuildGoogleSearchUrl(
+                aiType.SubType, aiType.Region, aiType.Country, aiType.Category);
+
+            typeSuggestions.Add(new ExpertTypeSuggestion(
+                Category:        aiType.Category ?? "Rødvin",
+                SubType:         aiType.SubType,
+                Country:         aiType.Country,
+                Region:          aiType.Region,
+                Grapes:          aiType.Grapes,
+                Characteristics: aiType.Characteristics,
+                FoodPairings:    aiType.FoodPairings,
+                WhyRecommended:  aiType.WhyRecommended,
+                VinmonopoletUrl: vinmonopoletUrl,
+                GoogleSearchUrl: googleUrl,
+                CatalogMatches:  matches.Length > 0 ? matches : null));
+        }
+
+        // Charge quota
+        await _proUsage.IncrementAsync(userId, ct);
+        var updatedStatus = await _proUsage.GetStatusAsync(userId, ct);
+
+        // Persist conversation
+        Guid? sessionId = null;
+        Guid[]? suggestionIds = null;
+        var typeArray = typeSuggestions.Count > 0 ? typeSuggestions.ToArray() : null;
+
+        try
+        {
+            (sessionId, suggestionIds) = await PersistConversationAsync(
+                conn, userId, request, parsed.Answer, chatResult.ProviderName, null, typeArray, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "ExpertService: conversation persistence failed — user still gets the answer");
+        }
+
+        return new ExpertResponse(
+            parsed.Answer, null,
+            updatedStatus.ScansToday, updatedStatus.DailyLimit, updatedStatus.ScansRemaining,
+            chatResult.ProviderName, sessionId, suggestionIds,
+            TypeSuggestions: typeArray);
+    }
+
+    // ── Catalogue matching for type suggestions ─────────────────────────────────
+
+    private async Task<ExpertWineReference[]> MatchCatalogWinesForTypeAsync(
+        NpgsqlConnection conn, AiTypeSuggestion aiType,
+        IReadOnlyList<CatalogWineRow> alreadySearched, CancellationToken ct)
+    {
+        // First check if any of the AI's named catalogue wines exist in the already-searched results
+        var namedMatches = new List<ExpertWineReference>();
+        if (aiType.CatalogWineNames is { Length: > 0 })
+        {
+            foreach (var name in aiType.CatalogWineNames)
+            {
+                var match = alreadySearched.FirstOrDefault(w =>
+                    w.Name.Contains(name, StringComparison.OrdinalIgnoreCase) ||
+                    name.Contains(w.Name, StringComparison.OrdinalIgnoreCase));
+
+                if (match is not null && namedMatches.All(m => m.Id != match.Id))
+                {
+                    namedMatches.Add(new ExpertWineReference(
+                        match.Id, match.Name, match.Producer, match.Vintage, match.Type, match.Country,
+                        Region: match.Region, FoodPairings: match.FoodPairings,
+                        Description: match.Description, Source: "catalog"));
+                }
+            }
+        }
+
+        if (namedMatches.Count >= 3)
+            return namedMatches.Take(3).ToArray();
+
+        // Broader catalogue match by type + country/region/grapes
+        var remaining = 3 - namedMatches.Count;
+        var existingIds = namedMatches.Select(m => m.Id).ToHashSet();
+
+        // Map category name to the DB type format
+        var dbType = aiType.Category switch
+        {
+            "Rødvin" => "Rød",
+            "Hvitvin" => "Hvit",
+            "Rosévin" => "Rosé",
+            _ => aiType.Category ?? ""
+        };
+
+        var broader = await conn.QueryAsync<CatalogWineRow>(
+            """
+            SELECT id AS Id, name AS Name, producer AS Producer, vintage AS Vintage,
+                   type AS Type, country AS Country, region AS Region,
+                   food_pairings AS FoodPairings, description AS Description
+            FROM wines
+            WHERE type ILIKE @Type
+              AND (@Country IS NULL OR country ILIKE '%' || @Country || '%')
+            ORDER BY created_at DESC
+            LIMIT @Limit
+            """,
+            new { Type = dbType, Country = aiType.Country, Limit = remaining + 5 });
+
+        foreach (var w in broader)
+        {
+            if (existingIds.Contains(w.Id)) continue;
+            namedMatches.Add(new ExpertWineReference(
+                w.Id, w.Name, w.Producer, w.Vintage, w.Type, w.Country,
+                Region: w.Region, FoodPairings: w.FoodPairings,
+                Description: w.Description, Source: "catalog"));
+            if (namedMatches.Count >= 3) break;
+        }
+
+        return namedMatches.ToArray();
     }
 
     // ── Conversation persistence ─────────────────────────────────────────────
 
     private async Task<(Guid SessionId, Guid[]? SuggestionIds)> PersistConversationAsync(
         NpgsqlConnection conn, Guid userId, ExpertRequest request,
-        string answer, string? modelUsed, ExpertWineReference[]? wines, CancellationToken ct)
+        string answer, string? modelUsed, ExpertWineReference[]? wines,
+        ExpertTypeSuggestion[]? typeSuggestions, CancellationToken ct)
     {
         Guid sessionId;
 
@@ -289,7 +514,7 @@ public sealed class ExpertService : IExpertService
             """,
             new { SessionId = sessionId, Content = answer, ModelUsed = modelUsed });
 
-        // Insert wine suggestions
+        // Insert wine suggestions (classic mode)
         Guid[]? suggestionIds = null;
         if (wines is { Length: > 0 })
         {
@@ -303,11 +528,30 @@ public sealed class ExpertService : IExpertService
 
                 suggestionIds[i] = await conn.ExecuteScalarAsync<Guid>(
                     """
-                    INSERT INTO expert_wine_suggestions (message_id, wine_id, wine_data)
-                    VALUES (@MessageId, @WineId, @WineData::jsonb)
+                    INSERT INTO expert_wine_suggestions (message_id, wine_id, wine_data, suggestion_type)
+                    VALUES (@MessageId, @WineId, @WineData::jsonb, 'wine')
                     RETURNING id
                     """,
                     new { MessageId = assistantMessageId, WineId = wineId, WineData = wineDataJson });
+            }
+        }
+
+        // Insert type suggestions (type mode)
+        if (typeSuggestions is { Length: > 0 })
+        {
+            suggestionIds = new Guid[typeSuggestions.Length];
+            for (int i = 0; i < typeSuggestions.Length; i++)
+            {
+                var typeDataJson = JsonSerializer.Serialize(typeSuggestions[i],
+                    new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+
+                suggestionIds[i] = await conn.ExecuteScalarAsync<Guid>(
+                    """
+                    INSERT INTO expert_wine_suggestions (message_id, wine_id, wine_data, suggestion_type)
+                    VALUES (@MessageId, NULL, @WineData::jsonb, 'type')
+                    RETURNING id
+                    """,
+                    new { MessageId = assistantMessageId, WineData = typeDataJson });
             }
         }
 
@@ -422,43 +666,71 @@ public sealed class ExpertService : IExpertService
 
     // ── AI response parsing ─────────────────────────────────────────────────────
 
-    private ParsedAiResponse ParseAiResponse(string rawAnswer)
+    private ParsedClassicResponse ParseClassicAiResponse(string rawAnswer)
     {
         var delimiterIndex = rawAnswer.IndexOf(WineDelimiter, StringComparison.Ordinal);
         if (delimiterIndex < 0)
         {
             _logger.LogDebug("ExpertService: no ---WINES--- delimiter found, using full response as answer");
-            return new ParsedAiResponse(rawAnswer.Trim(), []);
+            return new ParsedClassicResponse(rawAnswer.Trim(), []);
         }
 
         var answerText = rawAnswer[..delimiterIndex].Trim();
         var winesJson = rawAnswer[(delimiterIndex + WineDelimiter.Length)..].Trim();
-
-        // Strip markdown code fences (same pattern as WineOrchestratorService/GeminiService)
         winesJson = Regex.Replace(winesJson, @"^```(?:json)?\s*|\s*```$", "", RegexOptions.Multiline).Trim();
 
         if (string.IsNullOrWhiteSpace(winesJson))
-            return new ParsedAiResponse(answerText, []);
+            return new ParsedClassicResponse(answerText, []);
 
         try
         {
             var wines = JsonSerializer.Deserialize<AiWineSuggestion[]>(
                 winesJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-
             _logger.LogInformation("ExpertService: parsed {Count} wine suggestions from AI response", wines?.Length ?? 0);
-            return new ParsedAiResponse(answerText, wines ?? []);
+            return new ParsedClassicResponse(answerText, wines ?? []);
         }
         catch (JsonException ex)
         {
             _logger.LogWarning(ex, "ExpertService: failed to parse wines JSON after delimiter, falling back");
-            return new ParsedAiResponse(answerText, []);
+            return new ParsedClassicResponse(answerText, []);
+        }
+    }
+
+    private ParsedTypeResponse ParseTypeAiResponse(string rawAnswer)
+    {
+        var delimiterIndex = rawAnswer.IndexOf(WineDelimiter, StringComparison.Ordinal);
+        if (delimiterIndex < 0)
+        {
+            _logger.LogDebug("ExpertService: no ---WINES--- delimiter found in type mode");
+            return new ParsedTypeResponse(rawAnswer.Trim(), []);
+        }
+
+        var answerText = rawAnswer[..delimiterIndex].Trim();
+        var json = rawAnswer[(delimiterIndex + WineDelimiter.Length)..].Trim();
+        json = Regex.Replace(json, @"^```(?:json)?\s*|\s*```$", "", RegexOptions.Multiline).Trim();
+
+        if (string.IsNullOrWhiteSpace(json))
+            return new ParsedTypeResponse(answerText, []);
+
+        try
+        {
+            var types = JsonSerializer.Deserialize<AiTypeSuggestion[]>(
+                json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            _logger.LogInformation("ExpertService: parsed {Count} type suggestions from AI response", types?.Length ?? 0);
+            return new ParsedTypeResponse(answerText, types ?? []);
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogWarning(ex, "ExpertService: failed to parse type suggestions JSON, falling back");
+            return new ParsedTypeResponse(answerText, []);
         }
     }
 
     // ── Enrichment pipeline (mirrors WineOrchestratorService pattern) ────────────
 
     private async Task<WineApiService.WineEnrichment?[]> EnrichWinesAsync(
-        AiWineSuggestion[] aiWines, Func<string, Task>? onProgress, CancellationToken ct)
+        AiWineSuggestion[] aiWines, Func<string, Task>? onProgress, CancellationToken ct,
+        Guid? userId = null, Guid? correlationId = null)
     {
         if (aiWines.Length == 0)
             return [];
@@ -479,7 +751,7 @@ public sealed class ExpertService : IExpertService
 
             // Step a: Try WineAPI enrichment
             var enrichment = await _wineApi.FindAsync(
-                wine.Producer ?? "", wine.Name, wine.Vintage, ct);
+                wine.Producer ?? "", wine.Name, wine.Vintage, ct, userId, correlationId);
 
             // Step b: AI fallback if WineAPI has gaps (missing food pairings OR description)
             if (enrichment?.FoodPairings is not { Length: > 0 } || string.IsNullOrWhiteSpace(enrichment?.Description))
@@ -490,7 +762,7 @@ public sealed class ExpertService : IExpertService
                     usedAiFallback = true;
                 }
 
-                var aiFallback = await GetWineEnrichmentViaAiAsync(wine, ct);
+                var aiFallback = await GetWineEnrichmentViaAiAsync(wine, ct, userId, correlationId);
 
                 if (aiFallback is not null)
                 {
@@ -518,7 +790,7 @@ public sealed class ExpertService : IExpertService
     }
 
     private async Task<EnrichmentFallbackResult?> GetWineEnrichmentViaAiAsync(
-        AiWineSuggestion wine, CancellationToken ct)
+        AiWineSuggestion wine, CancellationToken ct, Guid? userId = null, Guid? correlationId = null)
     {
         var userContent = $"Vin: {wine.Producer ?? ""} {wine.Name ?? ""}, " +
                           $"{wine.Vintage?.ToString() ?? "ukjent årgang"}, " +
@@ -528,7 +800,8 @@ public sealed class ExpertService : IExpertService
             _settings.AiFallback.ExpertChatPriority,
             EnrichmentPrompt,
             userContent,
-            ct);
+            ct,
+            userId, correlationId);
 
         if (!chatResult.IsSuccess || chatResult.Answer is null)
         {
@@ -646,14 +919,16 @@ public sealed class ExpertService : IExpertService
 
     // ── Background catalogue upsert ─────────────────────────────────────────────
 
-    private async Task TryUpsertEnrichedWineAsync(AiWineSuggestion suggestion, WineApiService.WineEnrichment enrichment)
+    private async Task TryUpsertEnrichedWineAsync(AiWineSuggestion suggestion, WineApiService.WineEnrichment enrichment,
+        Guid? userId = null, Guid? correlationId = null)
     {
         try
         {
             // If we have a WineAPI ID but are missing detail fields, fetch full details first
             if (enrichment.ExternalId is not null && IsMissingDetailFields(enrichment))
             {
-                var details = await _wineApi.GetDetailsAsync(enrichment.ExternalId, CancellationToken.None);
+                var details = await _wineApi.GetDetailsAsync(enrichment.ExternalId, CancellationToken.None,
+                    userId, correlationId);
                 if (details is not null)
                 {
                     enrichment = enrichment with
@@ -801,6 +1076,7 @@ public sealed class ExpertService : IExpertService
 
     // ── Private DTOs ────────────────────────────────────────────────────────────
 
+    // Classic mode
     private record AiWineSuggestion(
         string? Name,
         string? Producer,
@@ -810,8 +1086,32 @@ public sealed class ExpertService : IExpertService
         string? Region,
         string? WhyRecommended);
 
-    private record ParsedAiResponse(string Answer, AiWineSuggestion[] Wines);
+    private record ParsedClassicResponse(string Answer, AiWineSuggestion[] Wines);
 
+    // Type mode
+    private record AiTypeSuggestion(
+        string? Category,
+        string? SubType,
+        string? Country,
+        string? Region,
+        string[]? Grapes,
+        string? Characteristics,
+        string[]? FoodPairings,
+        string? WhyRecommended,
+        AiSearchHints? SearchHints,
+        string? DessertCategory,
+        string[]? CatalogWineNames);
+
+    private record AiSearchHints(
+        string[]? IsGoodFor,
+        string? Fylde,
+        string? Friskhet,
+        string? Soedme,
+        string? Bitterhet);
+
+    private record ParsedTypeResponse(string Answer, AiTypeSuggestion[] TypeSuggestions);
+
+    // Shared
     private record EnrichmentFallbackResult(string[]? FoodPairings, string? TechnicalNotes, string? Description);
 
     private record CatalogWineRow(

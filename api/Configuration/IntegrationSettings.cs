@@ -44,6 +44,8 @@ public sealed class IntegrationSettings
 
     public DeepSeekSettings DeepSeek { get; init; } = new();
 
+    public GroqSettings Groq { get; init; } = new();
+
     public AiFallbackSettings AiFallback { get; init; } = new();
 
     /// <summary>
@@ -70,15 +72,21 @@ public sealed class DeepSeekSettings
     public string BaseUrl { get; init; } = "https://api.deepseek.com";
 }
 
+/// <summary>Connection details for the Groq API (OpenAI-compatible).</summary>
+public sealed class GroqSettings
+{
+    public string BaseUrl { get; init; } = "https://api.groq.com/openai";
+}
+
 /// <summary>
 /// Configures which AI providers are tried (in order) for each capability.
-/// Each entry is a provider name: "DeepSeek", "Gemini", "Groq".
+/// Each entry is a provider name: "Groq", "DeepSeek", "Gemini".
 /// </summary>
 public sealed class AiFallbackSettings
 {
-    /// <summary>Provider priority for label scanning (vision). Default: Gemini only.</summary>
-    public string[] LabelScanPriority { get; init; } = ["Gemini"];
+    /// <summary>Provider priority for label scanning (vision). Default: Groq (Llama 4 Scout), then Gemini fallback.</summary>
+    public string[] LabelScanPriority { get; init; } = ["Groq", "Gemini"];
 
-    /// <summary>Provider priority for expert chat. Default: DeepSeek, then Gemini fallback.</summary>
-    public string[] ExpertChatPriority { get; init; } = ["DeepSeek", "Gemini"];
+    /// <summary>Provider priority for expert chat. Default: Groq (Qwen 3), DeepSeek, then Gemini fallback.</summary>
+    public string[] ExpertChatPriority { get; init; } = ["Groq", "DeepSeek", "Gemini"];
 }

@@ -30,7 +30,10 @@ export class AdminDashboardComponent implements OnInit {
       existing.push(row);
       map.set(row.date, existing);
     }
-    return Array.from(map.entries()).map(([date, providers]) => ({ date, providers }));
+    return Array.from(map.entries()).map(([date, providers]) => ({
+      date,
+      providers: providers.slice().sort((a, b) => b.totalCalls - a.totalCalls),
+    }));
   });
 
   async ngOnInit(): Promise<void> {
@@ -55,6 +58,7 @@ export class AdminDashboardComponent implements OnInit {
     const labels: Record<string, string> = {
       gemini: 'Gemini',
       deepseek: 'DeepSeek',
+      groq: 'Groq',
       wineapi: 'WineAPI',
     };
     return labels[provider] ?? provider;
@@ -64,6 +68,8 @@ export class AdminDashboardComponent implements OnInit {
     const labels: Record<string, string> = {
       ExpertChat: 'Expert',
       AnalyzeLabel: 'Skann',
+      AnalyzeLabels: 'Skann (2x)',
+      LabelScan: 'Skann',
       GetFoodPairings: 'Matkombo',
     };
     return labels[endpoint] ?? endpoint;
@@ -73,9 +79,32 @@ export class AdminDashboardComponent implements OnInit {
     const icons: Record<string, string> = {
       deepseek: 'DS',
       gemini: 'GEM',
+      groq: 'GRQ',
       wineapi: 'API',
     };
     return icons[provider] ?? '?';
+  }
+
+  modelBadge(model: string | null): string {
+    if (!model) return '';
+    const badges: Record<string, string> = {
+      Q3: 'Qwen 3',
+      L4S: 'Llama 4 Scout',
+      DS: 'DeepSeek-V3',
+      GEM: 'Gemini Flash',
+    };
+    return badges[model] ?? model;
+  }
+
+  modelBadgeClass(model: string | null): string {
+    if (!model) return 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300';
+    const classes: Record<string, string> = {
+      Q3: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
+      L4S: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
+      DS: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+      GEM: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+    };
+    return classes[model] ?? 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300';
   }
 
   async resetData(): Promise<void> {
@@ -84,7 +113,7 @@ export class AdminDashboardComponent implements OnInit {
     this.resetting.set(false);
     this.showResetConfirm.set(false);
     if (result) {
-      this.notificationService.show(`Slettet ${result.deletedWines} viner, ${result.deletedWineLogs} loggføringer og ${result.deletedExternalIds} eksterne ID-er.`, 'success');
+      this.notificationService.show(`Slettet ${result.deletedWines} viner, ${result.deletedWineLogs} loggføringer og ${result.deletedExternalIds} eksterne ID-er. Nullstilte smaksprofil for ${result.resetProfiles} brukere.`, 'success');
       this.totalWines.set(0);
       await Promise.all([
         this.usageService.loadTodayUsage(),

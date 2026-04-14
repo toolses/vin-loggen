@@ -4,6 +4,33 @@ All notable changes to VinSomm are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+## [0.9.0] - 2026-04-14
+
+### Added
+- **Groq-First Performance Engine:** All AI calls now try Groq first for faster inference
+- **Groq Chat Provider:** `GroqChatProvider` using Qwen 3 (`qwen/qwen3-32b`) for expert chat, with OpenAI-compatible API
+- **Groq Vision (Llama 4 Scout):** `LabelScanService` with `meta-llama/llama-4-scout-17b-16e-instruct` as primary vision model for label scanning
+- `LabelScanService` vision fallback chain: Groq (Llama 4 Scout) → Gemini Flash Lite
+- Expert chat fallback chain updated: Groq (Qwen 3) → DeepSeek-V3 → Gemini Flash Lite
+- Context truncation for Qwen 3's 6K TPM limit: limits catalog wines to 3 and recent tastings to 2 when Groq is primary
+- Aggressive 429 handling: Groq rate limit triggers immediate fallback to next provider (no retry)
+- Qwen 3 `<think>` block stripping: reasoning traces are removed before returning the answer
+- `GroqSettings` configuration with configurable `BaseUrl` (default: `https://api.groq.com/openai`)
+- Groq HTTP client registered without standard resilience handler (avoids auto-retry on 429)
+
+### Changed
+- Default `AiFallbackSettings.ExpertChatPriority` updated to `["Groq", "DeepSeek", "Gemini"]`
+- Default `AiFallbackSettings.LabelScanPriority` updated to `["Groq", "Gemini"]`
+- `WineOrchestratorService` now uses `ILabelScanService` instead of direct `IGeminiService` for label scanning
+- **AI Observability:** `api_usage_logs` now tracks `used_model` (Q3/L4S/DS/GEM) and `total_tokens_used` per call
+- Migration `021_AddModelAndTokensToApiUsageLogs.sql` adds observability columns
+- All AI providers (Groq, DeepSeek, Gemini) now report model codes and token counts in `AiChatResult`
+- Admin usage endpoints return `usedModel` and `totalTokens` fields
+- Admin dashboard shows model badges (color-coded per provider) and token counts in usage tables
+- `GROQ_API_KEY` added to docker-compose.yml environment
+
 ## [0.8.0] - 2026-04-13
 
 ### Added
@@ -21,9 +48,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - `ExpertService` refactored to use `AiProviderChain` instead of direct Gemini calls
 - Configuration updated with `Integration__DeepSeek` and `Integration__AiFallback` sections
 
-## [Unreleased]
+## [0.7.0] - 2026-04-12
 
 ### Added
+- **Admin User Management & RLS Security:** Full admin UI for browsing and managing user accounts
+- `correlation_id` ties all log entries from a single user action (label scan, expert question) together for end-to-end tracing
+- `user_id` in `api_usage_logs` now correctly records the initiating user for Gemini, WineAPI, DeepSeek, and expert AI calls
+- Migration `020_AddApiUsageLogBodyAndCorrelation.sql`: adds 3 columns and a `WHERE correlation_id IS NOT NULL` partial index
+
 - **Expert Conversation Persistence:** All expert conversations are now saved to the database with session history
 - `expert_sessions`, `expert_messages`, `expert_wine_suggestions` tables with RLS
 - `GET /api/expert/sessions` — paginated session history list

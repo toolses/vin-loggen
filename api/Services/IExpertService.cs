@@ -19,15 +19,31 @@ public record ExpertWineReference(
     string?   Source         = null   // "catalog" | "wineapi" | "ai"
 );
 
+public record ExpertTypeSuggestion(
+    string  Category,
+    string? SubType,
+    string? Country,
+    string? Region,
+    string[]? Grapes,
+    string? Characteristics,
+    string[]? FoodPairings,
+    string? WhyRecommended,
+    string? VinmonopoletUrl,
+    string? GoogleSearchUrl,
+    ExpertWineReference[]? CatalogMatches,
+    string  Source = "ai-type"
+);
+
 public record ExpertResponse(
-    string                  Answer,
-    ExpertWineReference[]?  ReferencedWines,
-    int                     ProScansToday,
-    int                     DailyProLimit,
-    int                     ScansRemaining,
-    string?                 ModelUsed          = null,
-    Guid?                   SessionId          = null,
-    Guid[]?                 WineSuggestionIds  = null
+    string                    Answer,
+    ExpertWineReference[]?    ReferencedWines,
+    int                       ProScansToday,
+    int                       DailyProLimit,
+    int                       ScansRemaining,
+    string?                   ModelUsed            = null,
+    Guid?                     SessionId            = null,
+    Guid[]?                   WineSuggestionIds    = null,
+    ExpertTypeSuggestion[]?   TypeSuggestions       = null
 );
 
 public interface IExpertService

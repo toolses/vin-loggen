@@ -16,20 +16,29 @@
     </a>
 
     <!-- Today's usage cards per provider + endpoint -->
-    @for (usage of usageService.todayUsage(); track usage.provider + usage.endpoint) {
+    @for (usage of usageService.todayUsage(); track usage.provider + usage.endpoint + usage.usedModel) {
       <div class="bg-cellar-surface rounded-xl p-5 border border-white/10">
         <div class="flex items-center gap-2 mb-1">
           <span class="text-[10px] px-1.5 py-0.5 rounded font-mono uppercase tracking-wider"
                 [class]="usage.provider === 'deepseek' ? 'bg-blue-500/20 text-blue-300' :
                          usage.provider === 'gemini' ? 'bg-amber-500/20 text-amber-300' :
+                         usage.provider === 'groq' ? 'bg-orange-500/20 text-orange-300' :
                          'bg-white/10 text-cream/60'">
             {{ providerIcon(usage.provider) }}
           </span>
           <p class="text-cream/50 text-sm">{{ endpointLabel(usage.endpoint) }}</p>
+          @if (usage.usedModel) {
+            <span class="text-[9px] px-1.5 py-0.5 rounded-full font-medium" [class]="modelBadgeClass(usage.usedModel)">
+              {{ usage.usedModel }}
+            </span>
+          }
         </div>
         <p class="text-3xl font-serif text-cream">{{ usage.totalCalls }}</p>
         <div class="flex gap-4 mt-2 text-xs text-cream/40">
           <span>{{ usage.avgResponseMs }}ms snitt</span>
+          @if (usage.totalTokens > 0) {
+            <span>{{ usage.totalTokens }} tokens</span>
+          }
           @if (usage.errorCount > 0) {
             <span class="text-red-400">{{ usage.errorCount }} feil</span>
           }
@@ -50,9 +59,6 @@
   <div class="bg-cellar-surface rounded-xl border border-white/10 overflow-hidden">
     <div class="px-5 py-4 border-b border-white/10 flex items-center justify-between">
       <h2 class="text-lg font-serif text-cream">Daglig API-bruk (siste 30 dager)</h2>
-      <a routerLink="/admin/wines" class="text-sm text-gold hover:text-gold/80 transition-colors">
-        Se vinregister &rarr;
-      </a>
     </div>
 
     @if (dailyGrouped().length > 0) {
@@ -63,13 +69,15 @@
               <th class="px-5 py-3 font-medium">Dato</th>
               <th class="px-5 py-3 font-medium">Leverandør</th>
               <th class="px-5 py-3 font-medium">Endepunkt</th>
+              <th class="px-5 py-3 font-medium">Modell</th>
               <th class="px-5 py-3 font-medium text-right">Kall</th>
               <th class="px-5 py-3 font-medium text-right">Snitt ms</th>
+              <th class="px-5 py-3 font-medium text-right">Tokens</th>
             </tr>
           </thead>
           <tbody>
             @for (group of dailyGrouped(); track group.date) {
-              @for (row of group.providers; track row.provider + row.endpoint; let first = $first) {
+              @for (row of group.providers; track row.provider + row.endpoint + row.usedModel; let first = $first) {
                 <tr class="border-b border-white/5 hover:bg-white/5 transition-colors">
                   <td class="px-5 py-3 text-cream">
                     @if (first) {
@@ -77,17 +85,30 @@
                     }
                   </td>
                   <td class="px-5 py-3">
-                    <span class="text-[10px] px-1.5 py-0.5 rounded font-mono uppercase tracking-wider"
-                          [class]="row.provider === 'deepseek' ? 'bg-blue-500/20 text-blue-300' :
-                                   row.provider === 'gemini' ? 'bg-amber-500/20 text-amber-300' :
-                                   'bg-white/10 text-cream/60'">
-                      {{ providerIcon(row.provider) }}
+                    <span class="inline-flex items-center gap-2">
+                      <span class="text-[10px] px-1.5 py-0.5 rounded font-mono uppercase tracking-wider inline-flex items-center justify-center"
+                            [class]="row.provider === 'deepseek' ? 'bg-blue-500/20 text-blue-300' :
+                                     row.provider === 'gemini' ? 'bg-amber-500/20 text-amber-300' :
+                                     row.provider === 'groq' ? 'bg-orange-500/20 text-orange-300' :
+                                     'bg-white/10 text-cream/60'">
+                        {{ providerIcon(row.provider) }}
+                      </span>
+                      <span class="text-cream/70">{{ providerLabel(row.provider) }}</span>
                     </span>
-                    <span class="ml-2 text-cream/70">{{ providerLabel(row.provider) }}</span>
                   </td>
                   <td class="px-5 py-3 text-cream/50">{{ endpointLabel(row.endpoint) }}</td>
+                  <td class="px-5 py-3">
+                    @if (row.usedModel) {
+                      <span class="text-[9px] px-1.5 py-0.5 rounded-full font-medium" [class]="modelBadgeClass(row.usedModel)">
+                        {{ row.usedModel }}
+                      </span>
+                    } @else {
+                      <span class="text-cream/30">—</span>
+                    }
+                  </td>
                   <td class="px-5 py-3 text-right text-cream">{{ row.totalCalls }}</td>
                   <td class="px-5 py-3 text-right text-cream/50">{{ row.avgResponseMs }}</td>
+                  <td class="px-5 py-3 text-right text-cream/50">{{ row.totalTokens || '—' }}</td>
                 </tr>
               }
             }

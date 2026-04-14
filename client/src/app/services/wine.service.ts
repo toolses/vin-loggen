@@ -567,7 +567,12 @@ export class WineService {
    * The backend calls Gemini and checks the catalogue for de-duplication.
    * Sets the `processing` signal while the request is in flight.
    */
-  async analyzeLabel(frontImage: Blob, backImage?: Blob | null): Promise<WineAnalysisResult | null> {
+  async analyzeLabel(
+    frontImage: Blob,
+    backImage?: Blob | null,
+    frontImageUrl?: string | null,
+    backImageUrl?: string | null,
+  ): Promise<WineAnalysisResult | null> {
     this._processing.set(true);
     this._error.set(null);
     try {
@@ -575,6 +580,12 @@ export class WineService {
       formData.append('image', frontImage, 'label.jpg');
       if (backImage) {
         formData.append('backImage', backImage, 'back-label.jpg');
+      }
+      if (frontImageUrl) {
+        formData.append('frontImageUrl', frontImageUrl);
+      }
+      if (backImageUrl) {
+        formData.append('backImageUrl', backImageUrl);
       }
 
       const result = await firstValueFrom(

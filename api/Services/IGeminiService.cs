@@ -8,14 +8,21 @@ public interface IGeminiService
     Task<GeminiResult<WineAnalysisResponse>> AnalyzeLabelAsync(
         byte[]            imageBytes,
         string            mimeType,
-        CancellationToken ct);
+        CancellationToken ct,
+        Guid?             userId        = null,
+        Guid?             correlationId = null,
+        string?           frontImageUrl = null);
 
     Task<GeminiResult<WineAnalysisResponse>> AnalyzeLabelsAsync(
         byte[]            frontImageBytes,
         string            frontMimeType,
         byte[]?           backImageBytes,
         string?           backMimeType,
-        CancellationToken ct);
+        CancellationToken ct,
+        Guid?             userId        = null,
+        Guid?             correlationId = null,
+        string?           frontImageUrl = null,
+        string?           backImageUrl  = null);
 
     Task<GeminiService.FoodPairingResult?> GetFoodPairingsAsync(
         string? wineName,
@@ -23,9 +30,13 @@ public interface IGeminiService
         int?    vintage,
         string? type,
         string? country,
-        CancellationToken ct);
+        CancellationToken ct,
+        Guid?   userId        = null,
+        Guid?   correlationId = null);
 
     Task<TasteProfileResponse?> GenerateTasteProfileAsync(
         IEnumerable<WineProfileData> wines,
-        CancellationToken ct);
+        CancellationToken ct,
+        Guid?   userId        = null,
+        Guid?   correlationId = null);
 }

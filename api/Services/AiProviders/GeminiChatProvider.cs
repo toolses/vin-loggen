@@ -35,7 +35,12 @@ public sealed class GeminiChatProvider : IAiChatProvider
 
     public bool IsAvailable => !string.IsNullOrWhiteSpace(_configuration["GEMINI_API_KEY"]);
 
-    public async Task<AiChatResult> ChatAsync(string systemPrompt, string userContent, CancellationToken ct)
+    public async Task<AiChatResult> ChatAsync(
+        string systemPrompt,
+        string userContent,
+        CancellationToken ct,
+        Guid? userId        = null,
+        Guid? correlationId = null)
     {
         var apiKey = _configuration["GEMINI_API_KEY"];
         if (string.IsNullOrWhiteSpace(apiKey))
@@ -67,21 +72,22 @@ public sealed class GeminiChatProvider : IAiChatProvider
         {
             response = await client.PostAsJsonAsync($"{GeminiEndpoint}?key={apiKey}", payload, ct);
             sw.Stop();
-            _ = _apiUsage.LogAsync("gemini", "ExpertChat", (int)response.StatusCode, (int)sw.ElapsedMilliseconds, null, ct);
         }
         catch (TaskCanceledException ex) when (!ct.IsCancellationRequested)
         {
             sw.Stop();
-            _ = _apiUsage.LogAsync("gemini", "ExpertChat", null, (int)sw.ElapsedMilliseconds, null, ct);
+            _ = _apiUsage.LogAsync("gemini", "ExpertChat", null, (int)sw.ElapsedMilliseconds,
+                userId, ct, requestBody: userContent, correlationId: correlationId, usedModel: "GEM");
             _logger.LogWarning(ex, "GeminiChatProvider: request timed out");
-            return new AiChatResult(null, Name, false) { IsTransient = true };
+            return new AiChatResult(null, Name, false) { IsTransient = true, UsedModel = "GEM" };
         }
         catch (Exception ex)
         {
             sw.Stop();
-            _ = _apiUsage.LogAsync("gemini", "ExpertChat", null, (int)sw.ElapsedMilliseconds, null, ct);
+            _ = _apiUsage.LogAsync("gemini", "ExpertChat", null, (int)sw.ElapsedMilliseconds,
+                userId, ct, requestBody: userContent, correlationId: correlationId, usedModel: "GEM");
             _logger.LogWarning(ex, "GeminiChatProvider: request failed");
-            return new AiChatResult(null, Name, false) { IsTransient = true };
+            return new AiChatResult(null, Name, false) { IsTransient = true, UsedModel = "GEM" };
         }
 
         if (response.StatusCode is HttpStatusCode.ServiceUnavailable
@@ -90,15 +96,19 @@ public sealed class GeminiChatProvider : IAiChatProvider
             or HttpStatusCode.BadGateway)
         {
             var body = await response.Content.ReadAsStringAsync(ct);
+            _ = _apiUsage.LogAsync("gemini", "ExpertChat", (int)response.StatusCode, (int)sw.ElapsedMilliseconds,
+                userId, ct, requestBody: userContent, responseBody: body, correlationId: correlationId, usedModel: "GEM");
             _logger.LogWarning("GeminiChatProvider: transient {Status}: {Body}", response.StatusCode, body);
-            return new AiChatResult(null, Name, false) { IsTransient = true };
+            return new AiChatResult(null, Name, false) { IsTransient = true, UsedModel = "GEM" };
         }
 
         if (!response.IsSuccessStatusCode)
         {
             var body = await response.Content.ReadAsStringAsync(ct);
+            _ = _apiUsage.LogAsync("gemini", "ExpertChat", (int)response.StatusCode, (int)sw.ElapsedMilliseconds,
+                userId, ct, requestBody: userContent, responseBody: body, correlationId: correlationId, usedModel: "GEM");
             _logger.LogError("GeminiChatProvider: {Status}: {Body}", response.StatusCode, body);
-            return new AiChatResult(null, Name, false);
+            return new AiChatResult(null, Name, false) { UsedModel = "GEM" };
         }
 
         try
@@ -115,17 +125,24 @@ public sealed class GeminiChatProvider : IAiChatProvider
 
             if (string.IsNullOrWhiteSpace(text))
             {
+                _ = _apiUsage.LogAsync("gemini", "ExpertChat", (int)response.StatusCode, (int)sw.ElapsedMilliseconds,
+                    userId, ct, requestBody: userContent, correlationId: correlationId, usedModel: "GEM");
                 _logger.LogWarning("GeminiChatProvider: empty response");
-                return new AiChatResult(null, Name, false);
+                return new AiChatResult(null, Name, false) { UsedModel = "GEM" };
             }
 
+            _ = _apiUsage.LogAsync("gemini", "ExpertChat", (int)response.StatusCode, (int)sw.ElapsedMilliseconds,
+                userId, ct, requestBody: userContent, responseBody: text, correlationId: correlationId, usedModel: "GEM");
+
             _logger.LogInformation("GeminiChatProvider: success ({Ms}ms)", sw.ElapsedMilliseconds);
-            return new AiChatResult(text, Name, true);
+            return new AiChatResult(text, Name, true) { UsedModel = "GEM" };
         }
         catch (Exception ex)
         {
+            _ = _apiUsage.LogAsync("gemini", "ExpertChat", (int)response.StatusCode, (int)sw.ElapsedMilliseconds,
+                userId, ct, requestBody: userContent, correlationId: correlationId, usedModel: "GEM");
             _logger.LogError(ex, "GeminiChatProvider: failed to parse response");
-            return new AiChatResult(null, Name, false);
+            return new AiChatResult(null, Name, false) { UsedModel = "GEM" };
         }
     }
 }

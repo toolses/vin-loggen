@@ -1,8 +1,8 @@
-import { Component, computed, ElementRef, inject, OnInit, signal, viewChild } from '@angular/core';
+import { AfterViewInit, Component, computed, effect, ElementRef, inject, OnInit, signal, viewChild } from '@angular/core';
 import { DatePipe, NgTemplateOutlet } from '@angular/common';
 import { Router, RouterLink } from '@angular/router';
 import { ProfileService } from '../../services/profile.service';
-import { ExpertService, ExpertMessage, ExpertWineRef } from '../../services/expert.service';
+import { ExpertService, ExpertMessage, ExpertWineRef, ExpertTypeSuggestionRef } from '../../services/expert.service';
 import { MarkdownPipe } from '../../pipes/markdown.pipe';
 
 @Component({
@@ -11,7 +11,7 @@ import { MarkdownPipe } from '../../pipes/markdown.pipe';
   imports: [RouterLink, NgTemplateOutlet, MarkdownPipe, DatePipe],
   templateUrl: './expert.component.html',
 })
-export class ExpertComponent implements OnInit {
+export class ExpertComponent implements OnInit, AfterViewInit {
   protected readonly profile = inject(ProfileService);
   protected readonly expert = inject(ExpertService);
   private readonly router = inject(Router);
@@ -21,16 +21,25 @@ export class ExpertComponent implements OnInit {
   private readonly chatTextarea = viewChild<ElementRef<HTMLTextAreaElement>>('chatTextarea');
   protected readonly showHistory = signal(false);
 
-  protected readonly quotaPercent = computed(() => {
-    const limit = this.profile.dailyProLimit();
-    if (limit === 0) return 0;
-    return Math.round((this.profile.proScansRemaining() / limit) * 100);
-  });
-
   protected readonly isViewingPastSession = computed(() => this.expert.viewingHistory());
+
+  constructor() {
+    effect(() => {
+      if (this.expert.loading()) {
+        this.expert.statusText(); // track status changes
+        this.scrollToBottom();
+      }
+    });
+  }
 
   ngOnInit(): void {
     this.profile.loadProQuota();
+  }
+
+  ngAfterViewInit(): void {
+    if (this.expert.messages().length > 0) {
+      this.scrollToBottom();
+    }
   }
 
   protected async sendMessage(): Promise<void> {
@@ -39,8 +48,10 @@ export class ExpertComponent implements OnInit {
 
     this.chatInput.set('');
     this.resetTextareaHeight();
-    await this.expert.ask(question);
+    const askPromise = this.expert.ask(question);
     this.scrollToBottom();
+    await askPromise;
+    this.scrollLastMessageIntoView();
   }
 
   protected onInput(event: Event): void {
@@ -77,6 +88,7 @@ export class ExpertComponent implements OnInit {
   protected openSession(sessionId: string): void {
     this.expert.loadSession(sessionId);
     this.showHistory.set(false);
+    this.scrollToBottom();
   }
 
   protected deleteSession(sessionId: string, event: Event): void {
@@ -93,11 +105,50 @@ export class ExpertComponent implements OnInit {
 
   protected onFeedback(wine: ExpertWineRef, feedback: 1 | -1): void {
     if (!wine.suggestionId) return;
-
-    // Toggle off if same feedback
     if (wine.feedback === feedback) return;
-
     this.expert.submitFeedback(wine.suggestionId, feedback);
+  }
+
+  protected onTypeFeedback(ts: ExpertTypeSuggestionRef, feedback: 1 | -1): void {
+    if (!ts.suggestionId) return;
+    if (ts.feedback === feedback) return;
+    this.expert.submitFeedback(ts.suggestionId, feedback);
+  }
+
+  protected exploreType(ts: ExpertTypeSuggestionRef): void {
+    const parts = [ts.subType, ts.region, ts.country, ts.category].filter(Boolean);
+    const question = `Fortell meg mer om ${parts.join(', ')}`;
+    this.chatInput.set(question);
+    this.sendMessage();
+  }
+
+  protected getCategoryBadgeClass(category: string): string {
+    switch (category?.toLowerCase()) {
+      case 'rødvin': case 'rød':         return 'bg-burgundy/20 text-burgundy border-burgundy/30';
+      case 'hvitvin': case 'hvit':       return 'bg-gold/20 text-gold border-gold/30';
+      case 'rosévin': case 'rosé':       return 'bg-rose-400/20 text-rose-300 border-rose-400/30';
+      case 'musserende':                 return 'bg-sky-400/20 text-sky-300 border-sky-400/30';
+      case 'oransje':                    return 'bg-orange-400/20 text-orange-300 border-orange-400/30';
+      case 'dessert': case 'dessertvin': case 'sterkvin': return 'bg-amber-500/20 text-amber-300 border-amber-500/30';
+      default:                           return 'bg-white/10 text-cream/50 border-white/10';
+    }
+  }
+
+  protected getCategoryIcon(category: string): string {
+    switch (category?.toLowerCase()) {
+      case 'rødvin': return '🍷';
+      case 'hvitvin': return '🥂';
+      case 'rosévin': case 'rosé': return '🌸';
+      case 'musserende': return '🫧';
+      case 'oransje': return '🍊';
+      case 'dessertvin': case 'sterkvin': return '🍯';
+      default: return '🍷';
+    }
+  }
+
+  protected googleSearchUrl(wine: ExpertWineRef): string {
+    const terms = [wine.name, wine.producer, 'vin'].filter(Boolean).join(' ');
+    return `https://www.google.com/search?q=${encodeURIComponent(terms)}`;
   }
 
   // ── Helpers ────────────────────────────────────────────────────────
@@ -143,6 +194,15 @@ export class ExpertComponent implements OnInit {
     setTimeout(() => {
       const el = this.chatScroll()?.nativeElement;
       if (el) el.scrollTop = el.scrollHeight;
+    }, 50);
+  }
+
+  private scrollLastMessageIntoView(): void {
+    setTimeout(() => {
+      const container = this.chatScroll()?.nativeElement;
+      if (!container) return;
+      const last = container.lastElementChild as HTMLElement | null;
+      if (last) last.scrollIntoView({ block: 'start' });
     }, 50);
   }
 

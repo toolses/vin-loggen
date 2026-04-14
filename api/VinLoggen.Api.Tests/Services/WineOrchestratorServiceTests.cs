@@ -4,6 +4,7 @@ using Npgsql;
 using VinLoggen.Api.Configuration;
 using VinLoggen.Api.Models;
 using VinLoggen.Api.Services;
+using VinLoggen.Api.Services.AiProviders;
 using Xunit;
 
 namespace VinLoggen.Api.Tests.Services;
@@ -23,6 +24,8 @@ public class WineOrchestratorServiceTests : IDisposable
     private readonly Mock<IGeminiService>   _gemini   = new();
     private readonly Mock<IWineApiService>  _wineApi  = new();
     private readonly Mock<IProUsageService> _proUsage = new();
+    private readonly AiProviderChain        _aiChain  =
+        new(Enumerable.Empty<IAiChatProvider>(), NullLogger<AiProviderChain>.Instance);
     private readonly NpgsqlDataSource       _dataSource;
     private readonly WineOrchestratorService _sut;
 
@@ -46,6 +49,7 @@ public class WineOrchestratorServiceTests : IDisposable
             _gemini.Object,
             _wineApi.Object,
             _proUsage.Object,
+            _aiChain,
             _dataSource,
             new IntegrationSettings { EnableGemini = true, EnableWineApi = true, DailyProLimit = 10 },
             NullLogger<WineOrchestratorService>.Instance);
@@ -58,7 +62,7 @@ public class WineOrchestratorServiceTests : IDisposable
     [Fact]
     public async Task AnalyzeAsync_NullUserId_ReturnsBasicOcrResult()
     {
-        _gemini.Setup(g => g.AnalyzeLabelAsync(FakeImage, Jpeg, default))
+        _gemini.Setup(g => g.AnalyzeLabelAsync(FakeImage, Jpeg, default, It.IsAny<Guid?>(), It.IsAny<Guid?>()))
                .ReturnsAsync(new GeminiResult<WineAnalysisResponse>(DefaultAnalysis, null));
 
         var result = await _sut.AnalyzeAsync(FakeImage, Jpeg, userId: null, CancellationToken.None);
@@ -76,7 +80,7 @@ public class WineOrchestratorServiceTests : IDisposable
     [Fact]
     public async Task AnalyzeAsync_NullUserId_NeverCallsProUsageOrWineApi()
     {
-        _gemini.Setup(g => g.AnalyzeLabelAsync(FakeImage, Jpeg, default))
+        _gemini.Setup(g => g.AnalyzeLabelAsync(FakeImage, Jpeg, default, It.IsAny<Guid?>(), It.IsAny<Guid?>()))
                .ReturnsAsync(new GeminiResult<WineAnalysisResponse>(DefaultAnalysis, null));
 
         await _sut.AnalyzeAsync(FakeImage, Jpeg, userId: null, CancellationToken.None);
@@ -91,7 +95,7 @@ public class WineOrchestratorServiceTests : IDisposable
     public async Task AnalyzeAsync_GeminiDisabled_ReturnsFailResult()
     {
         var sut = new WineOrchestratorService(
-            _gemini.Object, _wineApi.Object, _proUsage.Object, _dataSource,
+            _gemini.Object, _wineApi.Object, _proUsage.Object, _aiChain, _dataSource,
             new IntegrationSettings { EnableGemini = false },
             NullLogger<WineOrchestratorService>.Instance);
 
@@ -107,7 +111,7 @@ public class WineOrchestratorServiceTests : IDisposable
     [Fact]
     public async Task AnalyzeAsync_GeminiReturnsError_ReturnsImageUnreadable()
     {
-        _gemini.Setup(g => g.AnalyzeLabelAsync(FakeImage, Jpeg, default))
+        _gemini.Setup(g => g.AnalyzeLabelAsync(FakeImage, Jpeg, default, It.IsAny<Guid?>(), It.IsAny<Guid?>()))
                .ReturnsAsync(new GeminiResult<WineAnalysisResponse>(null, "Could not read label"));
 
         var result = await _sut.AnalyzeAsync(FakeImage, Jpeg, userId: null, CancellationToken.None);
@@ -119,7 +123,7 @@ public class WineOrchestratorServiceTests : IDisposable
     [Fact]
     public async Task AnalyzeAsync_GeminiTimedOut_ReturnsExternalServiceDown()
     {
-        _gemini.Setup(g => g.AnalyzeLabelAsync(FakeImage, Jpeg, default))
+        _gemini.Setup(g => g.AnalyzeLabelAsync(FakeImage, Jpeg, default, It.IsAny<Guid?>(), It.IsAny<Guid?>()))
                .ReturnsAsync(new GeminiResult<WineAnalysisResponse>(null, "Gemini API request timed out"));
 
         var result = await _sut.AnalyzeAsync(FakeImage, Jpeg, userId: null, CancellationToken.None);
@@ -135,7 +139,7 @@ public class WineOrchestratorServiceTests : IDisposable
     {
         var userId = Guid.NewGuid();
 
-        _gemini.Setup(g => g.AnalyzeLabelAsync(FakeImage, Jpeg, default))
+        _gemini.Setup(g => g.AnalyzeLabelAsync(FakeImage, Jpeg, default, It.IsAny<Guid?>(), It.IsAny<Guid?>()))
                .ReturnsAsync(new GeminiResult<WineAnalysisResponse>(DefaultAnalysis, null));
 
         _proUsage.Setup(p => p.GetStatusAsync(userId, default))
@@ -150,7 +154,7 @@ public class WineOrchestratorServiceTests : IDisposable
             AlcoholContent: 14.5,
             Grapes:         ["Nebbiolo"]);
 
-        _wineApi.Setup(w => w.FindAsync("Marchesi di Barolo", "Barolo Riserva", 2018, default))
+        _wineApi.Setup(w => w.FindAsync("Marchesi di Barolo", "Barolo Riserva", 2018, default, It.IsAny<Guid?>(), It.IsAny<Guid?>()))
                 .ReturnsAsync(enrichment);
 
         _proUsage.Setup(p => p.IncrementAsync(userId, default)).Returns(Task.CompletedTask);
@@ -174,7 +178,7 @@ public class WineOrchestratorServiceTests : IDisposable
     {
         var userId = Guid.NewGuid();
 
-        _gemini.Setup(g => g.AnalyzeLabelAsync(FakeImage, Jpeg, default))
+        _gemini.Setup(g => g.AnalyzeLabelAsync(FakeImage, Jpeg, default, It.IsAny<Guid?>(), It.IsAny<Guid?>()))
                .ReturnsAsync(new GeminiResult<WineAnalysisResponse>(DefaultAnalysis, null));
 
         _proUsage.Setup(p => p.GetStatusAsync(userId, default))
@@ -194,7 +198,7 @@ public class WineOrchestratorServiceTests : IDisposable
     [Fact]
     public async Task AnalyzeAsync_WithBackImage_CallsAnalyzeLabelsAsync()
     {
-        _gemini.Setup(g => g.AnalyzeLabelsAsync(FakeImage, Jpeg, FakeBackImage, WebP, default))
+        _gemini.Setup(g => g.AnalyzeLabelsAsync(FakeImage, Jpeg, FakeBackImage, WebP, default, It.IsAny<Guid?>(), It.IsAny<Guid?>()))
                .ReturnsAsync(new GeminiResult<WineAnalysisResponse>(DefaultAnalysis, null));
 
         var result = await _sut.AnalyzeAsync(
@@ -203,14 +207,14 @@ public class WineOrchestratorServiceTests : IDisposable
 
         Assert.True(result.Success);
         Assert.Equal("Barolo Riserva", result.Data!.WineName);
-        _gemini.Verify(g => g.AnalyzeLabelsAsync(FakeImage, Jpeg, FakeBackImage, WebP, default), Times.Once);
-        _gemini.Verify(g => g.AnalyzeLabelAsync(It.IsAny<byte[]>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        _gemini.Verify(g => g.AnalyzeLabelsAsync(FakeImage, Jpeg, FakeBackImage, WebP, default, It.IsAny<Guid?>(), It.IsAny<Guid?>()), Times.Once);
+        _gemini.Verify(g => g.AnalyzeLabelAsync(It.IsAny<byte[]>(), It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<Guid?>(), It.IsAny<Guid?>()), Times.Never);
     }
 
     [Fact]
     public async Task AnalyzeAsync_WithNullBackImage_CallsSingleImageAnalyze()
     {
-        _gemini.Setup(g => g.AnalyzeLabelAsync(FakeImage, Jpeg, default))
+        _gemini.Setup(g => g.AnalyzeLabelAsync(FakeImage, Jpeg, default, It.IsAny<Guid?>(), It.IsAny<Guid?>()))
                .ReturnsAsync(new GeminiResult<WineAnalysisResponse>(DefaultAnalysis, null));
 
         var result = await _sut.AnalyzeAsync(
@@ -218,17 +222,17 @@ public class WineOrchestratorServiceTests : IDisposable
             backImageBytes: null, backMimeType: null);
 
         Assert.True(result.Success);
-        _gemini.Verify(g => g.AnalyzeLabelAsync(FakeImage, Jpeg, default), Times.Once);
+        _gemini.Verify(g => g.AnalyzeLabelAsync(FakeImage, Jpeg, default, It.IsAny<Guid?>(), It.IsAny<Guid?>()), Times.Once);
         _gemini.Verify(g => g.AnalyzeLabelsAsync(
             It.IsAny<byte[]>(), It.IsAny<string>(),
             It.IsAny<byte[]?>(), It.IsAny<string?>(),
-            It.IsAny<CancellationToken>()), Times.Never);
+            It.IsAny<CancellationToken>(), It.IsAny<Guid?>(), It.IsAny<Guid?>()), Times.Never);
     }
 
     [Fact]
     public async Task AnalyzeAsync_WithEmptyBackImage_CallsSingleImageAnalyze()
     {
-        _gemini.Setup(g => g.AnalyzeLabelAsync(FakeImage, Jpeg, default))
+        _gemini.Setup(g => g.AnalyzeLabelAsync(FakeImage, Jpeg, default, It.IsAny<Guid?>(), It.IsAny<Guid?>()))
                .ReturnsAsync(new GeminiResult<WineAnalysisResponse>(DefaultAnalysis, null));
 
         var result = await _sut.AnalyzeAsync(
@@ -236,13 +240,13 @@ public class WineOrchestratorServiceTests : IDisposable
             backImageBytes: [], backMimeType: Jpeg);
 
         Assert.True(result.Success);
-        _gemini.Verify(g => g.AnalyzeLabelAsync(FakeImage, Jpeg, default), Times.Once);
+        _gemini.Verify(g => g.AnalyzeLabelAsync(FakeImage, Jpeg, default, It.IsAny<Guid?>(), It.IsAny<Guid?>()), Times.Once);
     }
 
     [Fact]
     public async Task AnalyzeAsync_MultiImage_GeminiFailure_ReturnsImageUnreadable()
     {
-        _gemini.Setup(g => g.AnalyzeLabelsAsync(FakeImage, Jpeg, FakeBackImage, WebP, default))
+        _gemini.Setup(g => g.AnalyzeLabelsAsync(FakeImage, Jpeg, FakeBackImage, WebP, default, It.IsAny<Guid?>(), It.IsAny<Guid?>()))
                .ReturnsAsync(new GeminiResult<WineAnalysisResponse>(null, "Label unreadable"));
 
         var result = await _sut.AnalyzeAsync(
@@ -258,7 +262,7 @@ public class WineOrchestratorServiceTests : IDisposable
     {
         var userId = Guid.NewGuid();
 
-        _gemini.Setup(g => g.AnalyzeLabelsAsync(FakeImage, Jpeg, FakeBackImage, WebP, default))
+        _gemini.Setup(g => g.AnalyzeLabelsAsync(FakeImage, Jpeg, FakeBackImage, WebP, default, It.IsAny<Guid?>(), It.IsAny<Guid?>()))
                .ReturnsAsync(new GeminiResult<WineAnalysisResponse>(DefaultAnalysis, null));
 
         _proUsage.Setup(p => p.GetStatusAsync(userId, default))

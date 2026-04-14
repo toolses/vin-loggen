@@ -73,4 +73,16 @@ export class AdminWineListComponent implements OnInit {
       pageSize: this.pageSize(),
     });
   }
+
+  protected typeClass(type: string | null | undefined): string {
+    switch (type) {
+      case 'Rød':        return 'bg-burgundy/20 text-burgundy border-burgundy/30';
+      case 'Hvit':       return 'bg-gold/20 text-gold border-gold/30';
+      case 'Rosé':       return 'bg-rose-400/20 text-rose-300 border-rose-400/30';
+      case 'Musserende': return 'bg-sky-400/20 text-sky-300 border-sky-400/30';
+      case 'Oransje':    return 'bg-orange-400/20 text-orange-300 border-orange-400/30';
+      case 'Dessert':    return 'bg-amber-500/20 text-amber-300 border-amber-500/30';
+      default:           return 'bg-white/10 text-cream/50 border-white/10';
+    }
+  }
 }

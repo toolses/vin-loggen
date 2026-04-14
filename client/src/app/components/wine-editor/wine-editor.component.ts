@@ -7,6 +7,7 @@ import type { WineSearchResult, WineSavePayload } from '../../services/wine.serv
 import { ProfileService } from '../../services/profile.service';
 import { LocationService } from '../../services/location.service';
 import { NotificationService } from '../../services/notification.service';
+import { AdminService } from '../../services/admin.service';
 import { StarRatingComponent } from '../star-rating/star-rating.component';
 import {
   LocationSearchComponent,
@@ -26,6 +27,7 @@ export class WineEditorComponent implements OnInit {
   private readonly profileService = inject(ProfileService);
   private readonly locationService = inject(LocationService);
   private readonly notifications = inject(NotificationService);
+  protected readonly admin = inject(AdminService);
 
   protected readonly name = signal('');
   protected readonly producer = signal('');

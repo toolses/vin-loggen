@@ -1,0 +1,220 @@
+<div class="p-6 max-w-6xl">
+  <div class="flex items-center justify-between mb-6">
+    <h1 class="text-2xl font-serif text-cream">API-sporing</h1>
+    <div class="flex gap-2">
+      @for (d of [7, 14, 30]; track d) {
+        <button
+          (click)="changeDays(d)"
+          class="px-3 py-1.5 rounded-lg text-sm transition-colors"
+          [class]="days() === d
+            ? 'bg-burgundy/40 text-gold border border-gold/30'
+            : 'bg-white/5 text-cream/50 hover:bg-white/10 border border-white/10'">
+          {{ d }}d
+        </button>
+      }
+    </div>
+  </div>
+
+  <!-- Trace list -->
+  <div class="bg-cellar-surface rounded-xl border border-white/10 overflow-hidden">
+    @if (traceService.traces().length > 0) {
+      <div class="divide-y divide-white/5">
+        @for (trace of traceService.traces(); track trace.correlationId) {
+          <!-- Trace summary row -->
+          <button
+            (click)="selectTrace(trace)"
+            class="w-full text-left px-5 py-4 hover:bg-white/5 transition-colors"
+            [class.bg-white/5]="selectedTrace()?.correlationId === trace.correlationId">
+            <div class="flex items-center justify-between gap-4">
+              <div class="flex items-center gap-3 min-w-0">
+                <!-- Correlation ID -->
+                <code class="text-[11px] px-2 py-1 rounded bg-white/5 text-cream/60 font-mono shrink-0">
+                  {{ shortCorrelationId(trace.correlationId) }}
+                </code>
+                <!-- Provider badges -->
+                <div class="flex items-center gap-1.5 shrink-0">
+                  @for (p of trace.providers; track p) {
+                    <span class="text-[10px] px-1.5 py-0.5 rounded font-mono uppercase tracking-wider inline-flex items-center justify-center"
+                          [class]="providerBadgeClass(p)">
+                      {{ providerIcon(p) }}
+                    </span>
+                  }
+                </div>
+                <!-- Endpoints -->
+                <div class="flex items-center gap-1.5 shrink-0">
+                  @for (ep of trace.endpoints; track ep) {
+                    <span class="text-[10px] px-1.5 py-0.5 rounded bg-white/5 text-cream/40">
+                      {{ endpointLabel(ep) }}
+                    </span>
+                  }
+                </div>
+                <!-- Models -->
+                @if (trace.models && trace.models.length > 0) {
+                  <div class="flex items-center gap-1 shrink-0">
+                    @for (m of trace.models; track m) {
+                      <span class="text-[9px] px-1.5 py-0.5 rounded-full bg-white/5 text-cream/40">
+                        {{ m }}
+                      </span>
+                    }
+                  </div>
+                }
+              </div>
+
+              <div class="flex items-center gap-4 shrink-0 text-xs text-cream/40">
+                <span>{{ trace.totalCalls }} kall</span>
+                <span>{{ formatDuration(trace.totalDurationMs) }}</span>
+                @if (trace.totalTokens > 0) {
+                  <span>{{ trace.totalTokens }} tok</span>
+                }
+                @if (trace.errorCount > 0) {
+                  <span class="text-red-400">{{ trace.errorCount }} feil</span>
+                }
+                <span class="text-cream/30 w-32 text-right">{{ formatDateTime(trace.startedAt) }}</span>
+                <!-- Expand indicator -->
+                <svg class="w-4 h-4 transition-transform text-cream/30"
+                     [class.rotate-180]="selectedTrace()?.correlationId === trace.correlationId"
+                     fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                </svg>
+              </div>
+            </div>
+          </button>
+
+          <!-- Trace detail (expanded) -->
+          @if (selectedTrace()?.correlationId === trace.correlationId) {
+            <div class="bg-cellar-bg/50 border-t border-white/5">
+              @if (traceService.loading()) {
+                <div class="p-6 text-center text-cream/40">Laster tidslinje...</div>
+              } @else {
+                <!-- Timeline -->
+                <div class="p-5">
+                  <div class="relative">
+                    <!-- Vertical timeline line -->
+                    <div class="absolute left-[19px] top-3 bottom-3 w-px bg-white/10"></div>
+
+                    @for (entry of traceService.traceEntries(); track entry.id; let i = $index; let last = $last) {
+                      <div class="relative flex gap-4 pb-4" [class.pb-0]="last">
+                        <!-- Timeline dot -->
+                        <div class="relative z-10 w-10 shrink-0 flex justify-center pt-1.5">
+                          <div class="w-2.5 h-2.5 rounded-full ring-2 ring-cellar-bg"
+                               [class]="entry.statusCode >= 400 ? 'bg-red-400' : 'bg-green-400'">
+                          </div>
+                        </div>
+
+                        <!-- Entry content -->
+                        <div class="flex-1 min-w-0">
+                          <button
+                            (click)="toggleEntry(entry.id)"
+                            class="w-full text-left rounded-lg p-3 bg-cellar-surface border border-white/10 hover:border-white/20 transition-colors">
+                            <div class="flex items-center justify-between gap-3">
+                              <div class="flex items-center gap-2 min-w-0">
+                                <!-- Step number -->
+                                <span class="text-[10px] text-cream/30 w-4 text-center shrink-0">{{ i + 1 }}</span>
+                                <!-- Provider badge -->
+                                <span class="text-[10px] px-1.5 py-0.5 rounded font-mono uppercase tracking-wider inline-flex items-center justify-center shrink-0"
+                                      [class]="providerBadgeClass(entry.provider)">
+                                  {{ providerIcon(entry.provider) }}
+                                </span>
+                                <span class="text-cream/70 text-sm">{{ providerLabel(entry.provider) }}</span>
+                                <span class="text-cream/30 text-xs">{{ entry.endpoint }}</span>
+                                @if (entry.usedModel) {
+                                  <span class="text-[9px] px-1.5 py-0.5 rounded-full bg-white/5 text-cream/40">{{ entry.usedModel }}</span>
+                                }
+                              </div>
+                              <div class="flex items-center gap-3 shrink-0 text-xs">
+                                <span [class]="statusClass(entry.statusCode)">{{ entry.statusCode || '—' }}</span>
+                                <span class="text-cream/40">{{ entry.responseTimeMs }}ms</span>
+                                @if (entry.totalTokensUsed) {
+                                  <span class="text-cream/30">{{ entry.totalTokensUsed }} tok</span>
+                                }
+                                <span class="text-cream/20">{{ formatTime(entry.createdAt) }}</span>
+                                <svg class="w-3.5 h-3.5 transition-transform text-cream/30"
+                                     [class.rotate-180]="expandedEntryId() === entry.id"
+                                     fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                                </svg>
+                              </div>
+                            </div>
+                          </button>
+
+                          <!-- Expanded body content -->
+                          @if (expandedEntryId() === entry.id) {
+                            <div class="mt-2 space-y-2">
+                              @if (entry.requestBody) {
+                                <div class="rounded-lg border border-white/5 overflow-hidden">
+                                  <div class="px-3 py-1.5 bg-blue-500/10 text-blue-300 text-[10px] font-mono uppercase tracking-wider">
+                                    Request
+                                  </div>
+                                  <div class="p-3 flex gap-3">
+                                    <!-- Label thumbnails for LabelScan entries -->
+                                    @if (isLabelScan(entry) && parseLabelImages(entry.requestBody); as images) {
+                                      <div class="flex gap-2 shrink-0">
+                                        <button (click)="openLightbox(images.front!); $event.stopPropagation()"
+                                                class="block rounded-lg overflow-hidden border border-white/10 hover:border-gold/40 transition-colors"
+                                                title="Vis fullstørrelse – front">
+                                          <img [src]="toThumbnailUrl(images.front!)"
+                                               alt="Front etikett"
+                                               class="h-[120px] w-auto object-cover" />
+                                        </button>
+                                        @if (images.back) {
+                                          <button (click)="openLightbox(images.back!); $event.stopPropagation()"
+                                                  class="block rounded-lg overflow-hidden border border-white/10 hover:border-gold/40 transition-colors"
+                                                  title="Vis fullstørrelse – bak">
+                                            <img [src]="toThumbnailUrl(images.back!)"
+                                                 alt="Bak etikett"
+                                                 class="h-[120px] w-auto object-cover" />
+                                          </button>
+                                        }
+                                      </div>
+                                    }
+                                    <pre class="text-xs text-cream/60 overflow-x-auto max-h-64 overflow-y-auto font-mono whitespace-pre-wrap break-all flex-1">{{ formatBody(entry.requestBody) }}</pre>
+                                  </div>
+                                </div>
+                              }
+                              @if (entry.responseBody) {
+                                <div class="rounded-lg border border-white/5 overflow-hidden">
+                                  <div class="px-3 py-1.5 bg-emerald-500/10 text-emerald-300 text-[10px] font-mono uppercase tracking-wider">
+                                    Response
+                                  </div>
+                                  <pre class="p-3 text-xs text-cream/60 overflow-x-auto max-h-64 overflow-y-auto font-mono whitespace-pre-wrap break-all">{{ formatBody(entry.responseBody) }}</pre>
+                                </div>
+                              }
+                              @if (!entry.requestBody && !entry.responseBody) {
+                                <p class="text-cream/30 text-xs px-3 py-2">Ingen request/response-data logget for dette kallet.</p>
+                              }
+                            </div>
+                          }
+                        </div>
+                      </div>
+                    }
+                  </div>
+                </div>
+              }
+            </div>
+          }
+        }
+      </div>
+    } @else if (!traceService.loading()) {
+      <div class="p-8 text-center text-cream/40">
+        Ingen spor funnet de siste {{ days() }} dagene.
+      </div>
+    } @else {
+      <div class="p-8 text-center text-cream/40">
+        Laster...
+      </div>
+    }
+  </div>
+</div>
+
+<!-- Lightbox overlay -->
+@if (lightboxUrl()) {
+  <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
+       (click)="closeLightbox()">
+    <button class="absolute top-4 right-4 text-cream/60 hover:text-cream text-3xl leading-none"
+            (click)="closeLightbox()">&times;</button>
+    <img [src]="lightboxUrl()!"
+         alt="Etikett fullstørrelse"
+         class="max-h-[90vh] max-w-[90vw] object-contain rounded-xl shadow-2xl"
+         (click)="$event.stopPropagation()" />
+  </div>
+}

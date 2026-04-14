@@ -66,6 +66,7 @@ export interface ResetDataResult {
   deletedWineLogs: number;
   deletedExternalIds: number;
   deletedWines: number;
+  resetProfiles: number;
 }
 
 @Injectable({ providedIn: 'root' })

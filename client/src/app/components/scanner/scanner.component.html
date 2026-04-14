@@ -23,24 +23,6 @@
     </svg>
   </button>
 
-  <!-- ── Pro quota counter ──────────────────────────────────── -->
-  @if (auth.isLoggedIn() && step() !== 'processing') {
-    <div
-      class="absolute top-4 right-4 z-50 flex items-center gap-1.5 px-3 py-2 rounded-full glass"
-      style="margin-top: var(--sat)"
-      [title]="profileService.proScansRemaining() + ' Pro-skanninger igjen i dag'"
-    >
-      <svg class="w-3.5 h-3.5 text-gold flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-        <path fill-rule="evenodd" d="M10 1a.75.75 0 0 1 .75.75v1.5a.75.75 0 0 1-1.5 0v-1.5A.75.75 0 0 1 10 1ZM5.05 3.05a.75.75 0 0 1 1.06 0l1.062 1.06A.75.75 0 1 1 6.11 5.173L5.05 4.11a.75.75 0 0 1 0-1.06Zm9.9 0a.75.75 0 0 1 0 1.06l-1.06 1.062a.75.75 0 0 1-1.062-1.061l1.061-1.06a.75.75 0 0 1 1.06 0ZM3 8a.75.75 0 0 1 .75-.75h1.5a.75.75 0 0 1 0 1.5h-1.5A.75.75 0 0 1 3 8Zm11 0a.75.75 0 0 1 .75-.75h1.5a.75.75 0 0 1 0 1.5h-1.5A.75.75 0 0 1 14 8Zm-6.828 2.828a.75.75 0 0 1 0 1.061L6.11 12.95a.75.75 0 0 1-1.06-1.06l1.06-1.062a.75.75 0 0 1 1.061 0Zm3.594-3.317a.75.75 0 0 1 1.06.188l2 3a.75.75 0 1 1-1.248.832l-2-3a.75.75 0 0 1 .188-1.02Z" clip-rule="evenodd"/>
-      </svg>
-      <span class="text-xs font-medium"
-            [class.text-gold]="profileService.proScansRemaining() > 0"
-            [class.text-red-400]="profileService.proScansRemaining() === 0">
-        {{ profileService.proScansRemaining() }}/{{ profileService.dailyProLimit() }}
-      </span>
-    </div>
-  }
-
   <!-- ── Processing overlay ────────────────────────────────── -->
   @if (step() === 'processing') {
     <div class="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/80">
@@ -125,7 +107,8 @@
 
       } @else {
         <!-- Not capturing: Idle / Review state -->
-        <div class="flex-1 flex flex-col items-center justify-center h-full bg-cellar-bg px-6 text-center" style="padding-bottom: env(safe-area-inset-bottom)">
+        <div class="flex-1 h-full bg-cellar-bg flex flex-col justify-center" style="padding-bottom: env(safe-area-inset-bottom)">
+          <div class="max-w-lg mx-auto w-full px-4 flex flex-col items-center text-center">
 
           @if (cameraError()) {
             <div class="text-5xl mb-4" aria-hidden="true">📷</div>
@@ -144,7 +127,24 @@
               <!-- Normal scan prompt -->
               <div class="text-6xl mb-6" aria-hidden="true">📸</div>
               <p class="text-cream font-serif text-xl mb-2">Klar til å skanne</p>
-              <p class="text-cream-dark text-sm mb-8">Ta bilde av forsiden og eventuelt baksiden av flasken</p>
+              <p class="text-cream-dark text-sm mb-4">Ta bilde av forsiden og eventuelt baksiden av flasken</p>
+              @if (auth.isLoggedIn()) {
+                <div class="w-full mb-6 glass rounded-xl px-3 py-2">
+                  <div class="flex items-center justify-between text-xs mb-1">
+                    <span class="text-cream-dark">Dagens AI-scan kvote</span>
+                    <span class="font-medium" [class]="profileService.proScansRemaining() === 0 ? 'text-red-400' : 'text-gold'">
+                      {{ profileService.proScansRemaining() }} / {{ profileService.dailyProLimit() }} igjen
+                    </span>
+                  </div>
+                  <div class="h-1.5 bg-white/10 rounded-full overflow-hidden">
+                    <div
+                      class="h-full rounded-full transition-all duration-500"
+                      [class]="profileService.proScansRemaining() === 0 ? 'bg-red-500' : 'bg-gold'"
+                      [style.width.%]="profileService.dailyProLimit() > 0 ? (profileService.proScansRemaining() / profileService.dailyProLimit()) * 100 : 0"
+                    ></div>
+                  </div>
+                </div>
+              }
             }
           } @else {
             <!-- Review state: front captured, optionally back too -->
@@ -192,7 +192,7 @@
           }
 
           <!-- Action buttons -->
-          <div class="flex flex-col gap-3 w-full max-w-xs">
+          <div class="flex flex-col gap-3 w-full">
             @if (step() === 'idle') {
               @if (auth.isLoggedIn() && profileService.proScansRemaining() === 0) {
                 <!-- Quota depleted: manual entry is primary action -->
@@ -262,6 +262,7 @@
                 </button>
               }
             }
+          </div>
           </div>
         </div>
       }

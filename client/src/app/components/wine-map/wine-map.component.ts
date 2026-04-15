@@ -189,19 +189,19 @@ export class WineMapComponent implements OnDestroy {
       : `<div class="w-full h-24 bg-burgundy/20 rounded-t-lg flex items-center justify-center text-3xl">&#127863;</div>`;
 
     const ratingHtml = props['rating']
-      ? `<span class="text-gold font-bold">${props['rating']}</span><span class="text-cream-dark text-[10px]"> / 6</span>`
+      ? `<span class="whitespace-nowrap"><span class="text-gold font-bold">${props['rating']}</span><span class="text-cream-dark text-[10px]"> / 6</span></span>`
       : '';
 
     return `
       <div class="popup-wine-card">
         ${imageHtml}
         <div class="p-3">
-          <p class="font-semibold text-sm text-cream leading-tight">${props['name']}</p>
-          <p class="text-xs text-cream-dark mt-0.5">${props['producer']}</p>
-          <div class="flex items-center justify-between mt-2">
-            <span class="text-[10px] text-cream-dark">${props['locationName'] ?? ''}</span>
+          <div class="flex items-start justify-between gap-2">
+            <p class="font-semibold text-sm text-cream leading-tight">${props['name']}</p>
             ${ratingHtml}
           </div>
+          <p class="text-xs text-cream-dark mt-0.5">${props['producer']}</p>
+          <p class="text-[10px] text-cream-dark mt-2">${props['locationName'] ?? ''}</p>
         </div>
       </div>`;
   }
@@ -236,6 +236,7 @@ export class WineMapComponent implements OnDestroy {
           .setLngLat(coords)
           .setHTML(html)
           .addTo(map);
+        this.popup.on('close', () => { this.popup = null; });
       } else {
         this.popup.setHTML(html);
       }

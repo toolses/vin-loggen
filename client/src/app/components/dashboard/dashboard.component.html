@@ -8,7 +8,7 @@
 
     @if (wineService.wineCount() > 0) {
       <p class="text-cream-muted mt-3 text-xs uppercase tracking-widest font-medium">
-        {{ wineService.wineCount() }} {{ wineService.wineCount() === 1 ? 'vin' : 'viner' }} i kjelleren
+        {{ wineService.wineCount() }} {{ wineService.wineCount() === 1 ? 'vin' : 'viner' }} i katalogen
       </p>
     }
   </section>
@@ -83,7 +83,7 @@
         <!-- Empty State -->
         <div class="glass rounded-2xl p-10 text-center">
           <div class="text-6xl mb-4" aria-hidden="true">🍾</div>
-          <h3 class="font-serif text-xl text-cream mb-2">Din vinkjeller er tom</h3>
+          <h3 class="font-serif text-xl text-cream mb-2">Din vinkatalog er tom</h3>
           <p class="text-cream-dark text-sm mb-6">Skann din første vinetikett for å komme i gang</p>
           <a
             [routerLink]="profile.isPro() ? '/expert' : '/scan'"
@@ -97,7 +97,7 @@
           </a>
         </div>
       } @else {
-        <!-- Wine list (same style as Vinkjelleren) -->
+        <!-- Wine list (same style as Vinkatalogen) -->
         <ul class="space-y-3" role="list">
           @for (wine of recentWines(); track wine.id) {
             <app-wine-card

@@ -1,9 +1,32 @@
-import { AfterViewInit, Component, computed, effect, ElementRef, inject, OnInit, signal, viewChild } from '@angular/core';
+import { AfterViewInit, Component, computed, effect, ElementRef, inject, OnDestroy, OnInit, signal, viewChild } from '@angular/core';
 import { DatePipe, NgTemplateOutlet } from '@angular/common';
 import { Router, RouterLink } from '@angular/router';
 import { ProfileService } from '../../services/profile.service';
 import { ExpertService, ExpertMessage, ExpertWineRef, ExpertTypeSuggestionRef } from '../../services/expert.service';
 import { MarkdownPipe } from '../../pipes/markdown.pipe';
+
+interface QuickPick {
+  label: string;
+  question: string;
+}
+
+const ALL_QUICK_PICKS: QuickPick[] = [
+  { label: 'Vintype til lam',        question: 'Hvilken type vin passer til lam?' },
+  { label: 'Hvitvin til skalldyr',   question: 'Hva er en god hvitvin til skalldyr?' },
+  { label: 'Vintype til kjøtt',      question: 'Hvilken type vin passer til kjøtt?' },
+  { label: 'Vin til ost',            question: 'Hvilken vin passer til ost?' },
+  { label: 'Rødvin til pasta',       question: 'Hvilken rødvin passer til pasta?' },
+  { label: 'Vin til fisk',           question: 'Hva er en god vin til fisk?' },
+  { label: 'Vin til pizza',          question: 'Hvilken vin passer til pizza?' },
+  { label: 'Vin til sushi',          question: 'Hvilken vin anbefaler du til sushi?' },
+  { label: 'Rosévin til salat',      question: 'Passer rosévin til salat?' },
+  { label: 'Vin til kylling',        question: 'Hvilken vin passer til kylling?' },
+  { label: 'Vin til dessert',        question: 'Hvilken vin passer til dessert?' },
+  { label: 'Vin til taco',           question: 'Hva er en god vin til taco?' },
+  { label: 'Vin til grilling',       question: 'Hvilken vin passer til grillmat?' },
+  { label: 'Bobler til forrett',     question: 'Hvilken musserende vin passer til forrett?' },
+  { label: 'Vin til vilt',           question: 'Hvilken vin passer til vilt?' },
+];
 
 @Component({
   selector: 'app-expert',
@@ -11,7 +34,7 @@ import { MarkdownPipe } from '../../pipes/markdown.pipe';
   imports: [RouterLink, NgTemplateOutlet, MarkdownPipe, DatePipe],
   templateUrl: './expert.component.html',
 })
-export class ExpertComponent implements OnInit, AfterViewInit {
+export class ExpertComponent implements OnInit, AfterViewInit, OnDestroy {
   protected readonly profile = inject(ProfileService);
   protected readonly expert = inject(ExpertService);
   private readonly router = inject(Router);
@@ -20,6 +43,20 @@ export class ExpertComponent implements OnInit, AfterViewInit {
   protected readonly chatScroll = viewChild<ElementRef<HTMLDivElement>>('chatScroll');
   private readonly chatTextarea = viewChild<ElementRef<HTMLTextAreaElement>>('chatTextarea');
   protected readonly showHistory = signal(false);
+
+  // ── Quick picks rotation ────────────────────────────────────────────
+  private readonly quickPickIndex = signal(0);
+  private quickPickTimer: ReturnType<typeof setInterval> | null = null;
+
+  protected readonly visibleQuickPicks = computed(() => {
+    const idx = this.quickPickIndex();
+    const start = (idx * 3) % ALL_QUICK_PICKS.length;
+    const picks: QuickPick[] = [];
+    for (let i = 0; i < 3; i++) {
+      picks.push(ALL_QUICK_PICKS[(start + i) % ALL_QUICK_PICKS.length]);
+    }
+    return picks;
+  });
 
   protected readonly isViewingPastSession = computed(() => this.expert.viewingHistory());
 
@@ -34,6 +71,13 @@ export class ExpertComponent implements OnInit, AfterViewInit {
 
   ngOnInit(): void {
     this.profile.loadProQuota();
+    this.quickPickTimer = setInterval(() => {
+      this.quickPickIndex.update(i => i + 1);
+    }, 6000);
+  }
+
+  ngOnDestroy(): void {
+    if (this.quickPickTimer) clearInterval(this.quickPickTimer);
   }
 
   ngAfterViewInit(): void {

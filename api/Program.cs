@@ -116,6 +116,7 @@ builder.Services.AddScoped<IAiChatProvider, GroqChatProvider>();
 builder.Services.AddScoped<IAiChatProvider, DeepSeekChatProvider>();
 builder.Services.AddScoped<IAiChatProvider, GeminiChatProvider>();
 builder.Services.AddScoped<AiProviderChain>();
+builder.Services.AddSingleton<GroqTokenBudgetService>();
 
 builder.Services.AddScoped<IGeminiService,   GeminiService>();
 builder.Services.AddScoped<IWineApiService,  WineApiService>();

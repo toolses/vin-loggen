@@ -23,7 +23,7 @@ export class DashboardComponent implements OnInit {
   }
 
   protected recentWines() {
-    return this.wineService.wines().slice(0, 8);
+    return this.wineService.wines().slice(0, 3);
   }
 
   protected openSharePreview(wine: Wine): void {

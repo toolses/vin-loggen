@@ -65,6 +65,17 @@ public sealed class ExpertService : IExpertService
         - Beskriv karakteristikker, druesorter, regioner og hva som gjør denne typen vin passende.
         - Hvis katalogen inneholder viner som matcher typen, nevn dem ved navn i «catalogWineNames».
 
+        PRIORITET — Oppdagelse fremfor gjentakelse:
+        - Gi ALLTID det best mulige svaret på brukerens spørsmål. Det er høyeste prioritet.
+        - IKKE standardmessig foreslå vintyper brukeren allerede har smakt.
+          Bruk katalogdataen til å forstå brukerens smak, men anbefal primært nye
+          vintyper og stiler de ennå ikke har utforsket.
+        - Du KAN nevne viner brukeren har smakt hvis det er direkte relevant (f.eks.
+          «Du likte X, så du vil sannsynligvis også like Y»), men hovedfokus skal
+          være på nye oppdagelser.
+        - Hvis brukeren spesifikt spør om viner de har smakt, er det selvfølgelig
+          greit å referere til og liste disse.
+
         Regler:
         - Svar alltid på norsk.
         - Vær vennlig, konsis og kompetent.
@@ -361,6 +372,16 @@ public sealed class ExpertService : IExpertService
                 CatalogMatches:  matches.Length > 0 ? matches : null));
         }
 
+        // Collect all unique catalog matches across type suggestions as top-level wine references
+        var wineDict = new Dictionary<Guid, ExpertWineReference>();
+        foreach (var ts in typeSuggestions)
+        {
+            if (ts.CatalogMatches is not { Length: > 0 }) continue;
+            foreach (var match in ts.CatalogMatches)
+                wineDict.TryAdd(match.Id, match);
+        }
+        var referencedWines = wineDict.Count > 0 ? wineDict.Values.ToArray() : null;
+
         // Charge quota
         await _proUsage.IncrementAsync(userId, ct);
         var updatedStatus = await _proUsage.GetStatusAsync(userId, ct);
@@ -373,7 +394,7 @@ public sealed class ExpertService : IExpertService
         try
         {
             (sessionId, suggestionIds) = await PersistConversationAsync(
-                conn, userId, request, parsed.Answer, chatResult.ProviderName, null, typeArray, ct);
+                conn, userId, request, parsed.Answer, chatResult.ProviderName, referencedWines, typeArray, ct);
         }
         catch (Exception ex)
         {
@@ -381,7 +402,7 @@ public sealed class ExpertService : IExpertService
         }
 
         return new ExpertResponse(
-            parsed.Answer, null,
+            parsed.Answer, referencedWines,
             updatedStatus.ScansToday, updatedStatus.DailyLimit, updatedStatus.ScansRemaining,
             chatResult.ProviderName, sessionId, suggestionIds,
             TypeSuggestions: typeArray);
@@ -514,11 +535,10 @@ public sealed class ExpertService : IExpertService
             """,
             new { SessionId = sessionId, Content = answer, ModelUsed = modelUsed });
 
-        // Insert wine suggestions (classic mode)
-        Guid[]? suggestionIds = null;
+        // Insert wine suggestions (classic mode or type-mode catalogue matches)
+        var allSuggestionIds = new List<Guid>();
         if (wines is { Length: > 0 })
         {
-            suggestionIds = new Guid[wines.Length];
             for (int i = 0; i < wines.Length; i++)
             {
                 var wine = wines[i];
@@ -526,38 +546,39 @@ public sealed class ExpertService : IExpertService
                 var wineDataJson = JsonSerializer.Serialize(wine,
                     new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
 
-                suggestionIds[i] = await conn.ExecuteScalarAsync<Guid>(
+                allSuggestionIds.Add(await conn.ExecuteScalarAsync<Guid>(
                     """
                     INSERT INTO expert_wine_suggestions (message_id, wine_id, wine_data, suggestion_type)
                     VALUES (@MessageId, @WineId, @WineData::jsonb, 'wine')
                     RETURNING id
                     """,
-                    new { MessageId = assistantMessageId, WineId = wineId, WineData = wineDataJson });
+                    new { MessageId = assistantMessageId, WineId = wineId, WineData = wineDataJson }));
             }
         }
 
         // Insert type suggestions (type mode)
         if (typeSuggestions is { Length: > 0 })
         {
-            suggestionIds = new Guid[typeSuggestions.Length];
             for (int i = 0; i < typeSuggestions.Length; i++)
             {
                 var typeDataJson = JsonSerializer.Serialize(typeSuggestions[i],
                     new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
 
-                suggestionIds[i] = await conn.ExecuteScalarAsync<Guid>(
+                allSuggestionIds.Add(await conn.ExecuteScalarAsync<Guid>(
                     """
                     INSERT INTO expert_wine_suggestions (message_id, wine_id, wine_data, suggestion_type)
                     VALUES (@MessageId, NULL, @WineData::jsonb, 'type')
                     RETURNING id
                     """,
-                    new { MessageId = assistantMessageId, WineData = typeDataJson });
+                    new { MessageId = assistantMessageId, WineData = typeDataJson }));
             }
         }
 
+        var suggestionIds = allSuggestionIds.Count > 0 ? allSuggestionIds.ToArray() : null;
+
         _logger.LogInformation(
-            "ExpertService: persisted conversation session {SessionId} ({WineCount} suggestions)",
-            sessionId, wines?.Length ?? 0);
+            "ExpertService: persisted conversation session {SessionId} ({WineCount} wine + {TypeCount} type suggestions)",
+            sessionId, wines?.Length ?? 0, typeSuggestions?.Length ?? 0);
 
         return (sessionId, suggestionIds);
     }
@@ -691,6 +712,21 @@ public sealed class ExpertService : IExpertService
         }
         catch (JsonException ex)
         {
+            var repaired = TryRepairTruncatedJsonArray(winesJson);
+            if (repaired is not null)
+            {
+                try
+                {
+                    var wines2 = JsonSerializer.Deserialize<AiWineSuggestion[]>(
+                        repaired, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                    _logger.LogInformation(
+                        "ExpertService: repaired truncated classic JSON, recovered {Count} wine(s)",
+                        wines2?.Length ?? 0);
+                    return new ParsedClassicResponse(answerText, wines2 ?? []);
+                }
+                catch (JsonException) { /* repair didn't help, fall through */ }
+            }
+
             _logger.LogWarning(ex, "ExpertService: failed to parse wines JSON after delimiter, falling back");
             return new ParsedClassicResponse(answerText, []);
         }
@@ -721,6 +757,22 @@ public sealed class ExpertService : IExpertService
         }
         catch (JsonException ex)
         {
+            // Attempt to salvage a truncated JSON array (AI ran out of tokens)
+            var repaired = TryRepairTruncatedJsonArray(json);
+            if (repaired is not null)
+            {
+                try
+                {
+                    var types2 = JsonSerializer.Deserialize<AiTypeSuggestion[]>(
+                        repaired, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                    _logger.LogInformation(
+                        "ExpertService: repaired truncated type JSON, recovered {Count} suggestion(s)",
+                        types2?.Length ?? 0);
+                    return new ParsedTypeResponse(answerText, types2 ?? []);
+                }
+                catch (JsonException) { /* repair didn't help, fall through */ }
+            }
+
             _logger.LogWarning(ex, "ExpertService: failed to parse type suggestions JSON, falling back");
             return new ParsedTypeResponse(answerText, []);
         }
@@ -798,7 +850,7 @@ public sealed class ExpertService : IExpertService
                           $"{wine.Type ?? ""} {wine.Country ?? ""}";
 
         var chatResult = await _aiChain.ChatAsync(
-            _settings.AiFallback.ExpertChatPriority,
+            _settings.AiFallback.EnrichmentPriority,
             EnrichmentPrompt,
             userContent,
             ct,
@@ -1111,6 +1163,31 @@ public sealed class ExpertService : IExpertService
         string? Bitterhet);
 
     private record ParsedTypeResponse(string Answer, AiTypeSuggestion[] TypeSuggestions);
+
+    /// <summary>
+    /// Attempts to repair a truncated JSON array by closing open strings, objects, and the array.
+    /// Returns null if repair is not possible (e.g. no complete element exists).
+    /// </summary>
+    private static string? TryRepairTruncatedJsonArray(string json)
+    {
+        if (string.IsNullOrWhiteSpace(json) || json[0] != '[')
+            return null;
+
+        // Strategy: find the last complete object boundary "},", truncate there, close the array.
+        var lastCompleteBoundary = json.LastIndexOf("},", StringComparison.Ordinal);
+        if (lastCompleteBoundary > 0)
+        {
+            // Keep up to and including the "}", then close the array
+            return json[..(lastCompleteBoundary + 1)] + "]";
+        }
+
+        // Only one object — try to close it: find last "}" and close
+        var lastBrace = json.LastIndexOf('}');
+        if (lastBrace > 1)
+            return json[..(lastBrace + 1)] + "]";
+
+        return null;
+    }
 
     // Shared
     private record EnrichmentFallbackResult(string[]? FoodPairings, string? TechnicalNotes, string? Description);

@@ -187,7 +187,7 @@ public sealed class ExpertService : IExpertService
 
         // 3. Search local wines DB for context
         await Progress("Søker i vinkatalogen …");
-        var catalogWines = await SearchCatalogWinesAsync(conn, request.Question, ct);
+        var catalogWines = await SearchCatalogWinesAsync(conn, userId, request.Question, ct);
 
         // 4. Fetch user's taste profile
         var tasteProfileJson = await conn.QuerySingleOrDefaultAsync<string?>(
@@ -338,7 +338,7 @@ public sealed class ExpertService : IExpertService
         foreach (var aiType in parsed.TypeSuggestions)
         {
             // Find catalogue matches by type/country/region/grapes
-            var matches = await MatchCatalogWinesForTypeAsync(conn, aiType, catalogWines, ct);
+            var matches = await MatchCatalogWinesForTypeAsync(conn, userId, aiType, catalogWines, ct);
 
             // Build Vinmonopolet URL
             var vinmonopoletUrl = VinmonopoletQueryBuilder.BuildSearchUrl(
@@ -411,7 +411,7 @@ public sealed class ExpertService : IExpertService
     // ── Catalogue matching for type suggestions ─────────────────────────────────
 
     private async Task<ExpertWineReference[]> MatchCatalogWinesForTypeAsync(
-        NpgsqlConnection conn, AiTypeSuggestion aiType,
+        NpgsqlConnection conn, Guid userId, AiTypeSuggestion aiType,
         IReadOnlyList<CatalogWineRow> alreadySearched, CancellationToken ct)
     {
         // First check if any of the AI's named catalogue wines exist in the already-searched results
@@ -458,10 +458,11 @@ public sealed class ExpertService : IExpertService
             FROM wines
             WHERE type ILIKE @Type
               AND (@Country IS NULL OR country ILIKE '%' || @Country || '%')
+              AND EXISTS (SELECT 1 FROM wine_logs wl WHERE wl.wine_id = wines.id AND wl.user_id = @UserId)
             ORDER BY created_at DESC
             LIMIT @Limit
             """,
-            new { Type = dbType, Country = aiType.Country, Limit = remaining + 5 });
+            new { Type = dbType, Country = aiType.Country, UserId = userId, Limit = remaining + 5 });
 
         foreach (var w in broader)
         {
@@ -1058,7 +1059,7 @@ public sealed class ExpertService : IExpertService
     // ── Catalog search ──────────────────────────────────────────────────────────
 
     private async Task<IReadOnlyList<CatalogWineRow>> SearchCatalogWinesAsync(
-        NpgsqlConnection conn, string question, CancellationToken ct)
+        NpgsqlConnection conn, Guid userId, string question, CancellationToken ct)
     {
         var words = Regex.Matches(question.ToLowerInvariant(), @"\b[a-zæøåà-ü]{3,}\b")
             .Select(m => m.Value)
@@ -1074,9 +1075,11 @@ public sealed class ExpertService : IExpertService
                        type AS Type, country AS Country, region AS Region,
                        food_pairings AS FoodPairings, description AS Description
                 FROM wines
+                WHERE EXISTS (SELECT 1 FROM wine_logs wl WHERE wl.wine_id = wines.id AND wl.user_id = @UserId)
                 ORDER BY created_at DESC
                 LIMIT 5
-                """);
+                """,
+                new { UserId = userId });
             return fallback.AsList();
         }
 
@@ -1087,18 +1090,19 @@ public sealed class ExpertService : IExpertService
                    type AS Type, country AS Country, region AS Region,
                    food_pairings AS FoodPairings, description AS Description
             FROM wines
-            WHERE name     ILIKE '%' || @Search || '%'
-               OR producer ILIKE '%' || @Search || '%'
-               OR region   ILIKE '%' || @Search || '%'
-               OR type     ILIKE '%' || @Search || '%'
-               OR country  ILIKE '%' || @Search || '%'
-               OR array_to_string(grapes, ' ') ILIKE '%' || @Search || '%'
+            WHERE EXISTS (SELECT 1 FROM wine_logs wl WHERE wl.wine_id = wines.id AND wl.user_id = @UserId)
+              AND (   name     ILIKE '%' || @Search || '%'
+                   OR producer ILIKE '%' || @Search || '%'
+                   OR region   ILIKE '%' || @Search || '%'
+                   OR type     ILIKE '%' || @Search || '%'
+                   OR country  ILIKE '%' || @Search || '%'
+                   OR array_to_string(grapes, ' ') ILIKE '%' || @Search || '%')
             ORDER BY
                 SIMILARITY(LOWER(name || ' ' || producer || ' ' || COALESCE(region, '') || ' ' || COALESCE(type, '')),
                            LOWER(@Search)) DESC
             LIMIT 5
             """,
-            new { Search = likePattern });
+            new { UserId = userId, Search = likePattern });
 
         var list = results.AsList();
 
@@ -1108,6 +1112,7 @@ public sealed class ExpertService : IExpertService
                 words.Select((_, i) => $"name ILIKE '%' || @W{i} || '%' OR producer ILIKE '%' || @W{i} || '%' OR region ILIKE '%' || @W{i} || '%'"));
 
             var parameters = new DynamicParameters();
+            parameters.Add("UserId", userId);
             for (int i = 0; i < words.Count; i++)
                 parameters.Add($"W{i}", words[i]);
 
@@ -1117,7 +1122,8 @@ public sealed class ExpertService : IExpertService
                        type AS Type, country AS Country, region AS Region,
                        food_pairings AS FoodPairings, description AS Description
                 FROM wines
-                WHERE {orConditions}
+                WHERE EXISTS (SELECT 1 FROM wine_logs wl WHERE wl.wine_id = wines.id AND wl.user_id = @UserId)
+                  AND ({orConditions})
                 LIMIT 5
                 """,
                 parameters);

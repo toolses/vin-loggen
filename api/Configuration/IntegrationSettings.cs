@@ -89,4 +89,14 @@ public sealed class AiFallbackSettings
 
     /// <summary>Provider priority for expert chat. Default: Groq (Qwen 3), DeepSeek, then Gemini fallback.</summary>
     public string[] ExpertChatPriority { get; init; } = ["Groq", "DeepSeek", "Gemini"];
+
+    /// <summary>Provider priority for wine enrichment (food pairings, descriptions). Default: DeepSeek, then Groq fallback.</summary>
+    public string[] EnrichmentPriority { get; init; } = ["DeepSeek", "Groq", "Gemini"];
+
+    /// <summary>
+    /// Groq tokens-per-minute budget. When recent Groq usage within a 60-second
+    /// sliding window exceeds this threshold, the provider chain skips Groq and
+    /// falls back to the next provider. Default: 5500 (Groq Qwen 3 limit is 6000 TPM).
+    /// </summary>
+    public int GroqTokenBudgetPerMinute { get; init; } = 5500;
 }

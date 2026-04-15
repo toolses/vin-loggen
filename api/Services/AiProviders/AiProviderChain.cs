@@ -7,13 +7,16 @@ namespace VinLoggen.Api.Services.AiProviders;
 public sealed class AiProviderChain
 {
     private readonly IEnumerable<IAiChatProvider> _chatProviders;
+    private readonly GroqTokenBudgetService _groqBudget;
     private readonly ILogger<AiProviderChain> _logger;
 
     public AiProviderChain(
         IEnumerable<IAiChatProvider> chatProviders,
+        GroqTokenBudgetService groqBudget,
         ILogger<AiProviderChain> logger)
     {
         _chatProviders = chatProviders;
+        _groqBudget = groqBudget;
         _logger = logger;
     }
 
@@ -26,7 +29,7 @@ public sealed class AiProviderChain
         Guid? userId        = null,
         Guid? correlationId = null)
     {
-        var providers = ResolveChat(priority);
+        var providers = await ResolveChatAsync(priority, ct);
 
         foreach (var provider in providers)
         {
@@ -49,7 +52,7 @@ public sealed class AiProviderChain
         return new AiChatResult(null, "none", false);
     }
 
-    private List<IAiChatProvider> ResolveChat(string[] priority)
+    private async Task<List<IAiChatProvider>> ResolveChatAsync(string[] priority, CancellationToken ct)
     {
         var ordered = new List<IAiChatProvider>();
         foreach (var name in priority)
@@ -66,6 +69,14 @@ public sealed class AiProviderChain
             if (!provider.IsAvailable)
             {
                 _logger.LogDebug("AiProviderChain: chat provider '{Name}' not available (no API key?), skipping", name);
+                continue;
+            }
+
+            // Proactively skip Groq when the sliding-window token budget is exhausted
+            if (name.Equals("Groq", StringComparison.OrdinalIgnoreCase)
+                && !await _groqBudget.HasBudgetAsync(ct))
+            {
+                _logger.LogInformation("AiProviderChain: skipping Groq — TPM budget exhausted, falling back");
                 continue;
             }
 

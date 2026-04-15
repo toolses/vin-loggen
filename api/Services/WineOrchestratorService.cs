@@ -110,6 +110,15 @@ public sealed class WineOrchestratorService
 
         var analysis = geminiResult.Value!;
 
+        // Normalize country to English (AI sometimes returns Norwegian names)
+        var normalizedCountry = NormalizeCountryToEnglish(analysis.Country);
+        if (normalizedCountry != analysis.Country)
+        {
+            _logger.LogInformation("OrchestratorService: Normalized country '{Original}' → '{English}'",
+                analysis.Country, normalizedCountry);
+            analysis = analysis with { Country = normalizedCountry };
+        }
+
         // Label was unreadable (Gemini returned all nulls) – no charge
         bool labelReadable = !string.IsNullOrWhiteSpace(analysis.WineName);
 
@@ -282,7 +291,7 @@ public sealed class WineOrchestratorService
         var userContent = $"Vin: {producer ?? ""} {wineName ?? ""}, {vintage?.ToString() ?? "ukjent årgang"}, {type ?? ""} {country ?? ""}";
 
         var chatResult = await _aiChain.ChatAsync(
-            _settings.AiFallback.ExpertChatPriority,
+            _settings.AiFallback.EnrichmentPriority,
             FoodPairingPrompt,
             userContent,
             ct,
@@ -384,5 +393,53 @@ public sealed class WineOrchestratorService
         {
             return null;
         }
+    }
+
+    // ── Country name normalization (Norwegian → English) ─────────────────────
+
+    private static readonly Dictionary<string, string> NorwegianToEnglishCountry =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["frankrike"]    = "France",
+            ["italia"]       = "Italy",
+            ["spania"]       = "Spain",
+            ["tyskland"]     = "Germany",
+            ["portugal"]     = "Portugal",
+            ["østerrike"]    = "Austria",
+            ["sør-afrika"]   = "South Africa",
+            ["soer-afrika"]  = "South Africa",
+            ["chile"]        = "Chile",
+            ["argentina"]    = "Argentina",
+            ["australia"]    = "Australia",
+            ["new zealand"]  = "New Zealand",
+            ["ny-zealand"]   = "New Zealand",
+            ["usa"]          = "United States",
+            ["hellas"]       = "Greece",
+            ["ungarn"]       = "Hungary",
+            ["romania"]      = "Romania",
+            ["kroatia"]      = "Croatia",
+            ["slovenia"]     = "Slovenia",
+            ["sveits"]       = "Switzerland",
+            ["libanon"]      = "Lebanon",
+            ["israel"]       = "Israel",
+            ["georgia"]      = "Georgia",
+            ["marokko"]      = "Morocco",
+            ["brasil"]       = "Brazil",
+            ["mexico"]       = "Mexico",
+            ["kina"]         = "China",
+            ["japan"]        = "Japan",
+            ["storbritannia"] = "United Kingdom",
+            ["england"]      = "England",
+            ["nord-makedonia"] = "North Macedonia",
+        };
+
+    private static string? NormalizeCountryToEnglish(string? country)
+    {
+        if (string.IsNullOrWhiteSpace(country))
+            return country;
+
+        return NorwegianToEnglishCountry.TryGetValue(country.Trim(), out var english)
+            ? english
+            : country.Trim();
     }
 }

@@ -139,27 +139,15 @@
       <section class="mb-4">
         <p class="text-xs text-cream-dark mb-2 font-medium text-center">Hurtigvalg</p>
         <div class="flex flex-wrap gap-2 justify-center">
-          <button
-            (click)="onQuickAction('Hvilken type vin passer til lam?')"
-            class="glass px-3 py-1.5 rounded-full text-xs text-cream-dark border border-white/10
-                   hover:bg-white/[0.08] hover:text-cream transition-colors"
-          >
-            Vintype til lam
-          </button>
-          <button
-            (click)="onQuickAction('Hva er en god hvitvin til skalldyr?')"
-            class="glass px-3 py-1.5 rounded-full text-xs text-cream-dark border border-white/10
-                   hover:bg-white/[0.08] hover:text-cream transition-colors"
-          >
-            Hvitvin til skalldyr
-          </button>
-          <button
-            (click)="onQuickAction('Hvilken type vin passer til kjøtt?')"
-            class="glass px-3 py-1.5 rounded-full text-xs text-cream-dark border border-white/10
-                   hover:bg-white/[0.08] hover:text-cream transition-colors"
-          >
-            Vintype til kjøtt
-          </button>
+          @for (pick of visibleQuickPicks(); track pick.label) {
+            <button
+              (click)="onQuickAction(pick.question)"
+              class="glass px-3 py-1.5 rounded-full text-xs text-cream-dark border border-white/10
+                     hover:bg-white/[0.08] hover:text-cream transition-colors"
+            >
+              {{ pick.label }}
+            </button>
+          }
         </div>
       </section>
     }
@@ -192,7 +180,7 @@
               <!-- Referenced wines (classic mode) -->
               @if (msg.wines && msg.wines.length > 0) {
                 <div class="mt-2 space-y-1.5">
-                  <p class="text-[10px] text-cream-dark uppercase tracking-wider font-medium px-1">Anbefalte viner</p>
+                  <p class="text-[10px] text-cream-dark uppercase tracking-wider font-medium px-1">{{ msg.typeSuggestions && msg.typeSuggestions.length > 0 ? 'Fra din katalog' : 'Anbefalte viner' }}</p>
                   @for (wine of msg.wines; track wine.id + '-' + wine.name) {
                     @if (isLinkable(wine)) {
                       <a

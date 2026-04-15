@@ -103,6 +103,7 @@ public sealed class GeminiService : IGeminiService
         - "wineName": Vinens eget navn UTEN produsentnavnet. Hvis etiketten bare viser produsent + druesort + region, bruk druesort + region som wineName (f.eks. "Riesling Spätlese Zeltinger Sonnenuhr").
         - Ikke gjenta produsentnavnet i wineName-feltet.
         - Bruk offisielle navn fra etiketten, ikke forkortelser eller omskrivninger.
+        - "country": Bruk ALLTID det engelske navnet på landet (f.eks. "France", "Italy", "Spain", "Germany", "Portugal", "South Africa", "New Zealand"). Aldri bruk norske landnavn.
 
         Hvis du er usikker på et felt, sett det til null.
         """;
@@ -130,6 +131,7 @@ public sealed class GeminiService : IGeminiService
         - "wineName": Vinens eget navn UTEN produsentnavnet. Hvis etiketten bare viser produsent + druesort + region, bruk druesort + region som wineName (f.eks. "Riesling Spätlese Zeltinger Sonnenuhr").
         - Ikke gjenta produsentnavnet i wineName-feltet.
         - Bruk offisielle navn fra etiketten, ikke forkortelser eller omskrivninger.
+        - "country": Bruk ALLTID det engelske navnet på landet (f.eks. "France", "Italy", "Spain", "Germany", "Portugal", "South Africa", "New Zealand"). Aldri bruk norske landnavn.
         - "foodPairings": Matanbefalinger fra baketiketten. Hvis ingen finnes, returner null.
 
         Hvis du er usikker, bruk data fra baketiketten som fallback.

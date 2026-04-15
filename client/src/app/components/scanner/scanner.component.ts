@@ -52,6 +52,9 @@ export class ScannerComponent implements OnDestroy {
   /** Candidate wines from WineAPI search (filtered to high-confidence, top 5) */
   protected readonly candidateWines = signal<CandidateWine[]>([]);
 
+  /** ID of the currently expanded candidate (for details preview) */
+  protected readonly expandedCandidateId = signal<string | null>(null);
+
   private stream: MediaStream | null = null;
   private frontPreviewObjectUrl: string | null = null;
   private backPreviewObjectUrl: string | null = null;
@@ -265,6 +268,12 @@ export class ScannerComponent implements OnDestroy {
   private mapWineType(type: string | null): string | null {
     if (!type) return null;
     return ScannerComponent.wineTypeMap[type.toLowerCase()] ?? type;
+  }
+
+  protected toggleCandidateDetails(candidate: CandidateWine, event: Event): void {
+    event.stopPropagation();
+    const id = candidate.id ?? candidate.name;
+    this.expandedCandidateId.update(cur => cur === id ? null : id);
   }
 
   protected selectCandidate(candidate: CandidateWine): void {

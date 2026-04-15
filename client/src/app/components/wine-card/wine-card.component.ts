@@ -41,7 +41,7 @@ export class WineCardComponent {
 
   protected vinmonopoletSearchUrl(): string {
     const w = this.wine();
-    const q = [w.name, w.vintage].filter(Boolean).join(' ')
+    const q = [w.producer, w.name].filter(Boolean).join(' ')
       .split(/\s+/).map(p => encodeURIComponent(p)).join('+');
     return `https://www.vinmonopolet.no/search?q=${q}:relevance`;
   }
